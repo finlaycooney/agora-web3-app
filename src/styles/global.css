@@ -1,0 +1,134 @@
+body {
+    font-family: 'Montserrat', sans-serif;
+    background-image: url('/background.png');
+    background-size: 100% auto;
+    background-repeat: no-repeat;
+    /* This stops the image from repeating */
+    background-position: top center;
+    background-attachment: scroll;
+    background-color: rgb(49, 137, 155);
+    /* Fallback color */
+}
+
+.backdrop-blur-md {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-section {
+    animation: fadeIn 0.8s ease-out forwards;
+}
+
+.nav-link {
+    position: relative;
+    padding-bottom: 4px;
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #99ffff;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+.nav-link:hover::after {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+
+
+/* carousel section for homepage */
+
+.videoSection {
+    position: relative;
+    height: 500px;
+    /* Or whatever height you prefer */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    color: white;
+    text-align: center;
+    margin: 4rem 0;
+    /* Example margin to space it out on the page */
+}
+
+/* The video styling stays the same */
+.videoSection video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    z-index: -1;
+}
+
+.sectionOverlay {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 2rem 4rem;
+    border-radius: 10px;
+}
+
+/* 1. The wrapper holds the position */
+.button-tooltip-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* 2. The tag is hidden by default */
+.tooltip-tag {
+    position: absolute;
+    /* Position above */
+    top: 0;
+    right: 0;
+    transform: translate(25%, -50%);
+
+    background-color: #ae5389d1;
+    color: #fff;
+    padding: 1px 2px;
+    border-radius: 10px;
+    font-size: 12px;
+    white-space: nowrap;
+
+    /* The magic: Hide it... */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
+    pointer-events: none;
+    /* So the tooltip doesn't block the mouse */
+}
+
+/* 3. The hover effect on the *wrapper* */
+.button-tooltip-wrapper:hover .tooltip-tag {
+    /* ...and show it on hover! */
+    opacity: 1;
+    visibility: visible;
+}
+
+.footer-copyright {
+    color: #AAAAAA;
+    /* Or 'gray', or '#99ffff', whatever you want */
+}

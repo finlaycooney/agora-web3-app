@@ -1,0 +1,148 @@
+/* General Section Styling */
+.section {
+    padding: 5rem 1.5rem;
+    /* 80px top/bottom, 24px left/right */
+}
+
+/* Hero Section Specifics */
+.hero-section {
+    display: flex;
+    align-items: flex-start;
+    padding-top: clamp(12rem, 40vh, 25rem);
+    /* MIN: Never be smaller than 12rem (e.g., for mobile)
+    PREFERRED: Scale at 30% of the viewport height (vh)
+    MAX: Never be larger than 22rem (e.g., for 4K monitors)
+   */
+    /* make title lower/higher */
+    padding-bottom: 6rem;
+    padding-left: 100px;
+    /* 96px */
+
+    text-align: left;
+}
+
+/* Reusable container for centered content */
+.content-container {
+    max-width: 80rem;
+    /* 1280px */
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+/* Two-column layout styling */
+.two-column-layout {
+    display: flex;
+    flex-direction: column;
+    /* Stacks on mobile */
+    align-items: center;
+    gap: 3rem;
+}
+
+@media (min-width: 768px) {
+    .two-column-layout {
+        flex-direction: row;
+        /* Side-by-side on desktop */
+    }
+}
+
+.image-column,
+.text-column {
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .image-column {
+        width: 50%;
+    }
+
+    .text-column {
+        width: 50%;
+    }
+}
+
+/* Typography classes to replace Tailwind utilities */
+.hero-heading {
+    margin-bottom: 1rem;
+    font-size: 3rem;
+    /* 36px */
+    font-weight: 100;
+    /*boldness*/
+    color: #ffffff;
+}
+
+.hero-subheading {
+    max-width: 42rem;
+    /* 672px */
+    font-size: 1.5rem;
+    /* 18px */
+    color: #ffffff;
+    /* text-gray-300 */
+}
+
+.section-heading {
+    margin-bottom: 1rem;
+    font-size: 1.875rem;
+    /* 30px */
+    font-weight: 100;
+    color: #67e8f9;
+    /* text-cyan-300 */
+}
+
+.section-text {
+    margin-bottom: 1rem;
+    line-height: 1.75;
+    color: #d1d5db;
+    font-size: 1.4rem;
+    /* text/font size for all text*/
+}
+
+.section-image {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+}
+
+#who-we-are {
+    margin-top: 15rem;
+    /* 64px - Adjust this value up or down as needed */
+}
+
+
+
+/* horizontal images for team section*/
+.image-row {
+    display: flex;
+    /* Aligns the images horizontally */
+    justify-content: space-between;
+    /* Evenly spaces the images */
+    gap: 20px;
+    /* Adds space between the images */
+    margin-bottom: 30px;
+    /* Adds space between the image row and the text below */
+}
+
+.image-column {
+    flex: 1;
+    /* Allows each column to grow and fill the space evenly */
+}
+
+.section-image {
+    width: 100%;
+    /* Makes each image fill its column */
+    height: auto;
+    display: block;
+}
+
+.text-row {
+    display: flex;
+    /* Aligns the images horizontally */
+    justify-content: space-between;
+    /* Spaces the images evenly */
+    gap: 20px;
+    /* Adds space between the images */
+    margin-bottom: 100px;
+    /* Adds space between the image row and the text below */
+}
+
+/*end of horizontal images for team section*/

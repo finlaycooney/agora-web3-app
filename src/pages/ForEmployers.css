@@ -1,0 +1,188 @@
+/* General Styling for For Employers Page */
+:root {
+    --primary-color: #0a0a2a;
+    /* Deep navy blue */
+    --accent-color: #3b82f6;
+    /* A vibrant blue */
+    --text-color: #e0e0e0;
+    /* Light grey for text */
+    --card-bg: #1a1a3a;
+    /* Slightly lighter navy for cards */
+    --border-color: #2a2a4a;
+    /* Border for cards and elements */
+}
+
+/* --- Hero Section --- */
+.hero-section-employers {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 80vh;
+    padding: 4rem 1rem;
+    background: url('/background-for-employers.png') no-repeat center center/cover;
+    position: relative;
+    color: white;
+}
+
+/* Add a semi-transparent overlay for better text readability */
+.hero-section-employers::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 10, 42, 0.7);
+    /* Dark blue overlay */
+    z-index: 1;
+}
+
+.hero-content-employers {
+    position: relative;
+    z-index: 2;
+    max-width: 800px;
+}
+
+.hero-heading-employers {
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+}
+
+.hero-subheading-employers {
+    font-size: 1.25rem;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+    color: var(--text-color);
+}
+
+.cta-button {
+    background-color: var(--accent-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.cta-button:hover {
+    background-color: #2563eb;
+    transform: translateY(-2px);
+}
+
+/* --- General Content & Layout --- */
+.content-container-employers {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 4rem 1rem;
+}
+
+.section-heading-employers {
+    font-size: 2.5rem;
+    text-align: center;
+    margin-bottom: 3rem;
+    font-weight: 600;
+}
+
+.section-text-employers {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--text-color);
+    margin-bottom: 1rem;
+}
+
+/* --- Services Section --- */
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+.service-card {
+    background-color: var(--card-bg);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.service-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.service-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: white;
+}
+
+.service-description {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-color);
+}
+
+/* --- Why Partner With Us Section --- */
+.benefits-section {
+    background-color: var(--primary-color);
+}
+
+.two-column-layout-employers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3rem;
+}
+
+.text-column-employers,
+.image-column-employers {
+    flex: 1;
+    min-width: 300px;
+}
+
+.section-image-employers {
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+.benefits-list {
+    list-style: none;
+    padding-left: 0;
+    margin-top: 2rem;
+}
+
+.benefits-list li {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+    position: relative;
+    color: var(--text-color);
+}
+
+.benefits-list li::before {
+    content: '✓';
+    /* Checkmark icon */
+    position: absolute;
+    left: 0;
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+/* --- Animation --- */
+.fade-in-section {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.fade-in-section.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}

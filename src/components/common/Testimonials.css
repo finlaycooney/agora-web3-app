@@ -1,0 +1,143 @@
+/* --- Main Section --- */
+.testimonials-section {
+    width: 100%;
+    padding: 4rem 1rem;
+    /* 4rem top/bottom, 1rem left/right */
+    background-color: #f9f9f9;
+    /* A light background to separate it */
+    text-align: center;
+    overflow: hidden;
+    /* Ensures nothing leaks */
+}
+
+.testimonials-title {
+    font-size: 2.25rem;
+    /* 36px */
+    font-weight: 700;
+    margin-bottom: 5rem;
+    color: #333;
+}
+
+/* --- Slider Wrapper --- */
+.testimonial-slider {
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    /* Crucial for positioning the buttons */
+}
+
+.testimonial-slider-content {
+    overflow: hidden;
+    /* This is the "mask" that hides other slides */
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    background-color: #ffffff;
+}
+
+/* --- Slide Container --- */
+.testimonial-slide-container {
+    display: flex;
+    /* This transition is what makes the slide smooth */
+    transition: transform 0.85s ease-in-out;
+}
+
+/* --- Individual Slide --- */
+.testimonial-slide {
+    /* Each slide takes up 100% of the container's width */
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    /* Ensures padding is included in the 100% */
+    padding: 3rem 4rem;
+    /* Generous padding inside the slide */
+    min-height: 300px;
+    /* Gives the slider a consistent height */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.testimonial-quote {
+    font-size: 1.25rem;
+    /* 20px */
+    font-style: italic;
+    line-height: 1.6;
+    color: #444;
+    margin: 0;
+    margin-bottom: 1.5rem;
+}
+
+.testimonial-author {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #000;
+    margin: 0;
+}
+
+.testimonial-title {
+    font-size: 1rem;
+    color: #666;
+    margin: 0.25rem 0 0 0;
+}
+
+/* --- Navigation Buttons (Prev/Next) --- */
+.slider-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    transition: all 2.5s ease;
+    z-index: 10;
+}
+
+.slider-btn:hover {
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.981);
+}
+
+.prev-btn {
+    left: -20px;
+    /* Position outside the slider box */
+}
+
+.next-btn {
+    right: -20px;
+    /* Position outside the slider box */
+}
+
+/* --- Dot Navigation --- */
+.testimonial-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    /* Space between dots */
+    margin-top: 1.5rem;
+}
+
+.dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: #e9e9e9;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.dot:hover {
+    background-color: #d5d3d3;
+}
+
+.dot.active {
+    background-color: #ececec;
+    /* Active dot color */
+}
