@@ -73,16 +73,14 @@ const HomePage = () => {
                     <div className="text-column">
                         <h2 className="section-heading">About us</h2>
                         <p className="section-text">
-                            Inspired by the ancient agoras of Greece — the centers of artistic,
-                            spiritual, and political life — Agora is building the digital
-                            commons of tomorrow. We create open-source protocols and platforms
-                            that empower creators and communities to thrive.
+                            Inspired by the ancient agoras of Greece - the centres of artistic, spiritual, and political life - Agora4 is helping build the future of Web3. We're a small, crypto-native team that works directly with early-stage founders in DeFi, Crypto, AI and trading. Think of us less as headhunters and more as your talent partners. We’re the team you call when you need to land your first 3, 5, or 10 hires - the ones that will define your future and put you in a position to succeed.
+
+                            <br />
+                            <br />
+
+                            We'll help projects figure out who you need and what experience aligns best, not just throw CVs at you. We work with the best talent and go degen-deep to find them through our proven methods to identify the contributors, the anon builders, and the quant wizards who live on Github and Discord, not just LinkedIn. This is all in an effort to ensure both projects and candidates can focus on the important task of building cool stuff that has the potential to change the world.
                         </p>
-                        <p className="section-text">
-                            Our mission is to foster a more equitable and transparent internet
-                            where individuals have true ownership of their data and digital
-                            assets.
-                        </p>
+
                     </div>
                     <div className="image-column">
                         <img
