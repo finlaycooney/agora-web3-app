@@ -6,7 +6,7 @@ import path from 'path'
 
 export default defineConfig({
 
-  base: '/agora-web3-app/',
+  base: '/',
   plugins: [
     react(),
     tailwindcss(), // <-- Add the plugin here
