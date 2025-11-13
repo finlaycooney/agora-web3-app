@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite' // <-- Use the v4 plugin
 import path from 'path'
 
 export default defineConfig({
+
+  base: '/agora-web3-app/',
   plugins: [
     react(),
     tailwindcss(), // <-- Add the plugin here
