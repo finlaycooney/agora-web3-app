@@ -44,7 +44,7 @@ const HomePage = () => {
                         />
                     </div>
                     <div className="text-column">
-                        <h2 className="section-heading">Who We Are</h2>
+                        <h2 className="section-heading">Who we are</h2>
                         <p className="section-text">
                             We have a collective ethos which is to bring together the best minds in software engineering, research and strategy to incubate leading edge teams in nascent technology. This is underpinned by our extensive background in matching tier 1 projects with first class talent.
                         </p>
@@ -71,7 +71,7 @@ const HomePage = () => {
             <section id="about-us" className="section fade-in-section">
                 <div className="content-container two-column-layout">
                     <div className="text-column">
-                        <h2 className="section-heading">About Us</h2>
+                        <h2 className="section-heading">About us</h2>
                         <p className="section-text">
                             Inspired by the ancient agoras of Greece — the centers of artistic,
                             spiritual, and political life — Agora is building the digital
@@ -97,7 +97,9 @@ const HomePage = () => {
             {/* --- Meet the team --- */}
             {/* --- Next section --- */}
             <section id="Meet the Team" className="section fade-in-section">
+
                 <div className="content-container">
+                    <h2 className="section-heading">Meet the team</h2>
                     {/* New container to hold the three images in a row */}
                     <div className="image-row">
                         <div className="image-column">
@@ -155,7 +157,9 @@ const HomePage = () => {
             {/* <Testimonials /> {/* <-- 2. ADD THE COMPONENT HERE */}
 
             <section id="testimonials" className="section fade-in-section">
+
                 <div style={{ height: '700px', position: 'relative' }}>
+                    <h2 className="section-heading">FAQs</h2>
                     <Carousel
                         baseWidth={300}
                         autoplay={true}
