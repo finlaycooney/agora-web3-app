@@ -73,8 +73,8 @@ const HomePage = () => {
                     <div className="text-column">
                         <h2 className="section-heading">About Us</h2>
                         <p className="section-text">
-                            Inspired by the ancient agoras of Greece—the centers of artistic,
-                            spiritual, and political life—Agora Web3 is building the digital
+                            Inspired by the ancient agoras of Greece — the centers of artistic,
+                            spiritual, and political life — Agora is building the digital
                             commons of tomorrow. We create open-source protocols and platforms
                             that empower creators and communities to thrive.
                         </p>
