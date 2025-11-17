@@ -136,7 +136,7 @@ const HomePage = () => {
                         <div className="text-column">
                             <h2 className="section-heading">Fin Cooney</h2>
                             <p className="section-text">
-                                Fin entered the the web3 space 6 years before turning his had to recruitment. He now specialises in finding low level software engineers that others miss. He has a strong network in the Solana ecosystem, having worked closly with many key projects.
+                                Fin entered the the web3 space 6 years before turning his hand to recruitment. He now specialises in finding low level software engineers that others miss. He has a strong network in the Solana ecosystem, having worked closly with many key projects.
 
                             </p>
                         </div>
