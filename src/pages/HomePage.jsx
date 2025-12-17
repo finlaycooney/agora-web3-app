@@ -3,6 +3,7 @@ import GifCarousel from '../components/common/GifCarousel.jsx';
 import Testimonials from '../components/common/Testimonials.jsx';
 import Carousel from '../components/common/Carousel.jsx';
 import GradientButton from '../components/common/GradientButton.jsx';
+import Accordion from '../components/common/Accordion.jsx';
 
 const HomePage = () => {
     const handleHomepageClick = () => {
@@ -14,7 +15,9 @@ const HomePage = () => {
             {/* --- Hero Section --- */}
             <section id="home" className="section hero-section fade-in-section">
                 <div className="hero-content">
-                    <h1 className="hero-heading">Welcome to agora4</h1>
+                    <h1 className="hero-heading">Enterprise grade hiring
+                        <br />
+                        solutions for web3</h1>
                     <p className="hero-subheading">
                         The decentralized hub for community, commerce
                         <br />
@@ -144,9 +147,9 @@ const HomePage = () => {
                 </div>
             </section>
 
-            {/* --- FAQs / Testimonials Section --- */}
-            <section id="testimonials" className="section fade-in-section">
-                {/* Replaced inline style with class 'faq-wrapper' */}
+            {/* --- FAQs / Testimonials Section --- 
+             <section id="testimonials" className="section fade-in-section">
+                Replaced inline style with class 'faq-wrapper' 
                 <div className="content-container faq-wrapper">
                     <h2 className="section-heading">FAQs</h2>
                     <Carousel
@@ -157,6 +160,13 @@ const HomePage = () => {
                         loop={true}
                         round={false}
                     />
+                </div>
+            // </section> */}
+
+            <section id="faqs2" className="section fade-in-section">
+                <div className="content-container">
+                    <h2 className="section-heading">FAQs</h2>
+                    <Accordion />
                 </div>
             </section>
         </main >

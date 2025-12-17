@@ -38,19 +38,28 @@ const Header = ({ isVisible }) => {
 
                     {/* "For Candidates" Link (NOW UPDATED) */}
                     <div className="button-tooltip-wrapper">
-                        <a
-                            href="#" // Changed from "/"
-                            onClick={(e) => e.preventDefault()} // Added
-                            aria-disabled="true" // Added
+                        <Link
+
+                            to="/JobsBoard"
+                            aria-disabled="false"
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
-                            style={{ opacity: 1, cursor: 'not-allowed' }} // Added
+                            style={{ opacity: 1, cursor: 'pointer' }}
                         >
-                            For Candidates
+                            Jobs Board
+                        </Link>
+
+                    </div>
+
+                    <div className="button-tooltip-wrapper">
+                        <a
+                            href="https://medium.com/@agora4xyz"
+                            target="_blank"
+                            rel="noopener noreffer"
+                            className="nav-link text-white hover:text-[#99ffff] transition duration-500"
+                            style={{ opacity: 1, cursor: 'pointer' }}
+                        >
+                            Blog
                         </a>
-                        {/* Added the tag */}
-                        <span className="tooltip-tag">
-                            Coming soon!
-                        </span>
                     </div>
                 </nav>
 

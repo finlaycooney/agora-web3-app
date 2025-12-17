@@ -1,0 +1,32 @@
+/* Accordion.css */
+
+/* The container for each question */
+
+/* Hover effect for the whole item */
+.faq-item-base:hover {
+    border-color: #ffffff;
+    /* Darker border on hover */
+    transform: translateY(-2px);
+    /* Slight lift */
+    box-shadow: 1 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* The question text */
+.faq-title {
+    font-weight: 10;
+    font-size: 1.2rem;
+    color: #ffffff;
+}
+
+/* The answer text */
+.faq-content {
+    color: #ffffff;
+    padding-bottom: 1.25rem;
+    line-height: 1.2;
+}
+
+/* The arrow icon */
+.faq-indicator {
+    color: #ffffff;
+    font-size: 1.2rem;
+}
