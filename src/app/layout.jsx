@@ -9,6 +9,7 @@ import { Outfit } from 'next/font/google';
 import HeaderWrapper from '@/components/common/HeaderWrapper'; // Created a wrapper for scroll logic
 import Footer from '@/components/common/Footer';
 import { Providers } from "./providers";
+import { Analytics } from "@vercel/analytics/react";
 
 const outfit = Outfit({ subsets: ['latin'] });
 
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
 
           <Footer />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
