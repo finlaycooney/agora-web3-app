@@ -114,11 +114,11 @@ const HomePage = () => {
                                 [ <span className="text-emerald-400 group-hover:text-emerald-300">ACCESS_TALENT</span> ]
                             </div>
                             <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0">
-                                [ <span className="text-gray-400">COMING_SOON</span> ]
+                                [&nbsp;<span className="text-gray-400">COMING_SOON</span>&nbsp;]
                             </div>
                         </button>
                         <Link href="/jobs" className="font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group flex items-center justify-center">
-                            [ <span className="text-cyan-400 group-hover:text-cyan-300">VIEW_JOBS</span> ]
+                            [&nbsp;<span className="text-cyan-400 group-hover:text-cyan-300">VIEW_JOBS</span>&nbsp;]
                         </Link>
                     </div>
 

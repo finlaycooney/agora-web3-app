@@ -1928,7 +1928,7 @@
     flex-shrink: 0;
   }
 
-  .flex-grow {
+  .flex-grow, .grow {
     flex-grow: 1;
   }
 
@@ -2828,16 +2828,6 @@
     }
   }
 
-  .border-blue-500\/30 {
-    border-color: #3080ff4d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-blue-500\/30 {
-      border-color: color-mix(in oklab, var(--color-blue-500) 30%, transparent);
-    }
-  }
-
   .border-blue-900\/30 {
     border-color: #1c398e4d;
   }
@@ -2855,6 +2845,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-500\/20 {
       border-color: color-mix(in oklab, var(--color-cyan-500) 20%, transparent);
+    }
+  }
+
+  .border-cyan-500\/30 {
+    border-color: #00b7d74d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-500\/30 {
+      border-color: color-mix(in oklab, var(--color-cyan-500) 30%, transparent);
     }
   }
 
@@ -8423,18 +8423,6 @@
   }
 
   @media (hover: hover) {
-    .hover\:bg-blue-500\/20:hover {
-      background-color: #3080ff33;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\:bg-blue-500\/20:hover {
-        background-color: color-mix(in oklab, var(--color-blue-500) 20%, transparent);
-      }
-    }
-  }
-
-  @media (hover: hover) {
     .hover\:bg-blue-900\/50:hover {
       background-color: #1c398e80;
     }
@@ -8449,6 +8437,18 @@
   @media (hover: hover) {
     .hover\:bg-cyan-300:hover {
       background-color: var(--color-cyan-300);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:bg-cyan-500\/20:hover {
+      background-color: #00b7d733;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:bg-cyan-500\/20:hover {
+        background-color: color-mix(in oklab, var(--color-cyan-500) 20%, transparent);
+      }
     }
   }
 
@@ -8621,12 +8621,6 @@
   }
 
   @media (hover: hover) {
-    .hover\:text-blue-300:hover {
-      color: var(--color-blue-300);
-    }
-  }
-
-  @media (hover: hover) {
     .hover\:text-blue-400:hover {
       color: var(--color-blue-400);
     }
@@ -8735,15 +8729,15 @@
   }
 
   @media (hover: hover) {
-    .hover\:shadow-\[0_0_20px_rgba\(16\,185\,129\,0\.5\)\]:hover {
-      --tw-shadow: 0 0 20px var(--tw-shadow-color, #10b98180);
+    .hover\:shadow-\[0_0_20px_rgba\(6\,182\,212\,0\.5\)\]:hover {
+      --tw-shadow: 0 0 20px var(--tw-shadow-color, #06b6d480);
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
   }
 
   @media (hover: hover) {
-    .hover\:shadow-\[0_0_20px_rgba\(59\,130\,246\,0\.5\)\]:hover {
-      --tw-shadow: 0 0 20px var(--tw-shadow-color, #3b82f680);
+    .hover\:shadow-\[0_0_20px_rgba\(16\,185\,129\,0\.5\)\]:hover {
+      --tw-shadow: 0 0 20px var(--tw-shadow-color, #10b98180);
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
   }
@@ -11951,13 +11945,6 @@
   }
 
   @media (min-width: 48rem) {
-    .md\:text-4xl {
-      font-size: var(--text-4xl);
-      line-height: var(--tw-leading, var(--text-4xl--line-height));
-    }
-  }
-
-  @media (min-width: 48rem) {
     .md\:text-5xl {
       font-size: var(--text-5xl);
       line-height: var(--tw-leading, var(--text-5xl--line-height));
@@ -12564,7 +12551,7 @@ body {
   opacity: 0;
   background-color: #9ff;
   width: 100%;
-  height: 2px;
+  height: 1px;
   transition: opacity .3s ease-out, transform .3s ease-out;
   position: absolute;
   bottom: 0;

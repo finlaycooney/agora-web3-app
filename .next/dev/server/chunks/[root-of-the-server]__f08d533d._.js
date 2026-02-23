@@ -126,26 +126,43 @@ const handler = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules
             }
         })
     ],
-    // This secret is used to encrypt the user's session cookie
+    // 1. Secret Protocol
     secret: process.env.NEXTAUTH_SECRET,
+    // 2. Trust Host & Proxy Logic (Crucial for Vercel)
+    // Note: 'trustHost' is an Auth.js v5 property. For v4, NextAuth 
+    // automatically trusts Vercel if NEXTAUTH_URL is set correctly.
+    // 3. Security Settings
+    cookies: {
+        sessionToken: {
+            name: `next-auth.session-token`,
+            options: {
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+                secure: ("TURBOPACK compile-time value", "development") === 'production'
+            }
+        }
+    },
     callbacks: {
         async jwt ({ token, account, profile }) {
             // Persist the OAuth profile info to the token right after signin
             if (account) {
                 token.accessToken = account.access_token;
+                // NextAuth's default Profile type doesn't contain an explicit 'id'
+                // We cast to any, or we could also use account.providerAccountId
                 token.id = profile?.id;
             }
             return token;
         },
         async session ({ session, token }) {
-            // We pass the GitHub username to the session so the modal can grab it
             if (session.user) {
                 session.user.username = token.name;
-            // session.accessToken = token.accessToken; // If needed
             }
             return session;
         }
-    }
+    },
+    // Add debugging for production deployment phase
+    debug: ("TURBOPACK compile-time value", "development") === 'development'
 });
 ;
 }),

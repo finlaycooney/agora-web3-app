@@ -4,8 +4,12 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import FaultyTerminal from './FaultyTerminal';
+import { useSession, signIn } from "next-auth/react";
+import { track } from '@vercel/analytics';
 
 const TheHandshake = () => {
+    const { data: session, status } = useSession();
+
     return (
         <section className="relative w-full min-h-[600px] overflow-hidden bg-transparent text-white flex flex-col items-center justify-center py-20 px-4 md:px-8">
 
@@ -60,11 +64,11 @@ const TheHandshake = () => {
 
                 {/* Header */}
                 <div className="text-center space-y-6">
-                    <h2 className="text-5xl md:text-7xl font-extrabold uppercase tracking-tighter font-outfit bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
-                        Initialize Connection
+                    <h2 className="text-5xl md:text-7xl font-extrabold tracking-tighter font-outfit bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
+                        Initialize connection
                     </h2>
                     <p className="max-w-2xl mx-auto text-lg md:text-xl text-gray-400 font-light">
-                        Whether you are a founder building the next primitive or an engineer with high-fidelity signal—synchronize with the layer.
+                        Whether you are a founder building the next primitive or an engineer with high-fidelity signal - synchronize with the layer.
                     </p>
                 </div>
 
@@ -101,26 +105,36 @@ const TheHandshake = () => {
                     {/* Left Node: Founders */}
                     <div className="group relative p-10 rounded-3xl bg-gradient-to-br from-blue-950/30 to-transparent border border-blue-500/20 backdrop-blur-xl flex flex-col chat-bubble-left">
                         <div className="mb-6">
-                            <h3 className="text-3xl font-bold text-white font-outfit mb-2">Access Talent</h3>
+                            <h3 className="text-3xl font-bold text-white font-outfit mb-2">Access talent</h3>
                             <p className="text-blue-200/60 leading-relaxed">
                                 Query the layer for elite engineering units and institutional support.
                             </p>
                         </div>
-                        <button className="mt-auto self-start bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-blue-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] group-hover:px-10">
+                        <a
+                            href="https://t.me/fincooney"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => track('Contact Clicked', { platform: 'Telegram' })}
+                            className="mt-auto self-start bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] group-hover:px-10"
+                        >
                             [ CONTACT_AGORA4 ] <ArrowRight size={16} />
-                        </button>
+                        </a>
                     </div>
 
                     {/* Right Node: Developers */}
                     <div className="group relative p-10 rounded-3xl bg-gradient-to-bl from-emerald-950/30 to-transparent border border-emerald-500/20 backdrop-blur-xl flex flex-col chat-bubble-right">
                         <div className="mb-6">
-                            <h3 className="text-3xl font-bold text-white font-outfit mb-2">Sync Signal</h3>
+                            <h3 className="text-3xl font-bold text-white font-outfit mb-2">Sync signal</h3>
                             <p className="text-emerald-200/60 leading-relaxed">
                                 Join the index and map your proof-of-work to high-conviction protocols.
                             </p>
                         </div>
-                        <button className="mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10">
-                            [ SYNC_GITHUB ] <ArrowRight size={16} />
+                        <button
+                            onClick={() => !session && signIn('github')}
+                            disabled={status === 'loading' || status === 'authenticated'}
+                            className="mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            [ {status === 'loading' ? 'VERIFYING...' : status === 'authenticated' ? 'IDENTITY_SYNCED' : 'SYNC_GITHUB'} ] <ArrowRight size={16} />
                         </button>
                     </div>
 

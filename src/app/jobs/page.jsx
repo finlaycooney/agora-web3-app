@@ -61,7 +61,7 @@ const JobsBoard = () => {
 
                 </p>
                 <DecryptedText
-                    text="[LATEST_ROLES]"
+                    text="[ OPEN_POSITIONS ]"
                     animateOn="view"
                     speed={80}
                     className="text-cyan-400 block mt-4 font-mono text-sm tracking-widest"

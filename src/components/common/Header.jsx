@@ -17,23 +17,25 @@ const Header = ({ isVisible }) => {
                 {/* Navigation */}
                 <nav className="flex space-x-12">
                     {/* Home Link */}
-                    <Link href="/" className="nav-link text-white hover:text-[#99ffff] transition duration-500">[HOME]</Link>
+                    <Link href="/" className="nav-link text-white hover:text-[#99ffff] transition duration-500">[ HOME ]</Link>
 
                     {/* "For Employers" Link */}
-                    <div className="button-tooltip-wrapper">
-                        <Link
-                            href="/"
-                            onClick={(e) => e.preventDefault()}
-                            aria-disabled="true"
-                            className="nav-link text-white hover:text-[#99ffff] transition duration-500"
-                            style={{ opacity: 1, cursor: 'not-allowed' }}
-                        >
-                            [ACCESS_TALENT]
-                        </Link>
-                        <span className="tooltip-tag">
-                            Coming soon!
+                    <Link
+                        href="/"
+                        onClick={(e) => e.preventDefault()}
+                        aria-disabled="true"
+                        className="relative group overflow-hidden flex items-center justify-center cursor-not-allowed"
+                        style={{ opacity: 1 }}
+                    >
+                        <span className="nav-link text-white transition-transform duration-300 group-hover:-translate-y-[150%]">
+                            [&nbsp;<span>ACCESS_TALENT</span>&nbsp;]
                         </span>
-                    </div>
+                        <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0 pointer-events-none">
+                            <span className="nav-link text-gray-400 whitespace-nowrap">
+                                [&nbsp;<span>COMING_SOON</span>&nbsp;]
+                            </span>
+                        </div>
+                    </Link>
 
 
                     {/* "For Candidates" Link (NOW UPDATED) */}
@@ -45,7 +47,7 @@ const Header = ({ isVisible }) => {
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'pointer' }}
                         >
-                            [VIEW_JOBS]
+                            [&nbsp;<span>VIEW_JOBS</span>&nbsp;]
                         </Link>
 
                     </div>
@@ -58,7 +60,7 @@ const Header = ({ isVisible }) => {
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'pointer' }}
                         >
-                            [BLOG]
+                            [&nbsp;<span>BLOG</span>&nbsp;]
                         </a>
                     </div>
                 </nav>

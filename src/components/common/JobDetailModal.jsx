@@ -95,10 +95,18 @@ const JobDetailModal = ({ job, isOpen, onClose, onApply }) => {
 
                                     <h3 className="text-xl font-semibold mb-4 text-white">Key Responsibilities</h3>
                                     <ul className="list-disc list-outside ml-4 space-y-2 text-gray-300 font-light marker:text-cyan-500">
-                                        <li>Architect and build scalable smart contracts.</li>
-                                        <li>Collaborate with cross-functional teams to define, design, and ship new features.</li>
-                                        <li>Unit-test code for robustness, including edge cases, usability, and general reliability.</li>
-                                        <li>Work on bug fixing and improving application performance.</li>
+                                        {job.responsibilities ? (
+                                            job.responsibilities.map((resp, idx) => (
+                                                <li key={idx}>{resp}</li>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <li>Architect and build scalable smart contracts.</li>
+                                                <li>Collaborate with cross-functional teams to define, design, and ship new features.</li>
+                                                <li>Unit-test code for robustness, including edge cases, usability, and general reliability.</li>
+                                                <li>Work on bug fixing and improving application performance.</li>
+                                            </>
+                                        )}
                                     </ul>
                                 </div>
 

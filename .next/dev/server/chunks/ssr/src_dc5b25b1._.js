@@ -1770,22 +1770,38 @@ const LaserStreamSection = ()=>{
         setMounted(true);
         // Event Stream: Injects a new random event every 2.5s
         const eventInterval = setInterval(()=>{
-            const randomType = EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
-            const randomTemplate = randomType.templates[Math.floor(Math.random() * randomType.templates.length)];
-            const newEvent = {
-                id: Date.now(),
-                title: randomTemplate.title,
-                subtitle: randomType.subtitle,
-                time: 'Just now',
-                icon: randomType.icon,
-                extraIcon: randomTemplate.extra,
-                extraIcons: randomTemplate.extraIcons,
-                userImage: randomTemplate.img
-            };
-            setEvents((prev)=>[
+            setEvents((prev)=>{
+                let newEvent;
+                let isDuplicate = true;
+                let attempts = 0;
+                // Keep rolling until we get a name that doesn't match the most recent one
+                // (Max 10 attempts just as a safety fallback)
+                while(isDuplicate && attempts < 10){
+                    const randomType = EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
+                    const randomTemplate = randomType.templates[Math.floor(Math.random() * randomType.templates.length)];
+                    newEvent = {
+                        id: Date.now() + Math.random(),
+                        title: randomTemplate.title,
+                        subtitle: randomType.subtitle,
+                        time: 'Just now',
+                        icon: randomType.icon,
+                        extraIcon: randomTemplate.extra,
+                        extraIcons: randomTemplate.extraIcons,
+                        userImage: randomTemplate.img
+                    };
+                    // Extract just the first word (the name) from the new event and the previous event
+                    const newName = newEvent.title.split(' ')[0];
+                    const prevName = prev.length > 0 ? prev[0].title.split(' ')[0] : '';
+                    if (newName !== prevName) {
+                        isDuplicate = false;
+                    }
+                    attempts++;
+                }
+                return [
                     newEvent,
                     ...prev
-                ].slice(0, 5)); // Keep only top 5 items
+                ].slice(0, 5); // Keep only top 5 items
+            });
         }, 5000);
         return ()=>{
             clearInterval(eventInterval);
@@ -1807,7 +1823,7 @@ const LaserStreamSection = ()=>{
                                     className: "fill-cyan-300"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 154,
+                                    lineNumber: 173,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 mounted ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$magicui$2f$DecryptedText$2e$jsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"], {
@@ -1817,19 +1833,19 @@ const LaserStreamSection = ()=>{
                                     interval: 7500
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 156,
+                                    lineNumber: 175,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0)) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                     children: "Ultra low friction recruitment"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 163,
+                                    lineNumber: 182,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 153,
+                            lineNumber: 172,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
@@ -1837,7 +1853,7 @@ const LaserStreamSection = ()=>{
                             children: "Hiring with us"
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 168,
+                            lineNumber: 187,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1845,29 +1861,57 @@ const LaserStreamSection = ()=>{
                             children: "Hiring in the nascent tech space doesn't have to be painful. Our hyper-efficient hiring platform connects you with the best talent on the globe."
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 173,
+                            lineNumber: 192,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             className: "flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6",
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                                    className: "font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group",
+                                    className: "font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group relative overflow-hidden",
                                     children: [
-                                        "[ ",
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                            className: "text-cyan-400 group-hover:text-cyan-300",
-                                            children: "Access Talent"
-                                        }, void 0, false, {
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                            className: "transition-transform duration-300 group-hover:-translate-y-[150%]",
+                                            children: [
+                                                "[ ",
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                    className: "text-cyan-400 group-hover:text-cyan-300",
+                                                    children: "ACCESS_TALENT"
+                                                }, void 0, false, {
+                                                    fileName: "[project]/src/components/common/LaserStreamSection.jsx",
+                                                    lineNumber: 200,
+                                                    columnNumber: 35
+                                                }, ("TURBOPACK compile-time value", void 0)),
+                                                " ]"
+                                            ]
+                                        }, void 0, true, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 180,
-                                            columnNumber: 31
+                                            lineNumber: 199,
+                                            columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
-                                        " ]"
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                            className: "absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0 pointer-events-none",
+                                            children: [
+                                                "[ ",
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                    className: "text-gray-400",
+                                                    children: "COMING_SOON"
+                                                }, void 0, false, {
+                                                    fileName: "[project]/src/components/common/LaserStreamSection.jsx",
+                                                    lineNumber: 203,
+                                                    columnNumber: 35
+                                                }, ("TURBOPACK compile-time value", void 0)),
+                                                " ]"
+                                            ]
+                                        }, void 0, true, {
+                                            fileName: "[project]/src/components/common/LaserStreamSection.jsx",
+                                            lineNumber: 202,
+                                            columnNumber: 29
+                                        }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 179,
+                                    lineNumber: 198,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1879,19 +1923,19 @@ const LaserStreamSection = ()=>{
                                             className: "ml-2 group-hover:translate-x-1 transition-transform"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 184,
+                                            lineNumber: 208,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 182,
+                                    lineNumber: 206,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 178,
+                            lineNumber: 197,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -1900,12 +1944,12 @@ const LaserStreamSection = ()=>{
                                     text: feat
                                 }, i, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 191,
+                                    lineNumber: 215,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0)))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 189,
+                            lineNumber: 213,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1916,11 +1960,14 @@ const LaserStreamSection = ()=>{
                                     children: "See Also"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 197,
+                                    lineNumber: 221,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
-                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                    className: "group border border-gray-800 bg-gray-900/30 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-gray-700 hover:bg-gray-900/50 transition-all",
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
+                                    href: "https://medium.com/@agora4xyz",
+                                    target: "_blank",
+                                    rel: "noopener noreferrer",
+                                    className: "group border border-gray-800 bg-gray-900/30 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-gray-700 hover:bg-gray-900/50 transition-all block",
                                     children: [
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                             className: "flex items-center",
@@ -1931,12 +1978,12 @@ const LaserStreamSection = ()=>{
                                                         size: 20
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                        lineNumber: 201,
+                                                        lineNumber: 230,
                                                         columnNumber: 37
                                                     }, ("TURBOPACK compile-time value", void 0))
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                    lineNumber: 200,
+                                                    lineNumber: 229,
                                                     columnNumber: 33
                                                 }, ("TURBOPACK compile-time value", void 0)),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1946,7 +1993,7 @@ const LaserStreamSection = ()=>{
                                                             children: "Hiring Blog"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 204,
+                                                            lineNumber: 233,
                                                             columnNumber: 37
                                                         }, ("TURBOPACK compile-time value", void 0)),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1954,19 +2001,19 @@ const LaserStreamSection = ()=>{
                                                             children: "Read about our latest insights on the future of hiring"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 205,
+                                                            lineNumber: 234,
                                                             columnNumber: 37
                                                         }, ("TURBOPACK compile-time value", void 0))
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                    lineNumber: 203,
+                                                    lineNumber: 232,
                                                     columnNumber: 33
                                                 }, ("TURBOPACK compile-time value", void 0))
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 199,
+                                            lineNumber: 228,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$arrow$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ArrowRight$3e$__["ArrowRight"], {
@@ -1974,25 +2021,25 @@ const LaserStreamSection = ()=>{
                                             className: "text-gray-600 group-hover:text-white transition-colors"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 208,
+                                            lineNumber: 237,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 198,
+                                    lineNumber: 222,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 196,
+                            lineNumber: 220,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0))
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                    lineNumber: 150,
+                    lineNumber: 169,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0)),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2005,7 +2052,7 @@ const LaserStreamSection = ()=>{
                                     className: "absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 219,
+                                    lineNumber: 248,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2015,7 +2062,7 @@ const LaserStreamSection = ()=>{
                                             className: "absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 223,
+                                            lineNumber: 252,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2029,7 +2076,7 @@ const LaserStreamSection = ()=>{
                                                             children: "Clients we've worked with"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 227,
+                                                            lineNumber: 256,
                                                             columnNumber: 37
                                                         }, ("TURBOPACK compile-time value", void 0)),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2041,31 +2088,31 @@ const LaserStreamSection = ()=>{
                                                                         className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                                        lineNumber: 230,
+                                                                        lineNumber: 259,
                                                                         columnNumber: 45
                                                                     }, ("TURBOPACK compile-time value", void 0)),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                         className: "relative inline-flex rounded-full h-2 w-2 bg-green-500"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                                        lineNumber: 231,
+                                                                        lineNumber: 260,
                                                                         columnNumber: 45
                                                                     }, ("TURBOPACK compile-time value", void 0))
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                                lineNumber: 229,
+                                                                lineNumber: 258,
                                                                 columnNumber: 41
                                                             }, ("TURBOPACK compile-time value", void 0))
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 228,
+                                                            lineNumber: 257,
                                                             columnNumber: 37
                                                         }, ("TURBOPACK compile-time value", void 0))
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                    lineNumber: 226,
+                                                    lineNumber: 255,
                                                     columnNumber: 33
                                                 }, ("TURBOPACK compile-time value", void 0)),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2080,39 +2127,39 @@ const LaserStreamSection = ()=>{
                                                             className: "count-up-text text-white"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 238,
+                                                            lineNumber: 267,
                                                             columnNumber: 41
                                                         }, ("TURBOPACK compile-time value", void 0)) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                             className: "text-white",
                                                             children: INITIAL_COUNT
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                            lineNumber: 247,
+                                                            lineNumber: 276,
                                                             columnNumber: 41
                                                         }, ("TURBOPACK compile-time value", void 0)),
                                                         "<"
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                                    lineNumber: 236,
+                                                    lineNumber: 265,
                                                     columnNumber: 33
                                                 }, ("TURBOPACK compile-time value", void 0))
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 225,
+                                            lineNumber: 254,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                    lineNumber: 221,
+                                    lineNumber: 250,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 217,
+                            lineNumber: 246,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2122,34 +2169,34 @@ const LaserStreamSection = ()=>{
                                         event: event
                                     }, event.id, false, {
                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                        lineNumber: 259,
+                                        lineNumber: 288,
                                         columnNumber: 37
                                     }, ("TURBOPACK compile-time value", void 0)))
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                lineNumber: 257,
+                                lineNumber: 286,
                                 columnNumber: 29
                             }, ("TURBOPACK compile-time value", void 0))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                            lineNumber: 255,
+                            lineNumber: 284,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0))
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                    lineNumber: 214,
+                    lineNumber: 243,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0))
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-            lineNumber: 147,
+            lineNumber: 166,
             columnNumber: 13
         }, ("TURBOPACK compile-time value", void 0))
     }, void 0, false, {
         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-        lineNumber: 146,
+        lineNumber: 165,
         columnNumber: 9
     }, ("TURBOPACK compile-time value", void 0));
 };
@@ -2164,7 +2211,7 @@ const FeatureItem = ({ text })=>{
                 size: 18
             }, void 0, false, {
                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                lineNumber: 277,
+                lineNumber: 306,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0)),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2178,20 +2225,20 @@ const FeatureItem = ({ text })=>{
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                        lineNumber: 279,
+                        lineNumber: 308,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     rest.join('—')
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                lineNumber: 278,
+                lineNumber: 307,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0))
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-        lineNumber: 276,
+        lineNumber: 305,
         columnNumber: 9
     }, ("TURBOPACK compile-time value", void 0));
 };
@@ -2206,7 +2253,7 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                         children: event.icon
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                        lineNumber: 289,
+                        lineNumber: 318,
                         columnNumber: 13
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2220,7 +2267,7 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                                         children: event.title
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                        lineNumber: 294,
+                                        lineNumber: 323,
                                         columnNumber: 21
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     event.extraIcon && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2228,7 +2275,7 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                                         children: event.extraIcon
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                        lineNumber: 295,
+                                        lineNumber: 324,
                                         columnNumber: 41
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     event.userImage && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
@@ -2237,7 +2284,7 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                                         className: "w-5 h-5 rounded-full ml-2 border border-gray-600"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                        lineNumber: 296,
+                                        lineNumber: 325,
                                         columnNumber: 41
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     event.extraIcons && (Array.isArray(event.extraIcons) ? event.extraIcons.map((icon, i)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2245,20 +2292,20 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                                             children: icon
                                         }, i, false, {
                                             fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                            lineNumber: 299,
+                                            lineNumber: 328,
                                             columnNumber: 65
                                         }, ("TURBOPACK compile-time value", void 0))) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                         className: "ml-1 text-xs",
                                         children: event.extraIcons
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                        lineNumber: 300,
+                                        lineNumber: 329,
                                         columnNumber: 31
                                     }, ("TURBOPACK compile-time value", void 0)))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                lineNumber: 293,
+                                lineNumber: 322,
                                 columnNumber: 17
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2266,19 +2313,19 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                                 children: event.subtitle
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                                lineNumber: 303,
+                                lineNumber: 332,
                                 columnNumber: 17
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                        lineNumber: 292,
+                        lineNumber: 321,
                         columnNumber: 13
                     }, ("TURBOPACK compile-time value", void 0))
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                lineNumber: 288,
+                lineNumber: 317,
                 columnNumber: 9
             }, ("TURBOPACK compile-time value", void 0)),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2286,13 +2333,13 @@ const EventCard = ({ event })=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__
                 children: event.time
             }, void 0, false, {
                 fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-                lineNumber: 308,
+                lineNumber: 337,
                 columnNumber: 9
             }, ("TURBOPACK compile-time value", void 0))
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/common/LaserStreamSection.jsx",
-        lineNumber: 287,
+        lineNumber: 316,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 const __TURBOPACK__default__export__ = LaserStreamSection;
@@ -2549,7 +2596,7 @@ const ProjectNode = ({ index, total, isMobile })=>{
         className: "node-container project",
         style: styleProject,
         initial: {
-            opacity: 0,
+            opacity: 1,
             scale: 0.9,
             x: isMobile ? '-50%' : '50%',
             y: isMobile ? 26 : -26
@@ -2677,10 +2724,27 @@ const FlowingHub = ()=>{
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
         className: "flowing-hub-section",
         children: [
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
-                className: "section-heading mb-16 text-center mt-10",
-                children: "Network Transformation"
-            }, void 0, false, {
+            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                className: "text-center px-4 max-w-5xl mx-auto mb-16 mt-10",
+                children: [
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
+                        className: "section-heading mb-6",
+                        children: "Transforming raw signal into Tier 1 infrastructure"
+                    }, void 0, false, {
+                        fileName: "[project]/src/components/common/FlowingHub.jsx",
+                        lineNumber: 244,
+                        columnNumber: 17
+                    }, ("TURBOPACK compile-time value", void 0)),
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                        className: "text-gray-400 text-lg md:text-xl leading-relaxed mx-auto max-w-4xl font-sans",
+                        children: "The gap between elite engineering talent and the world's most ambitious projects is no longer a search problem—it's a trust problem. agora4 acts as the high-fidelity filter, sourcing from non-obvious alpha channels like Telegram Research groups and GitHub's top 0.1%. We don't just find talent; we integrate it into the projects that define the next decade of digital infrastructure."
+                    }, void 0, false, {
+                        fileName: "[project]/src/components/common/FlowingHub.jsx",
+                        lineNumber: 247,
+                        columnNumber: 17
+                    }, ("TURBOPACK compile-time value", void 0))
+                ]
+            }, void 0, true, {
                 fileName: "[project]/src/components/common/FlowingHub.jsx",
                 lineNumber: 243,
                 columnNumber: 13
@@ -2695,7 +2759,7 @@ const FlowingHub = ()=>{
                                 className: "hub-outer-glow"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 249,
+                                lineNumber: 254,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$render$2f$components$2f$motion$2f$proxy$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["motion"].div, {
@@ -2710,17 +2774,17 @@ const FlowingHub = ()=>{
                                 }
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 250,
+                                lineNumber: 255,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "hub-main overflow-hidden",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                        className: "absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"
+                                        className: "absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                        lineNumber: 256,
+                                        lineNumber: 261,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
@@ -2729,7 +2793,7 @@ const FlowingHub = ()=>{
                                         className: "hub-image"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                        lineNumber: 257,
+                                        lineNumber: 262,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$components$2f$AnimatePresence$2f$index$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AnimatePresence"], {
@@ -2752,24 +2816,24 @@ const FlowingHub = ()=>{
                                             }
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 260,
+                                            lineNumber: 265,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0))
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                        lineNumber: 258,
+                                        lineNumber: 263,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 255,
+                                lineNumber: 260,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                        lineNumber: 248,
+                        lineNumber: 253,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2782,12 +2846,12 @@ const FlowingHub = ()=>{
                                 isMobile: isMobile
                             }, node.id, false, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 274,
+                                lineNumber: 279,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0)))
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                        lineNumber: 272,
+                        lineNumber: 277,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2798,12 +2862,12 @@ const FlowingHub = ()=>{
                                 isMobile: isMobile
                             }, node.id, false, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 287,
+                                lineNumber: 292,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0)))
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                        lineNumber: 285,
+                        lineNumber: 290,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("svg", {
@@ -2823,7 +2887,7 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "0"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 298,
+                                                lineNumber: 303,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -2832,7 +2896,7 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "1"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 299,
+                                                lineNumber: 304,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -2841,13 +2905,13 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "0"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 300,
+                                                lineNumber: 305,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                        lineNumber: 297,
+                                        lineNumber: 302,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("linearGradient", {
@@ -2860,7 +2924,7 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "0"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 303,
+                                                lineNumber: 308,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -2869,7 +2933,7 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "1"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 304,
+                                                lineNumber: 309,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -2878,19 +2942,19 @@ const FlowingHub = ()=>{
                                                 stopOpacity: "0"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 305,
+                                                lineNumber: 310,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                        lineNumber: 302,
+                                        lineNumber: 307,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                lineNumber: 296,
+                                lineNumber: 301,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             SOURCES.map((node, i)=>{
@@ -2902,7 +2966,7 @@ const FlowingHub = ()=>{
                                             className: `flow-path input ${hoveredSource === node.id ? 'highlighted' : ''}`
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 313,
+                                            lineNumber: 318,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("path", {
@@ -2914,7 +2978,7 @@ const FlowingHub = ()=>{
                                             }
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 317,
+                                            lineNumber: 322,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(AnimatedBeam, {
@@ -2925,7 +2989,7 @@ const FlowingHub = ()=>{
                                             side: "left"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 322,
+                                            lineNumber: 327,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         [
@@ -2937,13 +3001,13 @@ const FlowingHub = ()=>{
                                                 onEnteringHub: triggerFlash
                                             }, `p-left-${node.id}-${delay}`, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 330,
+                                                lineNumber: 335,
                                                 columnNumber: 37
                                             }, ("TURBOPACK compile-time value", void 0)))
                                     ]
                                 }, `flow-left-${node.id}`, true, {
                                     fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                    lineNumber: 312,
+                                    lineNumber: 317,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0));
                             }),
@@ -2957,7 +3021,7 @@ const FlowingHub = ()=>{
                                             className: "flow-path output"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 347,
+                                            lineNumber: 352,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("path", {
@@ -2969,7 +3033,7 @@ const FlowingHub = ()=>{
                                             }
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 351,
+                                            lineNumber: 356,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(AnimatedBeam, {
@@ -2979,7 +3043,7 @@ const FlowingHub = ()=>{
                                             side: "right"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                            lineNumber: 356,
+                                            lineNumber: 361,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         [
@@ -3023,36 +3087,36 @@ const FlowingHub = ()=>{
                                                         className: "text-white"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                        lineNumber: 388,
+                                                        lineNumber: 393,
                                                         columnNumber: 45
                                                     }, ("TURBOPACK compile-time value", void 0))
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                    lineNumber: 387,
+                                                    lineNumber: 392,
                                                     columnNumber: 41
                                                 }, ("TURBOPACK compile-time value", void 0))
                                             }, `p-right-${node.id}-${delay}`, false, {
                                                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                                lineNumber: 363,
+                                                lineNumber: 368,
                                                 columnNumber: 37
                                             }, ("TURBOPACK compile-time value", void 0)))
                                     ]
                                 }, `flow-right-${node.id}`, true, {
                                     fileName: "[project]/src/components/common/FlowingHub.jsx",
-                                    lineNumber: 346,
+                                    lineNumber: 351,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0));
                             })
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/FlowingHub.jsx",
-                        lineNumber: 291,
+                        lineNumber: 296,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0))
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/common/FlowingHub.jsx",
-                lineNumber: 247,
+                lineNumber: 252,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0))
         ]
@@ -3093,16 +3157,16 @@ const TalentPortal = ()=>{
     }).map((_, i)=>`0x${Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0').slice(0, 4)}...`);
     const features = [
         {
-            title: "Protocol-Level Discovery",
+            title: "Selective stealth mode",
+            description: "Retain full privacy. Your identity is only surfaced to high-conviction teams with your permission."
+        },
+        {
+            title: "Open source discovery",
             description: "Map your proof-of-work directly to core engineering roles at Tier 1 projects."
         },
         {
-            title: "Proof-of-Work Verification",
-            description: "Skip the resume fluff. Our index authenticates your GitHub signal and technical contributions."
-        },
-        {
-            title: "Selective Stealth Mode",
-            description: "Retain full privacy. Your identity is only surfaced to high-conviction teams once a technical match is verified."
+            title: "Proof-of-work verification",
+            description: "Skip the resume fluff. Our index authenticate your identity and qualificationswith your GitHub and technical contributions."
         }
     ];
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
@@ -3134,7 +3198,7 @@ const TalentPortal = ()=>{
                             }
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 36,
+                            lineNumber: 37,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3173,7 +3237,7 @@ const TalentPortal = ()=>{
                                         }
                                     }, i, false, {
                                         fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                        lineNumber: 50,
+                                        lineNumber: 51,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0))),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$render$2f$components$2f$motion$2f$proxy$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["motion"].div, {
@@ -3194,12 +3258,12 @@ const TalentPortal = ()=>{
                                             children: code
                                         }, i, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 75,
+                                            lineNumber: 76,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)))
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 69,
+                                    lineNumber: 70,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3217,20 +3281,20 @@ const TalentPortal = ()=>{
                                             }
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 90,
+                                            lineNumber: 91,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                             className: "absolute inset-0 border-t border-blue-400/50 rounded-full animate-spin-slow"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 95,
+                                            lineNumber: 96,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 88,
+                                    lineNumber: 89,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3255,12 +3319,12 @@ const TalentPortal = ()=>{
                                                 className: "text-white"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                                lineNumber: 105,
+                                                lineNumber: 106,
                                                 columnNumber: 33
                                             }, ("TURBOPACK compile-time value", void 0))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 100,
+                                            lineNumber: 101,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$render$2f$components$2f$motion$2f$proxy$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["motion"].div, {
@@ -3283,12 +3347,12 @@ const TalentPortal = ()=>{
                                                 className: "text-emerald-400"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                                lineNumber: 112,
+                                                lineNumber: 113,
                                                 columnNumber: 33
                                             }, ("TURBOPACK compile-time value", void 0))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 107,
+                                            lineNumber: 108,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$render$2f$components$2f$motion$2f$proxy$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["motion"].div, {
@@ -3310,18 +3374,18 @@ const TalentPortal = ()=>{
                                                 className: "text-cyan-400"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                                lineNumber: 119,
+                                                lineNumber: 120,
                                                 columnNumber: 33
                                             }, ("TURBOPACK compile-time value", void 0))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 114,
+                                            lineNumber: 115,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 99,
+                                    lineNumber: 100,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3331,26 +3395,26 @@ const TalentPortal = ()=>{
                                             className: "w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 125,
+                                            lineNumber: 126,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         "SIGNAL_ACQUIRED"
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 124,
+                                    lineNumber: 125,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 46,
+                            lineNumber: 47,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0))
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                    lineNumber: 34,
+                    lineNumber: 35,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0)),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3364,7 +3428,7 @@ const TalentPortal = ()=>{
                                     className: "text-cyan-300 fill-cyan-300/10"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 134,
+                                    lineNumber: 135,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$magicui$2f$DecryptedText$2e$jsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"], {
@@ -3375,13 +3439,13 @@ const TalentPortal = ()=>{
                                     className: "text-cyan-300"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 135,
+                                    lineNumber: 136,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 133,
+                            lineNumber: 134,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
@@ -3389,7 +3453,7 @@ const TalentPortal = ()=>{
                             children: "Sync your signal"
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 144,
+                            lineNumber: 145,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -3402,7 +3466,7 @@ const TalentPortal = ()=>{
                                             size: 18
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 151,
+                                            lineNumber: 152,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3416,25 +3480,25 @@ const TalentPortal = ()=>{
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                                    lineNumber: 153,
+                                                    lineNumber: 154,
                                                     columnNumber: 37
                                                 }, ("TURBOPACK compile-time value", void 0)),
                                                 feature.description
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 152,
+                                            lineNumber: 153,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0))
                                     ]
                                 }, index, true, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 150,
+                                    lineNumber: 151,
                                     columnNumber: 29
                                 }, ("TURBOPACK compile-time value", void 0)))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 148,
+                            lineNumber: 149,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -3444,7 +3508,7 @@ const TalentPortal = ()=>{
                                     className: "absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#10b981_0%,#06b6d4_50%,#10b981_100%)]"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 161,
+                                    lineNumber: 162,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3454,37 +3518,37 @@ const TalentPortal = ()=>{
                                             className: "mr-2 h-5 w-5 group-hover:text-emerald-400 transition-colors"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                            lineNumber: 163,
+                                            lineNumber: 164,
                                             columnNumber: 29
                                         }, ("TURBOPACK compile-time value", void 0)),
                                         "Sync GitHub Identity"
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                                    lineNumber: 162,
+                                    lineNumber: 163,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0))
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/common/TalentPortal.jsx",
-                            lineNumber: 160,
+                            lineNumber: 161,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0))
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/common/TalentPortal.jsx",
-                    lineNumber: 132,
+                    lineNumber: 133,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0))
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/common/TalentPortal.jsx",
-            lineNumber: 31,
+            lineNumber: 32,
             columnNumber: 13
         }, ("TURBOPACK compile-time value", void 0))
     }, void 0, false, {
         fileName: "[project]/src/components/common/TalentPortal.jsx",
-        lineNumber: 30,
+        lineNumber: 31,
         columnNumber: 9
     }, ("TURBOPACK compile-time value", void 0));
 };
@@ -3516,13 +3580,13 @@ const CapitalLayer = ()=>{
         },
         {
             title: "Strategic Fundraising",
-            description: "Bridging the gap between human and financial capital. We connect high-conviction teams with strategic partners.",
+            description: "Bridging the gap between human and financial capital. We connect high-conviction teams with our strategic partners.",
             icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trending$2d$up$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__TrendingUp$3e$__["TrendingUp"],
             gradient: "from-emerald-500 to-cyan-500"
         },
         {
             title: "Ecosystem Advisory",
-            description: "Providing protocol-level strategy and team architecture consulting to ensure long-term scalability.",
+            description: "Providing strategy and team architecture consulting to ensure long-term scalability.",
             icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$users$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Users$3e$__["Users"],
             gradient: "from-orange-500 to-red-500"
         }
@@ -3801,8 +3865,8 @@ const ActiveNetworkQueries = ()=>{
                     className: "mb-12 text-center md:text-left",
                     children: [
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
-                            className: "text-3xl md:text-4xl font-bold uppercase tracking-widest text-white font-outfit mb-3",
-                            children: "Active Network Queries"
+                            className: "text-4xl md:text-5xl font-bold text-white mb-4 font-outfit tracking-tight",
+                            children: "Real time roles"
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/ActiveNetworkQueries.jsx",
                             lineNumber: 41,
@@ -4032,16 +4096,19 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 const ResearchLayer = ()=>{
     const reports = [
         {
-            title: "2026 Compensation Benchmarks for L2 Core Teams",
-            subtext: "A comparative analysis of compensation structures and equity models across major Ethereum scaling solutions."
+            title: "DeFi Vaults and the Recent Surge in Activity",
+            subtext: "Stablecoins have crossed the $300 billion mark. Now, curated DeFi vaults are providing the transparent, high-yield infrastructure that traditional finance can no longer ignore.",
+            url: "https://medium.com/@agora4xyz/agora-explorer-defi-vaults-and-the-recent-surge-in-activity-d3f14930fad1"
         },
         {
-            title: "Signal over Noise: The Evolution of GitHub Indexing",
-            subtext: "How our proprietary discovery primitive is redefining the verification of technical proof-of-work."
+            title: "How Institutions Adopting Crypto is Changing the Hiring Landscape",
+            subtext: "As Vanguard and other TradFi dinosaurs pivot toward crypto ETFs, the real battle isn't just for market share—it’s for talent. Discover how the bridge between Wall Street and Web3 is rewriting the corporate playbook and forcing a total rethink of institutional culture.",
+            url: "https://medium.com/@agora4xyz/agora-explorer-more-etfs-dinosaurs-less-nfts-crypto-bros-how-institutions-adopting-crypto-1f93de767e2a"
         },
         {
-            title: "The ZK-Talent Bottleneck: A Technical Report",
-            subtext: "Quantifying the supply-demand gap in zero-knowledge cryptography engineering and its impact on protocol roadmaps."
+            title: "H1 2025 Fundraising and Investment Trends",
+            subtext: "Despite a multi-year low in deal count, the first half of 2025 was the strongest for Web3 fundraising since 2022. Explore the data behind the infrastructure boom and the rise of late-stage conviction capital.",
+            url: "https://medium.com/@agora4xyz/h1-2025-fundraising-and-investment-trends-1aedf9a9b2dd"
         }
     ];
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
@@ -4052,10 +4119,10 @@ const ResearchLayer = ()=>{
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
                         className: "text-4xl md:text-5xl font-bold text-white mb-4 font-outfit tracking-tight",
-                        children: "The Research Layer"
+                        children: "Our research"
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                        lineNumber: 27,
+                        lineNumber: 30,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4063,13 +4130,13 @@ const ResearchLayer = ()=>{
                         children: "High-fidelity data on the state of Web3 human capital."
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                        lineNumber: 28,
+                        lineNumber: 31,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0))
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                lineNumber: 26,
+                lineNumber: 29,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0)),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4100,7 +4167,7 @@ const ResearchLayer = ()=>{
                                         size: 16
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 44,
+                                        lineNumber: 47,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4108,13 +4175,13 @@ const ResearchLayer = ()=>{
                                         children: "Intelligence Report"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 45,
+                                        lineNumber: 48,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                lineNumber: 43,
+                                lineNumber: 46,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4126,12 +4193,12 @@ const ResearchLayer = ()=>{
                                             size: 24
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                            lineNumber: 51,
+                                            lineNumber: 54,
                                             columnNumber: 33
                                         }, ("TURBOPACK compile-time value", void 0))
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 50,
+                                        lineNumber: 53,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
@@ -4139,7 +4206,7 @@ const ResearchLayer = ()=>{
                                         children: report.title
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 54,
+                                        lineNumber: 57,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4147,17 +4214,19 @@ const ResearchLayer = ()=>{
                                         children: report.subtext
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 55,
+                                        lineNumber: 58,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                lineNumber: 49,
+                                lineNumber: 52,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
-                                href: "#",
+                                href: report.url || "#",
+                                target: report.url ? "_blank" : "_self",
+                                rel: report.url ? "noopener noreferrer" : "",
                                 className: "flex items-center text-xs font-mono text-white/60 group-hover:text-white transition-colors uppercase tracking-widest mt-auto",
                                 children: [
                                     "READ_REPORT",
@@ -4166,30 +4235,30 @@ const ResearchLayer = ()=>{
                                         className: "ml-2 group-hover:translate-x-1 transition-transform"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                        lineNumber: 61,
+                                        lineNumber: 69,
                                         columnNumber: 29
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                                lineNumber: 59,
+                                lineNumber: 62,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, idx, true, {
                         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                        lineNumber: 34,
+                        lineNumber: 37,
                         columnNumber: 21
                     }, ("TURBOPACK compile-time value", void 0)))
             }, void 0, false, {
                 fileName: "[project]/src/components/common/ResearchLayer.jsx",
-                lineNumber: 32,
+                lineNumber: 35,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0))
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/common/ResearchLayer.jsx",
-        lineNumber: 24,
+        lineNumber: 27,
         columnNumber: 9
     }, ("TURBOPACK compile-time value", void 0));
 };
@@ -4644,13 +4713,18 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$framer$2d$motion$2f$dist$2f$es$2f$render$2f$components$2f$motion$2f$proxy$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/framer-motion/dist/es/render/components/motion/proxy.mjs [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$arrow$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ArrowRight$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/arrow-right.js [app-ssr] (ecmascript) <export default as ArrowRight>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$common$2f$FaultyTerminal$2e$jsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/common/FaultyTerminal.jsx [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$react$2f$index$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next-auth/react/index.js [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$vercel$2f$analytics$2f$dist$2f$index$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/@vercel/analytics/dist/index.mjs [app-ssr] (ecmascript)");
 "use client";
 ;
 ;
 ;
 ;
 ;
+;
+;
 const TheHandshake = ()=>{
+    const { data: session, status } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$react$2f$index$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useSession"])();
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
         className: "relative w-full min-h-[600px] overflow-hidden bg-transparent text-white flex flex-col items-center justify-center py-20 px-4 md:px-8",
         children: [
@@ -4679,12 +4753,12 @@ const TheHandshake = ()=>{
                     brightness: 0.4
                 }, void 0, false, {
                     fileName: "[project]/src/components/common/TheHandshake.jsx",
-                    lineNumber: 14,
+                    lineNumber: 18,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0))
             }, void 0, false, {
                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                lineNumber: 13,
+                lineNumber: 17,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0)),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4722,12 +4796,12 @@ const TheHandshake = ()=>{
                         }
                     }, i, false, {
                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                        lineNumber: 38,
+                        lineNumber: 42,
                         columnNumber: 21
                     }, ("TURBOPACK compile-time value", void 0)))
             }, void 0, false, {
                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                lineNumber: 36,
+                lineNumber: 40,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0)),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4737,25 +4811,25 @@ const TheHandshake = ()=>{
                         className: "text-center space-y-6",
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
-                                className: "text-5xl md:text-7xl font-extrabold uppercase tracking-tighter font-outfit bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60",
-                                children: "Initialize Connection"
+                                className: "text-5xl md:text-7xl font-extrabold tracking-tighter font-outfit bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60",
+                                children: "Initialize connection"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 63,
+                                lineNumber: 67,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                 className: "max-w-2xl mx-auto text-lg md:text-xl text-gray-400 font-light",
-                                children: "Whether you are a founder building the next primitive or an engineer with high-fidelity signal—synchronize with the layer."
+                                children: "Whether you are a founder building the next primitive or an engineer with high-fidelity signal - synchronize with the layer."
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 66,
+                                lineNumber: 70,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                        lineNumber: 62,
+                        lineNumber: 66,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4771,20 +4845,20 @@ const TheHandshake = ()=>{
                                                 className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 75,
+                                                lineNumber: 79,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 className: "relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 76,
+                                                lineNumber: 80,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 74,
+                                        lineNumber: 78,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4796,26 +4870,26 @@ const TheHandshake = ()=>{
                                                 children: "150+"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 78,
+                                                lineNumber: 82,
                                                 columnNumber: 118
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 78,
+                                        lineNumber: 82,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 73,
+                                lineNumber: 77,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "hidden md:block w-px h-4 bg-white/10"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 80,
+                                lineNumber: 84,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4828,20 +4902,20 @@ const TheHandshake = ()=>{
                                                 className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 83,
+                                                lineNumber: 87,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 className: "relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 84,
+                                                lineNumber: 88,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 82,
+                                        lineNumber: 86,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4853,26 +4927,26 @@ const TheHandshake = ()=>{
                                                 children: "$2B+"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 86,
+                                                lineNumber: 90,
                                                 columnNumber: 119
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 86,
+                                        lineNumber: 90,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 81,
+                                lineNumber: 85,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "hidden md:block w-px h-4 bg-white/10"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 88,
+                                lineNumber: 92,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4885,20 +4959,20 @@ const TheHandshake = ()=>{
                                                 className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 91,
+                                                lineNumber: 95,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 className: "relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 92,
+                                                lineNumber: 96,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 90,
+                                        lineNumber: 94,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4910,25 +4984,25 @@ const TheHandshake = ()=>{
                                                 children: "10k+"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 94,
+                                                lineNumber: 98,
                                                 columnNumber: 120
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 94,
+                                        lineNumber: 98,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 89,
+                                lineNumber: 93,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                        lineNumber: 72,
+                        lineNumber: 76,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0)),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4942,10 +5016,10 @@ const TheHandshake = ()=>{
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
                                                 className: "text-3xl font-bold text-white font-outfit mb-2",
-                                                children: "Access Talent"
+                                                children: "Access talent"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 104,
+                                                lineNumber: 108,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4953,36 +5027,42 @@ const TheHandshake = ()=>{
                                                 children: "Query the layer for elite engineering units and institutional support."
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 105,
+                                                lineNumber: 109,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 103,
+                                        lineNumber: 107,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
-                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                                        className: "mt-auto self-start bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-blue-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] group-hover:px-10",
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
+                                        href: "https://t.me/fincooney",
+                                        target: "_blank",
+                                        rel: "noopener noreferrer",
+                                        onClick: ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$vercel$2f$analytics$2f$dist$2f$index$2e$mjs__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["track"])('Contact Clicked', {
+                                                platform: 'Telegram'
+                                            }),
+                                        className: "mt-auto self-start bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] group-hover:px-10",
                                         children: [
                                             "[ CONTACT_AGORA4 ] ",
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$arrow$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ArrowRight$3e$__["ArrowRight"], {
                                                 size: 16
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 110,
+                                                lineNumber: 120,
                                                 columnNumber: 48
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 109,
+                                        lineNumber: 113,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 102,
+                                lineNumber: 106,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0)),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4993,10 +5073,10 @@ const TheHandshake = ()=>{
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
                                                 className: "text-3xl font-bold text-white font-outfit mb-2",
-                                                children: "Sync Signal"
+                                                children: "Sync signal"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 117,
+                                                lineNumber: 127,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0)),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5004,54 +5084,58 @@ const TheHandshake = ()=>{
                                                 children: "Join the index and map your proof-of-work to high-conviction protocols."
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 118,
+                                                lineNumber: 128,
                                                 columnNumber: 29
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 116,
+                                        lineNumber: 126,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                                        className: "mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10",
+                                        onClick: ()=>!session && (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$react$2f$index$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["signIn"])('github'),
+                                        disabled: status === 'loading' || status === 'authenticated',
+                                        className: "mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10 disabled:opacity-70 disabled:cursor-not-allowed",
                                         children: [
-                                            "[ SYNC_GITHUB ] ",
+                                            "[ ",
+                                            status === 'loading' ? 'VERIFYING...' : status === 'authenticated' ? 'IDENTITY_SYNCED' : 'SYNC_GITHUB',
+                                            " ] ",
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$arrow$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ArrowRight$3e$__["ArrowRight"], {
                                                 size: 16
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                                lineNumber: 123,
-                                                columnNumber: 45
+                                                lineNumber: 137,
+                                                columnNumber: 138
                                             }, ("TURBOPACK compile-time value", void 0))
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                        lineNumber: 122,
+                                        lineNumber: 132,
                                         columnNumber: 25
                                     }, ("TURBOPACK compile-time value", void 0))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                                lineNumber: 115,
+                                lineNumber: 125,
                                 columnNumber: 21
                             }, ("TURBOPACK compile-time value", void 0))
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/common/TheHandshake.jsx",
-                        lineNumber: 99,
+                        lineNumber: 103,
                         columnNumber: 17
                     }, ("TURBOPACK compile-time value", void 0))
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/common/TheHandshake.jsx",
-                lineNumber: 59,
+                lineNumber: 63,
                 columnNumber: 13
             }, ("TURBOPACK compile-time value", void 0))
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/common/TheHandshake.jsx",
-        lineNumber: 10,
+        lineNumber: 14,
         columnNumber: 9
     }, ("TURBOPACK compile-time value", void 0));
 };

@@ -13,17 +13,18 @@ const TalentPortal = () => {
 
     const features = [
         {
-            title: "Protocol-Level Discovery",
+            title: "Selective stealth mode",
+            description: "Retain full privacy. Your identity is only surfaced to high-conviction teams with your permission."
+        },
+        {
+            title: "Open source discovery",
             description: "Map your proof-of-work directly to core engineering roles at Tier 1 projects."
         },
         {
-            title: "Proof-of-Work Verification",
-            description: "Skip the resume fluff. Our index authenticates your GitHub signal and technical contributions."
-        },
-        {
-            title: "Selective Stealth Mode",
-            description: "Retain full privacy. Your identity is only surfaced to high-conviction teams once a technical match is verified."
+            title: "Proof-of-work verification",
+            description: "Skip the resume fluff. Our index authenticate your identity and qualificationswith your GitHub and technical contributions."
         }
+
     ];
 
     return (

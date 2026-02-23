@@ -143,7 +143,7 @@ const ProjectNode = ({ index, total, isMobile }) => {
         <motion.div
             className="node-container project"
             style={styleProject}
-            initial={{ opacity: 0, scale: 0.9, x: isMobile ? '-50%' : '50%', y: isMobile ? 26 : -26 }}
+            initial={{ opacity: 1, scale: 0.9, x: isMobile ? '-50%' : '50%', y: isMobile ? 26 : -26 }}
             animate={{ opacity: 1, scale: 1, x: isMobile ? '-50%' : '50%', y: isMobile ? 26 : -26 }}
             whileHover={{ scale: 1.05 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
@@ -240,9 +240,14 @@ const FlowingHub = () => {
 
     return (
         <section className="flowing-hub-section">
-            <h2 className="section-heading mb-16 text-center mt-10">
-                Network Transformation
-            </h2>
+            <div className="text-center px-4 max-w-5xl mx-auto mb-16 mt-10">
+                <h2 className="section-heading mb-6">
+                    Transforming raw signal into Tier 1 infrastructure
+                </h2>
+                <p className="text-gray-400 text-lg md:text-xl leading-relaxed mx-auto max-w-4xl font-sans">
+                    The gap between elite engineering talent and the world's most ambitious projects is no longer a search problem—it's a trust problem. agora4 acts as the high-fidelity filter, sourcing from non-obvious alpha channels like Telegram Research groups and GitHub's top 0.1%. We don't just find talent; we integrate it into the projects that define the next decade of digital infrastructure.
+                </p>
+            </div>
 
             <div className="flowing-hub-container">
                 <div className="hub-wrapper">
@@ -253,7 +258,7 @@ const FlowingHub = () => {
                         transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
                     />
                     <div className="hub-main overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
                         <img src="/agora4logo.png" alt="Agora4" className="hub-image" />
                         <AnimatePresence>
                             {isFlashActive && (

@@ -900,16 +900,16 @@ const HomePage = ()=>{
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                 className: "absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0",
                                                 children: [
-                                                    "[ ",
+                                                    "[ ",
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                         className: "text-gray-400",
                                                         children: "COMING_SOON"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/app/page.jsx",
                                                         lineNumber: 117,
-                                                        columnNumber: 35
+                                                        columnNumber: 40
                                                     }, ("TURBOPACK compile-time value", void 0)),
-                                                    " ]"
+                                                    " ]"
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/app/page.jsx",
@@ -926,16 +926,16 @@ const HomePage = ()=>{
                                         href: "/jobs",
                                         className: "font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group flex items-center justify-center",
                                         children: [
-                                            "[ ",
+                                            "[ ",
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 className: "text-cyan-400 group-hover:text-cyan-300",
                                                 children: "VIEW_JOBS"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/app/page.jsx",
                                                 lineNumber: 121,
-                                                columnNumber: 31
+                                                columnNumber: 36
                                             }, ("TURBOPACK compile-time value", void 0)),
-                                            " ]"
+                                            " ]"
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/app/page.jsx",

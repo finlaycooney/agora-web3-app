@@ -40,33 +40,59 @@ const Header = ({ isVisible })=>{
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                             href: "/",
                             className: "nav-link text-white hover:text-[#99ffff] transition duration-500",
-                            children: "[HOME]"
+                            children: "[ HOME ]"
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/Header.jsx",
                             lineNumber: 20,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                            className: "button-tooltip-wrapper",
+                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
+                            href: "/",
+                            onClick: (e)=>e.preventDefault(),
+                            "aria-disabled": "true",
+                            className: "relative group overflow-hidden flex items-center justify-center cursor-not-allowed",
+                            style: {
+                                opacity: 1
+                            },
                             children: [
-                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
-                                    href: "/",
-                                    onClick: (e)=>e.preventDefault(),
-                                    "aria-disabled": "true",
-                                    className: "nav-link text-white hover:text-[#99ffff] transition duration-500",
-                                    style: {
-                                        opacity: 1,
-                                        cursor: 'not-allowed'
-                                    },
-                                    children: "[ACCESS_TALENT]"
-                                }, void 0, false, {
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                    className: "nav-link text-white transition-transform duration-300 group-hover:-translate-y-[150%]",
+                                    children: [
+                                        "[ ",
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                            children: "ACCESS_TALENT"
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/common/Header.jsx",
+                                            lineNumber: 31,
+                                            columnNumber: 36
+                                        }, ("TURBOPACK compile-time value", void 0)),
+                                        " ]"
+                                    ]
+                                }, void 0, true, {
                                     fileName: "[project]/src/components/common/Header.jsx",
-                                    lineNumber: 24,
+                                    lineNumber: 30,
                                     columnNumber: 25
                                 }, ("TURBOPACK compile-time value", void 0)),
-                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                    className: "tooltip-tag",
-                                    children: "Coming soon!"
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0 pointer-events-none",
+                                    children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        className: "nav-link text-gray-400 whitespace-nowrap",
+                                        children: [
+                                            "[ ",
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                children: "COMING_SOON"
+                                            }, void 0, false, {
+                                                fileName: "[project]/src/components/common/Header.jsx",
+                                                lineNumber: 35,
+                                                columnNumber: 40
+                                            }, ("TURBOPACK compile-time value", void 0)),
+                                            " ]"
+                                        ]
+                                    }, void 0, true, {
+                                        fileName: "[project]/src/components/common/Header.jsx",
+                                        lineNumber: 34,
+                                        columnNumber: 29
+                                    }, ("TURBOPACK compile-time value", void 0))
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/common/Header.jsx",
                                     lineNumber: 33,
@@ -88,15 +114,25 @@ const Header = ({ isVisible })=>{
                                     opacity: 1,
                                     cursor: 'pointer'
                                 },
-                                children: "[VIEW_JOBS]"
-                            }, void 0, false, {
+                                children: [
+                                    "[ ",
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        children: "VIEW_JOBS"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/common/Header.jsx",
+                                        lineNumber: 50,
+                                        columnNumber: 36
+                                    }, ("TURBOPACK compile-time value", void 0)),
+                                    " ]"
+                                ]
+                            }, void 0, true, {
                                 fileName: "[project]/src/components/common/Header.jsx",
-                                lineNumber: 41,
+                                lineNumber: 43,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/Header.jsx",
-                            lineNumber: 40,
+                            lineNumber: 42,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0)),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -110,15 +146,25 @@ const Header = ({ isVisible })=>{
                                     opacity: 1,
                                     cursor: 'pointer'
                                 },
-                                children: "[BLOG]"
-                            }, void 0, false, {
+                                children: [
+                                    "[ ",
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        children: "BLOG"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/common/Header.jsx",
+                                        lineNumber: 63,
+                                        columnNumber: 36
+                                    }, ("TURBOPACK compile-time value", void 0)),
+                                    " ]"
+                                ]
+                            }, void 0, true, {
                                 fileName: "[project]/src/components/common/Header.jsx",
-                                lineNumber: 54,
+                                lineNumber: 56,
                                 columnNumber: 25
                             }, ("TURBOPACK compile-time value", void 0))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/Header.jsx",
-                            lineNumber: 53,
+                            lineNumber: 55,
                             columnNumber: 21
                         }, ("TURBOPACK compile-time value", void 0))
                     ]
@@ -144,22 +190,22 @@ const Header = ({ isVisible })=>{
                                 d: "M4 6h16M4 12h16m-7 6h7"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/common/Header.jsx",
-                                lineNumber: 70,
+                                lineNumber: 72,
                                 columnNumber: 29
                             }, ("TURBOPACK compile-time value", void 0))
                         }, void 0, false, {
                             fileName: "[project]/src/components/common/Header.jsx",
-                            lineNumber: 69,
+                            lineNumber: 71,
                             columnNumber: 25
                         }, ("TURBOPACK compile-time value", void 0))
                     }, void 0, false, {
                         fileName: "[project]/src/components/common/Header.jsx",
-                        lineNumber: 68,
+                        lineNumber: 70,
                         columnNumber: 21
                     }, ("TURBOPACK compile-time value", void 0))
                 }, void 0, false, {
                     fileName: "[project]/src/components/common/Header.jsx",
-                    lineNumber: 67,
+                    lineNumber: 69,
                     columnNumber: 17
                 }, ("TURBOPACK compile-time value", void 0))
             ]

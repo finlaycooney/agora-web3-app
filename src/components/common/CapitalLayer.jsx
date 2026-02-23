@@ -13,13 +13,13 @@ const CapitalLayer = () => {
         },
         {
             title: "Strategic Fundraising",
-            description: "Bridging the gap between human and financial capital. We connect high-conviction teams with strategic partners.",
+            description: "Bridging the gap between human and financial capital. We connect high-conviction teams with our strategic partners.",
             icon: TrendingUp,
             gradient: "from-emerald-500 to-cyan-500"
         },
         {
             title: "Ecosystem Advisory",
-            description: "Providing protocol-level strategy and team architecture consulting to ensure long-term scalability.",
+            description: "Providing strategy and team architecture consulting to ensure long-term scalability.",
             icon: Users,
             gradient: "from-orange-500 to-red-500"
         }

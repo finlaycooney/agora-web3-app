@@ -7,16 +7,19 @@ import { FileText, ArrowRight, CheckCircle2 } from 'lucide-react';
 const ResearchLayer = () => {
     const reports = [
         {
-            title: "2026 Compensation Benchmarks for L2 Core Teams",
-            subtext: "A comparative analysis of compensation structures and equity models across major Ethereum scaling solutions."
+            title: "DeFi Vaults and the Recent Surge in Activity",
+            subtext: "Stablecoins have crossed the $300 billion mark. Now, curated DeFi vaults are providing the transparent, high-yield infrastructure that traditional finance can no longer ignore.",
+            url: "https://medium.com/@agora4xyz/agora-explorer-defi-vaults-and-the-recent-surge-in-activity-d3f14930fad1"
         },
         {
-            title: "Signal over Noise: The Evolution of GitHub Indexing",
-            subtext: "How our proprietary discovery primitive is redefining the verification of technical proof-of-work."
+            title: "How Institutions Adopting Crypto is Changing the Hiring Landscape",
+            subtext: "As Vanguard and other TradFi dinosaurs pivot toward crypto ETFs, the real battle isn't just for market share—it’s for talent. Discover how the bridge between Wall Street and Web3 is rewriting the corporate playbook and forcing a total rethink of institutional culture.",
+            url: "https://medium.com/@agora4xyz/agora-explorer-more-etfs-dinosaurs-less-nfts-crypto-bros-how-institutions-adopting-crypto-1f93de767e2a"
         },
         {
-            title: "The ZK-Talent Bottleneck: A Technical Report",
-            subtext: "Quantifying the supply-demand gap in zero-knowledge cryptography engineering and its impact on protocol roadmaps."
+            title: "H1 2025 Fundraising and Investment Trends",
+            subtext: "Despite a multi-year low in deal count, the first half of 2025 was the strongest for Web3 fundraising since 2022. Explore the data behind the infrastructure boom and the rise of late-stage conviction capital.",
+            url: "https://medium.com/@agora4xyz/h1-2025-fundraising-and-investment-trends-1aedf9a9b2dd"
         }
     ];
 
@@ -24,7 +27,7 @@ const ResearchLayer = () => {
         <section className="w-full max-w-7xl mx-auto px-4 py-24">
             {/* Header */}
             <div className="mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 font-outfit tracking-tight">The Research Layer</h2>
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 font-outfit tracking-tight">Our research</h2>
                 <p className="text-gray-400/80 font-sans text-lg max-w-2xl">High-fidelity data on the state of Web3 human capital.</p>
             </div>
 
@@ -56,7 +59,12 @@ const ResearchLayer = () => {
                         </div>
 
                         {/* CTA */}
-                        <a href="#" className="flex items-center text-xs font-mono text-white/60 group-hover:text-white transition-colors uppercase tracking-widest mt-auto">
+                        <a
+                            href={report.url || "#"}
+                            target={report.url ? "_blank" : "_self"}
+                            rel={report.url ? "noopener noreferrer" : ""}
+                            className="flex items-center text-xs font-mono text-white/60 group-hover:text-white transition-colors uppercase tracking-widest mt-auto"
+                        >
                             READ_REPORT
                             <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform" />
                         </a>

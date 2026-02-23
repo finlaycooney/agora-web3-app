@@ -38,8 +38,8 @@ const ActiveNetworkQueries = () => {
             <div className="max-w-7xl mx-auto px-4 relative z-10">
                 {/* Header */}
                 <div className="mb-12 text-center md:text-left">
-                    <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-widest text-white font-outfit mb-3">
-                        Active Network Queries
+                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 font-outfit tracking-tight">
+                        Real time roles
                     </h2>
                     <p className="text-gray-500 font-sans text-lg">
                         Real-time protocol demand and institutional engineering requirements.

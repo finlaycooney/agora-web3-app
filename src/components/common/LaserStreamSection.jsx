@@ -120,21 +120,40 @@ const LaserStreamSection = () => {
         setMounted(true);
         // Event Stream: Injects a new random event every 2.5s
         const eventInterval = setInterval(() => {
-            const randomType = EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
-            const randomTemplate = randomType.templates[Math.floor(Math.random() * randomType.templates.length)];
+            setEvents(prev => {
+                let newEvent;
+                let isDuplicate = true;
+                let attempts = 0;
 
-            const newEvent = {
-                id: Date.now(),
-                title: randomTemplate.title,
-                subtitle: randomType.subtitle,
-                time: 'Just now',
-                icon: randomType.icon,
-                extraIcon: randomTemplate.extra,
-                extraIcons: randomTemplate.extraIcons,
-                userImage: randomTemplate.img
-            };
+                // Keep rolling until we get a name that doesn't match the most recent one
+                // (Max 10 attempts just as a safety fallback)
+                while (isDuplicate && attempts < 10) {
+                    const randomType = EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
+                    const randomTemplate = randomType.templates[Math.floor(Math.random() * randomType.templates.length)];
 
-            setEvents(prev => [newEvent, ...prev].slice(0, 5)); // Keep only top 5 items
+                    newEvent = {
+                        id: Date.now() + Math.random(), // Ensure unique ID even if rapid fire
+                        title: randomTemplate.title,
+                        subtitle: randomType.subtitle,
+                        time: 'Just now',
+                        icon: randomType.icon,
+                        extraIcon: randomTemplate.extra,
+                        extraIcons: randomTemplate.extraIcons,
+                        userImage: randomTemplate.img
+                    };
+
+                    // Extract just the first word (the name) from the new event and the previous event
+                    const newName = newEvent.title.split(' ')[0];
+                    const prevName = prev.length > 0 ? prev[0].title.split(' ')[0] : '';
+
+                    if (newName !== prevName) {
+                        isDuplicate = false;
+                    }
+                    attempts++;
+                }
+
+                return [newEvent, ...prev].slice(0, 5); // Keep only top 5 items
+            });
         }, 5000);
 
         return () => {
@@ -176,8 +195,13 @@ const LaserStreamSection = () => {
 
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
-                        <button className="font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group">
-                            [ <span className="text-cyan-400 group-hover:text-cyan-300">Access Talent</span> ]
+                        <button className="font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group relative overflow-hidden">
+                            <div className="transition-transform duration-300 group-hover:-translate-y-[150%]">
+                                [ <span className="text-cyan-400 group-hover:text-cyan-300">ACCESS_TALENT</span> ]
+                            </div>
+                            <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0 pointer-events-none">
+                                [ <span className="text-gray-400">COMING_SOON</span> ]
+                            </div>
                         </button>
                         <button className="group flex items-center text-white font-semibold hover:text-cyan-300 transition-colors">
                             Learn more
@@ -195,7 +219,12 @@ const LaserStreamSection = () => {
                     {/* 'See Also' Bottom Card */}
                     <div className="pt-8 border-t border-gray-800/50 mt-8">
                         <h4 className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mb-4 font-mono font-bold">See Also</h4>
-                        <div className="group border border-gray-800 bg-gray-900/30 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-gray-700 hover:bg-gray-900/50 transition-all">
+                        <a
+                            href="https://medium.com/@agora4xyz"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group border border-gray-800 bg-gray-900/30 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-gray-700 hover:bg-gray-900/50 transition-all block"
+                        >
                             <div className="flex items-center">
                                 <div className="bg-gray-800/50 p-2 rounded-lg mr-4 text-cyan-300 group-hover:scale-110 transition-transform">
                                     <Radio size={20} />
@@ -206,7 +235,7 @@ const LaserStreamSection = () => {
                                 </div>
                             </div>
                             <ArrowRight size={18} className="text-gray-600 group-hover:text-white transition-colors" />
-                        </div>
+                        </a>
                     </div>
                 </div>
 
