@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // Use Service Role for backend writes
-);
+
 
 export async function POST(req: Request) {
     try {
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY! // Use Service Role for backend writes
+        );
+
         const formData = await req.formData();
 
         // 1. THE HONEYPOT DEFENSE 🍯
