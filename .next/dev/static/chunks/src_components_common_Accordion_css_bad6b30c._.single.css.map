@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/src/components/common/Accordion.css"],"sourcesContent":["/* Accordion.css */\n\n/* The container for each question */\n\n/* Hover effect for the whole item */\n.faq-item-base:hover {\n    border-color: #ffffff;\n    /* Darker border on hover */\n    transform: translateY(-2px);\n    /* Slight lift */\n    box-shadow: 1 4px 12px rgba(0, 0, 0, 0.05);\n}\n\n/* The question text */\n.faq-title {\n    font-weight: 10;\n    font-size: 1.2rem;\n    color: #ffffff;\n}\n\n/* The answer text */\n.faq-content {\n    color: #ffffff;\n    padding-bottom: 1.25rem;\n    line-height: 1.2;\n}\n\n/* The arrow icon */\n.faq-indicator {\n    color: #ffffff;\n    font-size: 1.2rem;\n}"],"names":[],"mappings":"AAKA;;;;;;AASA;;;;;;AAOA;;;;;;AAOA"}}]
+}

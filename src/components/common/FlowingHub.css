@@ -1,0 +1,236 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+
+.flowing-hub-section {
+    position: relative;
+    width: 100%;
+    min-height: 700px;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    padding: 2rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flowing-hub-section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.flowing-hub-container {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    height: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Hub Styling */
+.hub-wrapper {
+    position: relative;
+    z-index: 20;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hub-outer-glow {
+    position: absolute;
+    inset: -20px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(20px);
+    animation: breathing-glow 4s ease-in-out infinite;
+}
+
+@keyframes breathing-glow {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.3;
+    }
+
+    50% {
+        transform: scale(1.4);
+        opacity: 0.6;
+    }
+}
+
+.hub-ring {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+}
+
+.hub-main {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: rgba(30, 58, 138, 0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 25px;
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+}
+
+.hub-image {
+    width: 80%;
+    height: auto;
+    filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.4));
+    z-index: 2;
+}
+
+.hub-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    border-radius: 50%;
+    z-index: 3;
+    pointer-events: none;
+}
+
+/* Node Styling */
+.node-container {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 10;
+    cursor: pointer;
+}
+
+.node-icon-box {
+    width: 52px;
+    height: 52px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(207, 250, 254, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.node-container:hover .node-icon-box {
+    background: rgba(30, 58, 138, 0.4);
+    border-color: rgba(6, 182, 212, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.2);
+}
+
+.node-label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: #94a3b8;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.node-container.project .node-label {
+    text-align: center;
+}
+
+/* SVG & Paths */
+.svg-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.flow-path {
+    fill: none;
+    stroke-width: 1.5;
+    transition: all 0.5s ease;
+}
+
+.flow-path.input {
+    stroke: rgba(148, 163, 184, 0.15);
+    /* Dimmed Slate */
+}
+
+.flow-path.output {
+    stroke: rgba(16, 185, 129, 0.1);
+    /* Dimmed Success Emerald */
+}
+
+.flow-path.highlighted {
+    stroke-width: 2.5;
+    opacity: 1;
+}
+
+.flow-path.input.highlighted {
+    stroke: rgba(34, 211, 238, 0.6);
+}
+
+.flow-path.output.highlighted {
+    stroke: rgba(16, 185, 129, 0.6);
+}
+
+/* Crawling Dash Animation */
+.crawling-path {
+    fill: none;
+    stroke-width: 2;
+    stroke-dasharray: 4, 12;
+    animation: dash-crawl 10s linear infinite;
+    opacity: 0.4;
+}
+
+@keyframes dash-crawl {
+    from {
+        stroke-dashoffset: 200;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Mobile Layout */
+@media (max-width: 768px) {
+    .flowing-hub-container {
+        height: 1000px;
+        flex-direction: column;
+    }
+
+    .hub-wrapper {
+        width: 120px;
+        height: 120px;
+        order: 2;
+        margin: 80px 0;
+    }
+
+    .source-nodes {
+        order: 1;
+    }
+
+    .output-nodes {
+        order: 3;
+    }
+}

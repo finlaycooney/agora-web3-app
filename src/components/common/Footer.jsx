@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 // This is the Footer component for your application.
 // It's a self-contained block of JSX that can be imported into any page.

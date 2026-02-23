@@ -1,0 +1,258 @@
+/* =========================================
+   1. GENERAL SECTION & RESET
+   ========================================= */
+.section {
+    padding: 3rem 1.5rem;
+    /* Reduced padding for mobile */
+    overflow: hidden;
+    /* Prevents horizontal scrollbars */
+}
+
+/* On Desktop, increase padding */
+@media (min-width: 768px) {
+    .section {
+        padding: 5rem 1.5rem;
+    }
+}
+
+/* Reusable container for centered content */
+.content-container {
+    max-width: 80rem;
+    /* 1280px */
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+/* =========================================
+   2. HERO SECTION
+   ========================================= */
+.hero-section {
+    display: flex;
+    align-items: flex-start;
+    /* Responsive Padding:
+       - Top: Scales between 12rem and 25rem based on screen height
+       - Left: 5% on mobile to prevent cut-off, changes to fixed pixel on desktop
+    */
+    padding-top: clamp(10rem, 30vh, 25rem);
+    padding-bottom: 4rem;
+    padding-left: 5%;
+    padding-right: 5%;
+    text-align: left;
+}
+
+@media (min-width: 1024px) {
+    .hero-section {
+        padding-left: 100px;
+        /* Restore the specific indentation on large screens */
+    }
+}
+
+.hero-content {
+    max-width: 100%;
+}
+
+/* Typography */
+.hero-heading {
+    margin-bottom: 1rem;
+    font-size: 3rem;
+    /* 5xl equivalent */
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #ffffff;
+    letter-spacing: -0.025em;
+}
+
+.hero-subheading {
+    max-width: 42rem;
+    font-size: 1.1rem;
+    /* Smaller for mobile */
+    line-height: 1.5;
+    color: #ffffff;
+}
+
+/* Desktop Typography overrides */
+@media (min-width: 768px) {
+    .hero-heading {
+        font-size: 3.75rem;
+        /* 6xl equivalent */
+    }
+
+    .hero-subheading {
+        font-size: 1.5rem;
+    }
+}
+
+/* =========================================
+   3. CAROUSEL & OVERLAP FIX
+   ========================================= */
+
+
+@media (min-width: 768px) {
+    .carousel-wrapper {
+        width: 90%;
+        margin-top: 25rem;
+        /* Even more space on desktop if needed */
+    }
+}
+
+/* =========================================
+   4. TWO-COLUMN LAYOUTS (Who We Are / About)
+   ========================================= */
+.two-column-layout {
+    display: flex;
+    flex-direction: column;
+    /* Default: Stack vertically (Mobile) */
+    align-items: center;
+    gap: 3rem;
+}
+
+/* On Desktop: switch to Row */
+@media (min-width: 768px) {
+    .two-column-layout {
+        flex-direction: row;
+        align-items: flex-start;
+        /* Align text to top */
+    }
+
+    .image-column,
+    .text-column {
+        width: 50%;
+    }
+}
+
+/* Typography for Sections */
+.section-heading {
+    margin-bottom: 1rem;
+    font-size: 3rem;
+    /* 5xl equivalent */
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    /* Bold */
+    color: #ffffff;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    /* tracking-tight */
+}
+
+.section-text {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+    color: #d1d5db;
+    /* gray-300 */
+    font-size: 1rem;
+    /* Readable mobile size */
+}
+
+@media (min-width: 768px) {
+    .section-text {
+        font-size: 1.25rem;
+        /* Larger on desktop */
+    }
+
+    .section-heading {
+        font-size: 3.75rem;
+        /* 6xl equivalent */
+    }
+}
+
+.section-image {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    display: block;
+    object-fit: cover;
+}
+
+#who-we-are {
+    margin-top: 5rem;
+    /* Reduced from 15rem for mobile */
+}
+
+@media (min-width: 768px) {
+    #who-we-are {
+        margin-top: 10rem;
+        /* Restored large spacing for desktop */
+    }
+}
+
+/* =========================================
+   5. MEET THE TEAM (GRID SYSTEM)
+   ========================================= */
+/* The Container */
+.team-grid {
+    display: grid;
+    /* Mobile: 1 column */
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    margin-top: 2rem;
+}
+
+/* Tablet & Desktop: 3 columns */
+@media (min-width: 768px) {
+    .team-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2rem;
+    }
+}
+
+/* Individual Card */
+.team-member {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.member-image-wrapper {
+    width: 100%;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    border-radius: 0.5rem;
+}
+
+.member-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.team-member:hover .member-image {
+    transform: scale(1.03);
+    /* Subtle zoom effect on hover */
+}
+
+.member-name {
+    font-size: 1.5rem;
+    color: #67e8f9;
+    font-weight: 100;
+    margin-bottom: 0.5rem;
+}
+
+.member-bio {
+    font-size: 0.95rem;
+    /* Slightly smaller than body text */
+    line-height: 1.5;
+}
+
+/* =========================================
+   6. FAQ / TESTIMONIALS
+   ========================================= */
+.faq-wrapper {
+    position: relative;
+    width: 100%;
+    /* Replaces the fixed 700px height. 
+       This allows it to shrink on mobile but ensures space on desktop. */
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Adds specific spacing between the Carousel Heading and the GifCarousel */
+.carousel-wrapper .section-heading,
+.carousel-wrapper .section-text {
+    margin-bottom: 3rem;
+    /* Increase this number for a bigger gap */
+}

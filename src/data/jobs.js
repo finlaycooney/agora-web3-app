@@ -1,83 +1,114 @@
 export const JOBS = [
     {
-        id: "marketing-lead",
+        id: "gondor-founding-engineer",
+        title: "Founding Engineer",
+        salary: "$140k – $200k • 0.5% – 2.0%",
+        location: "New York City (In-person)",
+        type: "Full-time",
+        description: "Join the founding team at [REDACTED] to build the DeFi layer for prediction markets. You will work on an institutional financial primitive for borrowing against Polymarket positions, developing high-performance infrastructure and smart contracts.",
+        tags: ["Solana", "Rust", "DeFi", "Founding Team", "TypeScript"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "engineer-rust-trading",
+        title: "Sr Golang Engineer",
+        salary: "Competitive", // Not explicitly stated in source
+        location: "Remote",
+        type: "Full-time",
+        description: "Build the financial logic and low-latency infrastructure for a modular Layer-2 blockchain optimized for trading. You will design and implement high-throughput order matching engines and real-time risk engines using Rust[cite: 8].",
+        tags: ["Rust", "Trading Systems", "DeFi", "Remote"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "marketing-lead-web3",
         title: "Marketing Lead",
-        salary: "$80k - $100k",
-        location: "Remote", // Added this
+        salary: "Competitive", // Not explicitly stated in source
+        location: "Remote",
         type: "Full-time",
-        description: "We are looking for a visionary marketer...",
-        tags: ["Marketing", "Growth"], // Added this to prevent crash
-        className: "md:col-span-2",
-    },
-    {
-        id: "engineer-1", // Changed ID to be unique
-        title: "React Engineer",
-        salary: "$100k - $120k",
-        location: "London",
-        type: "Full-time",
-        description: "Build cool components...",
-        tags: ["React", "Frontend"],
+        description: "Drive marketing initiatives and establish brand presence in the rapidly evolving Web3 space. You will lead all facets of marketing, taking the effort from $0\\rightarrow1$ and building the team from scratch.",
+        tags: ["Marketing", "Web3", "Growth", "Remote"],
         className: "md:col-span-1",
     },
     {
-        id: "engineer-2", // Unique ID
+        id: "staff-rust-backend",
+        title: "Staff Rust Backend Engineer",
+        salary: "Competitive / Equity",
+        location: "Remote / Chicago / Dubai / Tokyo",
+        type: "Full-time",
+        description: "Collaborate with the development team to build and implement key features for a crypto exchange and wallet. Utilize Rust to develop robust and scalable solutions and work on the platform's order book.",
+        tags: ["Rust", "Backend", "Solana", "DeFi"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "quantitative-analyst",
+        title: "Quantitative Analyst",
+        salary: "Competitive pay + equity", // Salary range not explicitly listed in JD, but mentions "Competitive"
+        location: "New York City (In-person)",
+        type: "Full-time",
+        description: "Join the team designing Gondor's liquidation engine and pricing oracles for illiquid Polymarket assets. You will model cross-margin rules, run simulations on historical order books, and build the math behind an institutional DeFi primitive.",
+        tags: ["Quant Risk", "Python", "DeFi", "Liquidation Engines", "Polymarket"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "founding-rust-engineer-solana",
+        title: "Founding Rust Engineer",
+        salary: "Competitive / Equity",
+        location: "Remote",
+        type: "Full-time",
+        description: "Join the founding team of a YC-backed startup building a professional-grade trading terminal for Solana. You will design and build the core high-performance trading engine, optimizing for low latency and high throughput.",
+        tags: ["Rust", "Solana", "Trading Systems", "Low Latency"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "staff-backend-engineer-trading",
+        title: "Staff Backend Engineer",
+        salary: "Competitive",
+        location: "Remote",
+        type: "Full-time",
+        description: "Lead the backend architecture for one of the largest crypto trading bots in the market. You will design scalable, microservices-based backends in TypeScript to handle massive concurrent user volume and real-time data streaming.",
+        tags: ["TypeScript", "Node.js", "Backend", "Trading Bot"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "senior-frontend-engineer-trading",
+        title: "Senior Frontend Engineer",
+        salary: "Competitive",
+        location: "Remote",
+        type: "Full-time",
+        description: "Translate robust trading bot capabilities into a high-performance web application. You will build responsive user interfaces using React/NextJS and TypeScript, ensuring speed and seamless mobile performance.",
+        tags: ["React", "TypeScript", "Frontend", "Web3"],
+        className: "md:col-span-1",
+    },
+    {
+        id: "backend-engineer-trading-mid",
         title: "Backend Engineer",
-        salary: "$110k - $130k",
-        location: "Berlin",
-        type: "Contract",
-        description: "Scale our Node.js infrastructure...",
-        tags: ["Node.js", "Backend"],
+        salary: "Competitive",
+        location: "Remote",
+        type: "Full-time",
+        description: "Develop and maintain robust backend services using TypeScript and Rust for a high-volume trading platform. You will build optimized API endpoints and manage third-party integrations while ensuring top-tier system reliability.",
+        tags: ["TypeScript", "Rust", "Backend", "Remote"],
         className: "md:col-span-1",
     },
     {
-        id: "designer-1", // Unique ID
-        title: "Product Designer",
-        salary: "$90k - $110k",
-        location: "Remote",
+        id: "onchain-vault-manager",
+        title: "Onchain Vault Manager",
+        salary: "$90k Base or % of AUM",
+        location: "Remote (Global)",
         type: "Full-time",
-        description: "Design our mobile wallet experience...",
-        tags: ["Figma", "UI/UX"],
-        className: "md:col-span-2", // Made this wide for visual variety
+        description: "Act as both architect and operator for onchain investment strategies. You will build and deploy permissionless EVM vaults, manage yield strategies, and oversee the rebalancing and harvesting lifecycles.",
+        tags: ["Solidity", "DeFi", "Smart Contracts", "Financial Engineering"],
+        className: "md:col-span-1",
     },
     {
-        id: "designer-1", // Unique ID
-        title: "Product Designer",
-        salary: "$90k - $110k",
-        location: "Remote",
-        type: "Full-time",
-        description: "Design our mobile wallet experience...",
-        tags: ["Figma", "UI/UX"],
-        className: "md:col-span-2", // Made this wide for visual variety
-    },
-    {
-        id: "designer-1", // Unique ID
-        title: "Product Designer",
-        salary: "$90k - $110k",
-        location: "Remote",
-        type: "Full-time",
-        description: "Design our mobile wallet experience...",
-        tags: ["Figma", "UI/UX"],
-        className: "md:col-span-2", // Made this wide for visual variety
-    },
-    {
-        id: "designer-1", // Unique ID
-        title: "Product Designer",
-        salary: "$90k - $110k",
-        location: "Remote",
-        type: "Full-time",
-        description: "Design our mobile wallet experience...",
-        tags: ["Figma", "UI/UX"],
-        className: "md:col-span-1", // Made this wide for visual variety
-    },
-    {
-        id: "designer-1", // Unique ID
-        title: "Product Designer",
-        salary: "$90k - $110k",
-        location: "Remote",
-        type: "Full-time",
-        description: "Design our mobile wallet experience...",
-        tags: ["Figma", "UI/UX"],
-        className: "md:col-span-2", // Made this wide for visual variety
-    },
+        id: "fractional-cto-defi",
+        title: "Fractional Chief Technology Officer (CTO)",
+        salary: "$75 - $200/hr",
+        location: "Remote (CET Timezone)",
+        type: "Part-time / Full-time",
+        description: "Architect the next evolution of non-custodial asset management systems for a high-growth crypto consultancy. You will design secure infrastructure for portfolio execution and wallet connectivity.",
+        tags: ["CTO", "Solidity", "Rust", "Part-time"],
+        className: "md:col-span-1",
+    }
+
     // ... add more jobs ensuring IDs are unique and tags exist
 ];

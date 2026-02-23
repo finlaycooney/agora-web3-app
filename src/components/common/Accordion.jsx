@@ -1,3 +1,5 @@
+"use client";
+
 import { Accordion, AccordionItem } from "@heroui/react";
 import './Accordion.css';
 

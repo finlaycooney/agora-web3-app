@@ -1,7 +1,7 @@
 // src/components/common/Header.jsx
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 const Header = ({ isVisible }) => {
 
@@ -17,18 +17,18 @@ const Header = ({ isVisible }) => {
                 {/* Navigation */}
                 <nav className="flex space-x-12">
                     {/* Home Link */}
-                    <Link to="#" className="nav-link text-white hover:text-[#99ffff] transition duration-500">Home</Link>
+                    <Link href="/" className="nav-link text-white hover:text-[#99ffff] transition duration-500">[HOME]</Link>
 
                     {/* "For Employers" Link */}
                     <div className="button-tooltip-wrapper">
                         <Link
-                            to="#"
+                            href="/"
                             onClick={(e) => e.preventDefault()}
                             aria-disabled="true"
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'not-allowed' }}
                         >
-                            For Employers
+                            [ACCESS_TALENT]
                         </Link>
                         <span className="tooltip-tag">
                             Coming soon!
@@ -40,12 +40,12 @@ const Header = ({ isVisible }) => {
                     <div className="button-tooltip-wrapper">
                         <Link
 
-                            to="/JobsBoard"
+                            href="/jobs"
                             aria-disabled="false"
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'pointer' }}
                         >
-                            Jobs Board
+                            [VIEW_JOBS]
                         </Link>
 
                     </div>
@@ -58,7 +58,7 @@ const Header = ({ isVisible }) => {
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'pointer' }}
                         >
-                            Blog
+                            [BLOG]
                         </a>
                     </div>
                 </nav>

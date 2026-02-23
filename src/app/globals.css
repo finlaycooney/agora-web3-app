@@ -1,0 +1,195 @@
+@import "tailwindcss";
+@config "../../tailwind.config.cjs";
+
+/* Your custom styles go below... */
+
+body {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    /* background-image: url('/background.png');
+    background-size: 100% auto;
+    background-repeat: no-repeat;
+    /* This stops the image from repeating */
+    /* background-position: top center; */
+    /* Tailwind Gradient Syntax: 
+     bg-gradient-to-b = Top to Bottom
+     from-slate-900   = Start Color (Top)
+     to-black         = End Color (Bottom)
+  */
+    @apply bg-gradient-to-b from-[#67bed9] to-[#00244b] min-h-screen text-white;
+
+    margin: 0;
+
+    background-attachment: scroll;
+    background-color: #00244b;
+
+    background-image:
+        radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 60%),
+        linear-gradient(to bottom, #67bed9 0%, #00244b 1200px, #00244b 100%);
+    /* Replace #003DA5 with your Hex */
+    /* Fallback color */
+}
+
+.bg-noise {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    /* Lets clicks pass through */
+    z-index: -1;
+    opacity: 0.15;
+    /* Keep this very low for "Subtle" */
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/*#67bed9
+#006d96
+#00244b */
+
+.backdrop-blur-md {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-section {
+    animation: fadeIn 0.8s ease-out forwards;
+}
+
+.nav-link {
+    position: relative;
+    padding-bottom: 4px;
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #99ffff;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+.nav-link:hover::after {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+
+
+/* carousel section for homepage */
+
+.videoSection {
+    position: relative;
+    height: 500px;
+    /* Or whatever height you prefer */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    color: white;
+    text-align: center;
+    margin: 4rem 0;
+    /* Example margin to space it out on the page */
+}
+
+/* The video styling stays the same */
+.videoSection video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    z-index: -1;
+}
+
+.sectionOverlay {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 2rem 4rem;
+    border-radius: 10px;
+}
+
+/* 1. The wrapper holds the position */
+.button-tooltip-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* 2. The tag is hidden by default */
+.tooltip-tag {
+    position: absolute;
+    /* Position above */
+    top: 0;
+    right: 0;
+    transform: translate(25%, -50%);
+
+    background-color: #ae5389d1;
+    color: #fff;
+    padding: 1px 2px;
+    border-radius: 10px;
+    font-size: 12px;
+    white-space: nowrap;
+
+    /* The magic: Hide it... */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
+    pointer-events: none;
+    /* So the tooltip doesn't block the mouse */
+}
+
+/* 3. The hover effect on the *wrapper* */
+.button-tooltip-wrapper:hover .tooltip-tag {
+    /* ...and show it on hover! */
+    opacity: 1;
+    visibility: visible;
+}
+
+.footer-copyright {
+    color: #AAAAAA;
+    /* Or 'gray', or '#99ffff', whatever you want */
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-200%);
+    }
+
+    100% {
+        transform: translateX(200%);
+    }
+}
+
+@keyframes spin-slow {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin-slow {
+    animation: spin-slow 12s linear infinite;
+}
