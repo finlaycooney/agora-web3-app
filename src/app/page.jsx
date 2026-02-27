@@ -6,6 +6,12 @@ import Carousel from '../components/common/Carousel.jsx';
 import Accordion from '../components/common/Accordion.jsx';
 
 import BeamsWrapper from '../components/common/BeamsWrapper';
+import Link from 'next/link';
+import { cn } from "@/lib/utils";
+import Marquee from "@/components/magicui/marquee";
+import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import LaserStreamSection from '../components/common/LaserStreamSection';
 import FlowingHub from '../components/common/FlowingHub';
 import TalentPortal from '../components/common/TalentPortal';
 import CapitalLayer from '../components/common/CapitalLayer';
