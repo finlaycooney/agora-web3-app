@@ -62,16 +62,16 @@ const features = [
 
 const HomePage = () => {
     const images = [
-        "/logos/backpack.png",
-        "/logos/bagel.png",
-        "/logos/helius.png",
-        "/logos/jupiter.png",
-        "/logos/maven11.png",
-        "/logos/monkey_tilt.png",
-        "/logos/perena.png",
-        "/logos/orca.png",
-        "/logos/axiom.png",
-        "/logos/reya.png",
+        "/logos/backpack.webp",
+        "/logos/bagel.webp",
+        "/logos/helius.webp",
+        "/logos/jupiter.webp",
+        "/logos/maven11.webp",
+        "/logos/monkey_tilt.webp",
+        "/logos/perena.webp",
+        "/logos/orca.webp",
+        "/logos/axiom.webp",
+        "/logos/reya.webp",
     ];
 
     const handleHomepageClick = () => {
@@ -122,7 +122,7 @@ const HomePage = () => {
                                 [&nbsp;<span className="text-gray-400">COMING_SOON</span>&nbsp;]
                             </div>
                         </button>
-                        <Link href="/jobs" className="font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group flex items-center justify-center">
+                        <Link prefetch={true} href="/jobs" className="font-mono text-sm md:text-base text-white px-8 py-3 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group flex items-center justify-center">
                             [&nbsp;<span className="text-cyan-400 group-hover:text-cyan-300">VIEW_JOBS</span>&nbsp;]
                         </Link>
                     </div>

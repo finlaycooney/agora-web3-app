@@ -10,7 +10,7 @@ const Header = ({ isVisible }) => {
             <div className="px-6 py-1 flex justify-between items-center">
 
                 <div>
-                    <img src="/agora4logo.png" alt="Agora Web3 Logo" className="h-20 w-auto" />
+                    <img src="/agora4logo.webp" alt="Agora Web3 Logo" className="h-20 w-auto" />
                 </div>
 
 
@@ -43,6 +43,7 @@ const Header = ({ isVisible }) => {
                         <Link
 
                             href="/jobs"
+                            prefetch={true}
                             aria-disabled="false"
                             className="nav-link text-white hover:text-[#99ffff] transition duration-500"
                             style={{ opacity: 1, cursor: 'pointer' }}

@@ -259,7 +259,7 @@ const FlowingHub = () => {
                     />
                     <div className="hub-main overflow-hidden">
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
-                        <img src="/agora4logo.png" alt="Agora4" className="hub-image" />
+                        <img src="/agora4logo.webp" alt="Agora4" className="hub-image" />
                         <AnimatePresence>
                             {isFlashActive && (
                                 <motion.div

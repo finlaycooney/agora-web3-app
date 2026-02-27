@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import './ForEmployers.css';
 
 const ForEmployersPage = () => (
@@ -87,9 +88,11 @@ const ForEmployersPage = () => (
                         </ul>
                     </div>
                     <div className="image-column-employers">
-                        <img
-                            src="/why-partner-with-us.png" // Replace with a relevant image
+                        <Image
+                            src="/why-partner-with-us.webp"
                             alt="Two professionals shaking hands in a modern office"
+                            width={500}
+                            height={300}
                             className="section-image-employers"
                         />
                     </div>
