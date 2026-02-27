@@ -173,7 +173,7 @@ const Beams = ({
   float getPos(vec3 pos) {
     vec3 noisePos =
       vec3(pos.x * 0., pos.y - uv.y, pos.z + time * uSpeed * 3.) * uScale;
-    return cnoise(noisePos);
+    return noise(noisePos.xy);
   }`,
                 fragmentHeader: '',
                 vertex: {
@@ -264,7 +264,7 @@ const MergedPlanes = React.memo(forwardRef(({ material, width, count, height }, 
     const mesh = useRef(null);
     useImperativeHandle(ref, () => mesh.current);
     const geometry = useMemo(
-        () => createStackedPlanesBufferGeometry(count, width, height, 0, 40),
+        () => createStackedPlanesBufferGeometry(count, width, height, 0, 32),
         [count, width, height]
     );
     useFrame((_, delta) => {
