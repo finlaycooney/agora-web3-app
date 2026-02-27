@@ -10,6 +10,7 @@ import HeaderWrapper from '@/components/common/HeaderWrapper'; // Created a wrap
 import Footer from '@/components/common/Footer';
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const outfit = Outfit({ subsets: ['latin'] });
 
@@ -37,6 +38,7 @@ export default function RootLayout({ children }) {
           <Footer />
         </Providers>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
