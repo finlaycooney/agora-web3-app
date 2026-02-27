@@ -93,7 +93,7 @@ const HomePage = () => {
 
                 {/* 1. The Terminal Engine Background */}
                 {/* Applied linear-gradient mask for burn-in fade at bottom */}
-                <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)]">
+                <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)] transform-gpu will-change-transform">
                     <Beams
                         beamWidth={1.6}
                     />
