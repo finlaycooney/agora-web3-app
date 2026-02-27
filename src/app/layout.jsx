@@ -11,6 +11,7 @@ import Footer from '@/components/common/Footer';
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { LazyMotion, domAnimation } from "framer-motion";
 
 const outfit = Outfit({ subsets: ['latin'] });
 
@@ -28,14 +29,16 @@ export default function RootLayout({ children }) {
 
         {/* The Handshake: Providers wrap everything that needs Session/UI state */}
         <Providers>
-          {/* HeaderWrapper handles the useScrollHandler logic internally now */}
-          <HeaderWrapper />
+          <LazyMotion features={domAnimation}>
+            {/* HeaderWrapper handles the useScrollHandler logic internally now */}
+            <HeaderWrapper />
 
-          <main>
-            {children}
-          </main>
+            <main>
+              {children}
+            </main>
 
-          <Footer />
+            <Footer />
+          </LazyMotion>
         </Providers>
         <Analytics />
         <SpeedInsights />
