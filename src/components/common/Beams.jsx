@@ -169,31 +169,17 @@ const Beams = ({
     vec3 noisePos =
       vec3(pos.x * 0., pos.y - uv.y, pos.z + time * uSpeed * 3.) * uScale;
     return cnoise(noisePos);
-  }
-  vec3 getCurrentPos(vec3 pos) {
-    vec3 newpos = pos;
-    newpos.z += getPos(pos);
-    return newpos;
-  }
-  vec3 getNormal(vec3 pos) {
-    vec3 curpos = getCurrentPos(pos);
-    vec3 nextposX = getCurrentPos(pos + vec3(0.01, 0.0, 0.0));
-    vec3 nextposZ = getCurrentPos(pos + vec3(0.0, -0.01, 0.0));
-    vec3 tangentX = normalize(nextposX - curpos);
-    vec3 tangentZ = normalize(nextposZ - curpos);
-    return normalize(cross(tangentZ, tangentX));
   }`,
                 fragmentHeader: '',
                 vertex: {
-                    '#include <begin_vertex>': `transformed.z += getPos(transformed.xyz);`,
-                    '#include <beginnormal_vertex>': `objectNormal = getNormal(position.xyz);`
+                    '#include <begin_vertex>': `transformed.z += getPos(transformed.xyz);`
                 },
                 fragment: {
                     '#include <dithering_fragment>': `
     float randomNoise = noise(gl_FragCoord.xy);
-    gl_FragColor.rgb -= randomNoise / 15. * uNoiseIntensity;`
+    gl_FragColor.rgb -= (randomNoise / 30.) * uNoiseIntensity;`
                 },
-                material: { fog: true },
+                material: { fog: true, flatShading: true },
                 uniforms: {
                     diffuse: new THREE.Color(...hexToNormalizedRGB('#00244b')),
                     time: { shared: true, mixed: true, linked: true, value: 0 },
@@ -273,7 +259,7 @@ const MergedPlanes = React.memo(forwardRef(({ material, width, count, height }, 
     const mesh = useRef(null);
     useImperativeHandle(ref, () => mesh.current);
     const geometry = useMemo(
-        () => createStackedPlanesBufferGeometry(count, width, height, 0, 100),
+        () => createStackedPlanesBufferGeometry(count, width, height, 0, 40),
         [count, width, height]
     );
     useFrame((_, delta) => {
