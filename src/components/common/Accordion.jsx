@@ -1,6 +1,6 @@
 "use client";
 
-import { Accordion, AccordionItem } from "@heroui/react";
+import { Accordion, AccordionItem } from "@heroui/accordion";
 import './Accordion.css';
 
 const ACCORDION_ITEMS = [
