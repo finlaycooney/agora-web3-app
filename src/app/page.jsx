@@ -7,6 +7,7 @@ import Accordion from '../components/common/Accordion.jsx';
 
 import BeamsWrapper from '../components/common/BeamsWrapper';
 import Link from 'next/link';
+import Image from 'next/image';
 import { cn } from "@/lib/utils";
 import Marquee from "@/components/magicui/marquee";
 import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
@@ -142,9 +143,11 @@ const HomePage = () => {
                 >
                     {images.map((src, index) => (
                         <div key={index} className="mx-4">
-                            <img
+                            <Image
                                 src={src}
                                 alt={`Partner ${index}`}
+                                width={160}
+                                height={192}
                                 className="h-48 w-40 object-contain opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
                             />
                         </div>
