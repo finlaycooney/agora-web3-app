@@ -87,10 +87,12 @@ const HomePage = () => {
 
                 {/* 1. The Terminal Engine Background */}
                 {/* Applied linear-gradient mask for burn-in fade at bottom */}
-                <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)] transform-gpu will-change-transform">
-                    <BeamsWrapper
-                        beamWidth={1.6}
-                    />
+                <div className="absolute inset-0 z-0 h-screen w-full overflow-hidden">
+                    <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)] transform-gpu will-change-transform">
+                        <BeamsWrapper
+                            beamWidth={1.6}
+                        />
+                    </div>
                 </div>
 
                 {/* Content Container - Dead Center */}
