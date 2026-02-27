@@ -5,19 +5,7 @@ import Carousel from '../components/common/Carousel.jsx';
 
 import Accordion from '../components/common/Accordion.jsx';
 
-import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import { cn } from "@/lib/utils";
-import Marquee from "@/components/magicui/marquee";
-import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
-import { BorderBeam } from "@/components/magicui/border-beam";
-import LaserStreamSection from '../components/common/LaserStreamSection';
-
-// Dynamically import Beams to unblock the main thread
-const Beams = dynamic(() => import('@/components/common/Beams'), {
-    ssr: false,
-    loading: () => <div className="absolute inset-0 w-full h-full bg-[#00244b]" />
-});
+import BeamsWrapper from '../components/common/BeamsWrapper';
 import FlowingHub from '../components/common/FlowingHub';
 import TalentPortal from '../components/common/TalentPortal';
 import CapitalLayer from '../components/common/CapitalLayer';
@@ -94,7 +82,7 @@ const HomePage = () => {
                 {/* 1. The Terminal Engine Background */}
                 {/* Applied linear-gradient mask for burn-in fade at bottom */}
                 <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)] transform-gpu will-change-transform">
-                    <Beams
+                    <BeamsWrapper
                         beamWidth={1.6}
                     />
                 </div>
