@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import { degToRad } from 'three/src/math/MathUtils.js';
+import { useInView } from 'framer-motion';
 
 function extendMaterial(BaseMaterial, cfg) {
     const physical = THREE.ShaderLib.physical;
@@ -49,8 +50,8 @@ function extendMaterial(BaseMaterial, cfg) {
     return mat;
 }
 
-const CanvasWrapper = ({ children }) => (
-    <Canvas dpr={[1, 2]} frameloop="always" className="w-full h-full relative">
+const CanvasWrapper = ({ children, inView }) => (
+    <Canvas dpr={[1, 2]} frameloop={inView ? "always" : "demand"} className="w-full h-full relative">
         {children}
     </Canvas>
 );
@@ -151,6 +152,9 @@ const Beams = ({
     rotation = 45
 }) => {
     const meshRef = useRef(null);
+    const containerRef = useRef(null);
+    const inView = useInView(containerRef);
+
     const beamMaterial = useMemo(
         () =>
             extendMaterial(THREE.MeshStandardMaterial, {
@@ -209,15 +213,17 @@ const Beams = ({
     );
 
     return (
-        <CanvasWrapper>
-            <group rotation={[0, 0, degToRad(rotation)]}>
-                <PlaneNoise ref={meshRef} material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
-                <DirLight color={lightColor} position={[0, 3, 10]} />
-            </group>
-            <ambientLight intensity={1} />
-            <color attach="background" args={['#00244b']} />
-            <PerspectiveCamera makeDefault position={[0, 0, 20]} fov={30} />
-        </CanvasWrapper>
+        <div ref={containerRef} className="w-full h-full absolute inset-0">
+            <CanvasWrapper inView={inView}>
+                <group rotation={[0, 0, degToRad(rotation)]}>
+                    <PlaneNoise ref={meshRef} material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
+                    <DirLight color={lightColor} position={[0, 3, 10]} />
+                </group>
+                <ambientLight intensity={1} />
+                <color attach="background" args={['#00244b']} />
+                <PerspectiveCamera makeDefault position={[0, 0, 20]} fov={30} />
+            </CanvasWrapper>
+        </div>
     );
 };
 
