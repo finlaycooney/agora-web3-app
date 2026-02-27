@@ -11,13 +11,15 @@ import { cn } from "@/lib/utils";
 import Marquee from "@/components/magicui/marquee";
 import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
 import { BorderBeam } from "@/components/magicui/border-beam";
-import LaserStreamSection from '../components/common/LaserStreamSection';
-import FlowingHub from '../components/common/FlowingHub';
-import TalentPortal from '../components/common/TalentPortal';
-import CapitalLayer from '../components/common/CapitalLayer';
-import ActiveNetworkQueries from '../components/common/ActiveNetworkQueries';
-import ResearchLayer from '../components/common/ResearchLayer';
-import TheHandshake from '../components/common/TheHandshake';
+import dynamic from 'next/dynamic';
+
+const LaserStreamSection = dynamic(() => import('../components/common/LaserStreamSection'));
+const FlowingHub = dynamic(() => import('../components/common/FlowingHub'));
+const TalentPortal = dynamic(() => import('../components/common/TalentPortal'));
+const CapitalLayer = dynamic(() => import('../components/common/CapitalLayer'));
+const ActiveNetworkQueries = dynamic(() => import('../components/common/ActiveNetworkQueries'));
+const ResearchLayer = dynamic(() => import('../components/common/ResearchLayer'));
+const TheHandshake = dynamic(() => import('../components/common/TheHandshake'));
 
 // --- Data for the Split Cards ---
 const features = [
