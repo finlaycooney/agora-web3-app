@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable react/no-unknown-property */
-import { forwardRef, useImperativeHandle, useEffect, useRef, useMemo } from 'react';
+import React, { forwardRef, useImperativeHandle, useEffect, useRef, useMemo } from 'react';
 
 import * as THREE from 'three';
 
@@ -269,7 +269,7 @@ function createStackedPlanesBufferGeometry(n, width, height, spacing, heightSegm
     return geometry;
 }
 
-const MergedPlanes = forwardRef(({ material, width, count, height }, ref) => {
+const MergedPlanes = React.memo(forwardRef(({ material, width, count, height }, ref) => {
     const mesh = useRef(null);
     useImperativeHandle(ref, () => mesh.current);
     const geometry = useMemo(
@@ -280,15 +280,15 @@ const MergedPlanes = forwardRef(({ material, width, count, height }, ref) => {
         mesh.current.material.uniforms.time.value += 0.1 * delta;
     });
     return <mesh ref={mesh} geometry={geometry} material={material} />;
-});
+}));
 MergedPlanes.displayName = 'MergedPlanes';
 
-const PlaneNoise = forwardRef((props, ref) => (
+const PlaneNoise = React.memo(forwardRef((props, ref) => (
     <MergedPlanes ref={ref} material={props.material} width={props.width} count={props.count} height={props.height} />
-));
+)));
 PlaneNoise.displayName = 'PlaneNoise';
 
-const DirLight = ({ position, color }) => {
+const DirLight = React.memo(({ position, color }) => {
     const dir = useRef(null);
     useEffect(() => {
         if (!dir.current) return;
@@ -302,6 +302,6 @@ const DirLight = ({ position, color }) => {
         dir.current.shadow.bias = -0.004;
     }, []);
     return <directionalLight ref={dir} color={color} intensity={1} position={position} />;
-};
+});
 
 export default Beams;
