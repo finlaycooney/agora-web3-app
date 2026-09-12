@@ -3,20 +3,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Github, CheckCircle, Upload, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useSession, signIn } from "next-auth/react";
+import {
+    CV_ACCEPT_ATTRIBUTE,
+    isApplicationReference,
+    normalizeProfessionalUrl,
+    validateApplicationFields,
+    validateCvFileMetadata,
+} from '@/lib/application';
+
+interface JobSummary {
+    id: string;
+    title: string;
+}
 
 interface SignalSubmissionModalProps {
     isOpen: boolean;
     onClose: () => void;
-    jobTitle?: string;
+    job?: JobSummary | null;
 }
 
-const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, onClose, jobTitle }) => {
+const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, onClose, job }) => {
     const { data: session, status } = useSession();
     const [step, setStep] = useState<'initial' | 'submitting' | 'success'>('initial');
-
-    // User requested "loadingState" to be defined
-    const [loadingState, setLoadingState] = useState<string>('');
-
+    const [errorMessage, setErrorMessage] = useState('');
     const [data, setData] = useState({
         fullName: '',
         email: '',
@@ -25,30 +34,31 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
     });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [terminalLines, setTerminalLines] = useState<string[]>([]);
+    const [website, setWebsite] = useState('');
+    const [submissionRefId, setSubmissionRefId] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             setStep('initial');
+            setErrorMessage('');
             setTerminalLines([]);
+            setSelectedFile(null);
+            setWebsite('');
+            setSubmissionRefId('');
+            setData({
+                fullName: session?.user?.name || '',
+                email: session?.user?.email || '',
+                professionalUrl: '',
+                technicalAchievement: '',
+            });
             document.body.style.overflow = 'hidden';
-
-            // Pre-fill form if session exists
-            if (session?.user) {
-                setData(prev => ({
-                    ...prev,
-                    fullName: session.user?.name || prev.fullName,
-                    email: session.user?.email || prev.email
-                }));
-            }
         } else {
             document.body.style.overflow = 'unset';
         }
         return () => {
             document.body.style.overflow = 'unset';
-            // Reset state
-            setLoadingState('');
         };
-    }, [isOpen, session]);
+    }, [isOpen, session?.user?.email, session?.user?.name]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -58,49 +68,59 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                alert("File too large. Max 5MB.");
+            setErrorMessage('');
+            const validation = validateCvFileMetadata(file);
+            if (!validation.ok) {
+                setSelectedFile(null);
+                setErrorMessage(validation.message);
+                e.target.value = '';
                 return;
             }
+
             setSelectedFile(file);
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleProfessionalUrlBlur = () => {
+        const result = normalizeProfessionalUrl(data.professionalUrl);
+        if (result.ok && result.value !== data.professionalUrl) {
+            setData(previous => ({ ...previous, professionalUrl: result.value }));
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        setStep('submitting');
-        setLoadingState('INITIALIZING_SECURE_HANDSHAKE...');
 
-        // 1. Simulate terminal sequence
-        const lines = [
-            "> INITIALIZING_SECURE_HANDSHAKE...",
-            "> VERIFYING_IDENTITY_TOKENS...",
-            "> ENCRYPTING_SIGNAL_PACKET...",
-            "> UPLOADING_TO_AGORA_NODES...",
-        ];
+        const fieldValidation = validateApplicationFields({
+            jobId: job?.id || '',
+            ...data,
+        }, job ? [job] : []);
 
-        for (let i = 0; i < lines.length; i++) {
-            setLoadingState(lines[i]);
-            await new Promise(resolve => setTimeout(resolve, 600));
-            setTerminalLines(prev => [...prev, lines[i]]);
+        if (!fieldValidation.ok) {
+            setErrorMessage(fieldValidation.message);
+            return;
         }
 
-        // 2. Submit Data
+        if (!selectedFile) {
+            setErrorMessage('Attach your CV as a PDF or DOCX file.');
+            return;
+        }
+
         const formData = new FormData();
-        formData.append('fullName', data.fullName);
-        formData.append('email', data.email);
-        formData.append('professionalUrl', data.professionalUrl);
-        formData.append('technicalAchievement', data.technicalAchievement);
+        formData.append('jobId', fieldValidation.job.id);
+        formData.append('fullName', fieldValidation.fields.fullName);
+        formData.append('email', fieldValidation.fields.email);
+        formData.append('professionalUrl', fieldValidation.fields.professionalUrl);
+        formData.append('technicalAchievement', fieldValidation.fields.technicalAchievement);
+        formData.append('website', website);
+        formData.append('cvFile', selectedFile);
 
-        // GitHub Sync Logic Fix
-        if (session?.user) {
-            // Safe cast as requested
-            formData.append('githubHandle', (session.user as any).username || '');
-        }
-
-        if (selectedFile) {
-            formData.append('cvFile', selectedFile);
-        }
+        setErrorMessage('');
+        setStep('submitting');
+        setTerminalLines([
+            '> VALIDATING_APPLICATION...',
+            '> UPLOADING_CV...',
+        ]);
 
         try {
             const response = await fetch('/api/submit-signal', {
@@ -108,11 +128,11 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                 body: formData,
             });
 
-            if (response.ok) {
-                setLoadingState('HANDSHAKE_COMPLETE');
-                setTerminalLines(prev => [...prev, "> SIGNAL_RECEIVED.", "> HANDSHAKE_COMPLETE."]);
+            const result = await response.json().catch(() => null);
 
-                await new Promise(resolve => setTimeout(resolve, 500));
+            if (response.ok && result?.success && isApplicationReference(result.refId)) {
+                setSubmissionRefId(result.refId);
+                setTerminalLines(prev => [...prev, "> SIGNAL_RECEIVED.", "> HANDSHAKE_COMPLETE."]);
                 setStep('success');
                 confetti({
                     particleCount: 100,
@@ -121,14 +141,16 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                     colors: ['#22d3ee', '#34d399', '#ffffff']
                 });
             } else {
-                const error = await response.json();
-                setTerminalLines(prev => [...prev, `> ERROR: ${error.message}`]);
-                setLoadingState('PROTOCOL_FAILURE');
+                const unconfirmedMessage = response.ok && result?.success
+                    ? 'We could not confirm that your application was saved. Please try again.'
+                    : result?.message;
+                setErrorMessage(unconfirmedMessage || 'Your application could not be submitted. Please try again.');
+                setWebsite('');
+                setStep('initial');
             }
-
-        } catch (error: any) {
-            setTerminalLines(prev => [...prev, `> ERROR: ${error.message}`]);
-            setLoadingState('CONNECTION_LOST');
+        } catch {
+            setErrorMessage('The connection was interrupted. Please try again.');
+            setStep('initial');
         }
     };
 
@@ -152,11 +174,15 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-[#020b1a] border border-teal-500/30 w-full max-w-lg rounded-2xl shadow-[0_0_40px_rgba(20,184,166,0.1)] overflow-hidden relative"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="signal-submission-title"
+                            className="bg-[#020b1a] border border-teal-500/30 w-full max-w-lg max-h-[calc(100vh-2rem)] rounded-2xl shadow-[0_0_40px_rgba(20,184,166,0.1)] overflow-y-auto relative"
                         >
                             {/* Close Button */}
                             <button
                                 onClick={onClose}
+                                aria-label="Close application form"
                                 className="absolute top-4 right-4 text-teal-500/50 hover:text-teal-400 transition-colors"
                             >
                                 <X size={20} />
@@ -165,11 +191,11 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                             {/* Header */}
                             <div className="p-8 pb-0">
                                 <div className="flex items-center space-x-3 mb-2">
-                                    <h2 className="text-2xl font-bold text-white font-outfit">Signal Submission</h2>
+                                    <h2 id="signal-submission-title" className="text-2xl font-bold text-white font-outfit">Signal Submission</h2>
                                     <CheckCircle className="text-blue-500 fill-blue-500/20" size={20} />
                                 </div>
                                 <p className="text-gray-400 text-sm font-outfit">
-                                    Applying for: <span className="text-teal-400">{jobTitle || 'Position'}</span>
+                                    Applying for: <span className="text-teal-400">{job?.title || 'Position'}</span>
                                 </p>
                             </div>
 
@@ -190,15 +216,15 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                             <div className="flex items-center justify-center space-x-3 relative z-10">
                                                 <Github className="text-emerald-400" size={20} />
                                                 <span className="font-mono font-bold text-emerald-100">
-                                                    {status === 'loading' ? 'VERIFYING_SIGNAL...' :
-                                                        status === 'authenticated' ? `IDENTITY_SYNCED: @${(session.user as any)?.username || session.user?.name}` :
-                                                            'SYNC_GITHUB_IDENTITY'}
+                                                    {status === 'loading' ? 'CONNECTING_GITHUB...' :
+                                                        status === 'authenticated' ? `GITHUB_CONNECTED: ${session.user?.name || 'ACCOUNT'}` :
+                                                            'PREFILL_WITH_GITHUB'}
                                                 </span>
                                             </div>
                                             <div className="absolute inset-0 bg-emerald-500/10 blur-xl group-hover:bg-emerald-500/20 transition-all duration-500" />
                                             {status !== 'authenticated' && (
                                                 <p className="text-[10px] text-emerald-400/60 font-mono mt-1 text-center uppercase tracking-wider">
-                                                    Verify technical signal to bypass manual form
+                                                    Optional: prefill your name and email
                                                 </p>
                                             )}
                                         </button>
@@ -210,38 +236,78 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                         </div>
 
                                         {/* Minimalist Form */}
-                                        <form onSubmit={handleSubmit} className="space-y-4">
-                                            <div className="space-y-4">
+                                        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                                            <label hidden aria-hidden="true">
+                                                Leave this field empty
                                                 <input
+                                                    type="text"
+                                                    name="website"
+                                                    tabIndex={-1}
+                                                    autoComplete="new-password"
+                                                    data-lpignore="true"
+                                                    data-1p-ignore="true"
+                                                    value={website}
+                                                    onChange={(event) => setWebsite(event.target.value)}
+                                                />
+                                            </label>
+
+                                            {errorMessage && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+                                                >
+                                                    {errorMessage}
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4">
+                                                <label htmlFor="application-full-name" className="sr-only">Full name</label>
+                                                <input
+                                                    id="application-full-name"
                                                     type="text"
                                                     name="fullName"
                                                     placeholder="Full Name"
                                                     required
+                                                    maxLength={120}
+                                                    autoComplete="name"
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
                                                     value={data.fullName}
                                                     onChange={handleInputChange}
                                                 />
+                                                <label htmlFor="application-email" className="sr-only">Email address</label>
                                                 <input
+                                                    id="application-email"
                                                     type="email"
                                                     name="email"
                                                     placeholder="Email Address"
                                                     required
+                                                    maxLength={254}
+                                                    autoComplete="email"
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
                                                     value={data.email}
                                                     onChange={handleInputChange}
                                                 />
+                                                <label htmlFor="application-professional-url" className="sr-only">Professional URL</label>
                                                 <input
-                                                    type="url"
-                                                    name="portfolioUrl"
+                                                    id="application-professional-url"
+                                                    type="text"
+                                                    inputMode="url"
+                                                    name="professionalUrl"
                                                     placeholder="Professional URL (LinkedIn/GitHub)"
+                                                    maxLength={2048}
+                                                    autoComplete="url"
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
                                                     value={data.professionalUrl}
                                                     onChange={handleInputChange}
+                                                    onBlur={handleProfessionalUrlBlur}
                                                 />
+                                                <label htmlFor="application-achievement" className="sr-only">Technical achievement</label>
                                                 <textarea
+                                                    id="application-achievement"
                                                     name="technicalAchievement"
                                                     placeholder="Briefly describe your core contribution to a Tier 1 protocol..."
                                                     rows={3}
+                                                    maxLength={2000}
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit resize-none"
                                                     value={data.technicalAchievement}
                                                     onChange={handleInputChange}
@@ -255,9 +321,13 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                     {selectedFile ? `SELECTED: ${selectedFile.name}` : 'DROP_CV_HERE_OR_CLICK_TO_UPLOAD'}
                                                 </p>
                                                 <input
+                                                    id="application-cv"
                                                     type="file"
+                                                    name="cvFile"
                                                     className="absolute inset-0 opacity-0 cursor-pointer"
-                                                    accept=".pdf,.docx"
+                                                    accept={CV_ACCEPT_ATTRIBUTE}
+                                                    required
+                                                    aria-label="Upload CV as PDF or DOCX, maximum 4 MB"
                                                     onChange={handleFileChange}
                                                 />
                                             </div>
@@ -302,6 +372,7 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                 <div>
                                                     <p className="font-bold">SIGNAL_VERIFIED</p>
                                                     <p className="opacity-70">We will be in touch shortly.</p>
+                                                    <p className="mt-1 opacity-70">REFERENCE: {submissionRefId}</p>
                                                 </div>
                                             </motion.div>
                                         )}

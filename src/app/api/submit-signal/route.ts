@@ -1,82 +1,113 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { JOBS } from '@/data/jobs';
+import {
+    readApplicationFields,
+    validateApplicationFields,
+} from '@/lib/application';
+import { validateCvFile } from '@/lib/application-file';
 
+export const runtime = 'nodejs';
 
+const jsonError = (code: string, message: string, status: number) => (
+    NextResponse.json({ success: false, code, message }, { status })
+);
 
 export async function POST(req: Request) {
     try {
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY! // Use Service Role for backend writes
-        );
-
         const formData = await req.formData();
 
-        // 1. THE HONEYPOT DEFENSE 🍯
-        // If a bot fills out this hidden field, we return a fake success.
-        const botShield = formData.get('protocol_token');
-        if (botShield) {
-            console.log("🛡️ Bot signal intercepted via Honeypot.");
-            return NextResponse.json({ success: true, message: "Signal received." });
+        const honeypot = formData.get('website') ?? formData.get('protocol_token');
+        if (typeof honeypot === 'string' && honeypot.trim()) {
+            return NextResponse.json(
+                { success: true, message: 'Application received.' },
+                { status: 202 },
+            );
         }
 
-        // 2. EXTRACT DATA
-        const fullName = formData.get('fullName') as string;
-        const email = formData.get('email') as string;
-        const cvFile = formData.get('cvFile') as File;
-        const refId = `AG-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
-        // 3. STRICT FILE VALIDATION 🛑
-        if (!cvFile || cvFile.size === 0) {
-            return NextResponse.json({ error: "MISSING_CV" }, { status: 400 });
+        const fields = readApplicationFields(formData);
+        const fieldValidation = validateApplicationFields(fields, JOBS);
+        if (!fieldValidation.ok) {
+            return jsonError(fieldValidation.code, fieldValidation.message, 400);
         }
 
-        // Limit to 5MB
-        if (cvFile.size > 5 * 1024 * 1024) {
-            return NextResponse.json({ error: "FILE_TOO_LARGE" }, { status: 400 });
+        const cvFile = formData.get('cvFile');
+        const fileValidation = await validateCvFile(cvFile);
+        if (!fileValidation.ok) {
+            return jsonError(fileValidation.code, fileValidation.message, 400);
         }
 
-        // Only allow PDFs
-        if (cvFile.type !== 'application/pdf') {
-            return NextResponse.json({ error: "INVALID_FORMAT_PDF_ONLY" }, { status: 400 });
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !serviceRoleKey) {
+            console.error('Application submission is missing Supabase configuration.');
+            return jsonError(
+                'SERVICE_UNAVAILABLE',
+                'Applications are temporarily unavailable. Please try again later.',
+                503,
+            );
         }
 
-        // 4. FILENAME SANITIZATION 🧼
-        const timestamp = Date.now();
-        const cleanName = cvFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const fileName = `${timestamp}-${cleanName}`;
-        const filePath = `cvs/${fileName}`;
+        const supabase = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const refId = `AG-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+        const filePath = `cvs/${fieldValidation.job.id}/${refId}.${fileValidation.extension}`;
 
-        // 5. THE VAULT HANDSHAKE (STORAGE)
         const { error: uploadError } = await supabase.storage
             .from('cv-submissions')
-            .upload(filePath, cvFile);
+            .upload(filePath, fileValidation.file, {
+                contentType: fileValidation.mimeType,
+                upsert: false,
+            });
 
         if (uploadError) {
-            console.error("❌ STORAGE_FAILURE:", uploadError);
-            return NextResponse.json({ error: "VAULT_UPLOAD_FAILED" }, { status: 500 });
+            console.error('CV upload failed:', uploadError);
+            return jsonError(
+                'CV_UPLOAD_FAILED',
+                'Your CV could not be uploaded. Please try again.',
+                500,
+            );
         }
 
-        // 6. DATABASE INGESTION
         const { error: dbError } = await supabase
             .from('applicants')
             .insert([{
-                full_name: fullName,
-                email: email,
+                job_id: fieldValidation.job.id,
+                job_title: fieldValidation.job.title,
+                full_name: fieldValidation.fields.fullName,
+                email: fieldValidation.fields.email,
+                professional_url: fieldValidation.fields.professionalUrl || null,
+                technical_achievement: fieldValidation.fields.technicalAchievement || null,
                 cv_url: filePath,
                 ref_id: refId,
-                status: 'pending'
+                status: 'pending',
             }]);
 
         if (dbError) {
-            console.error("❌ DB_FAILURE:", dbError);
-            return NextResponse.json({ error: "DATABASE_WRITE_FAILURE" }, { status: 500 });
+            console.error('Applicant database write failed:', dbError);
+            const { error: cleanupError } = await supabase.storage
+                .from('cv-submissions')
+                .remove([filePath]);
+
+            if (cleanupError) {
+                console.error('Failed to clean up orphaned CV:', cleanupError);
+            }
+
+            return jsonError(
+                'APPLICATION_SAVE_FAILED',
+                'Your application could not be saved. Please try again.',
+                500,
+            );
         }
 
         return NextResponse.json({ success: true, refId });
-
     } catch (error) {
-        console.error("💥 CRITICAL_FAILURE:", error);
-        return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
+        console.error('Unexpected application submission failure:', error);
+        return jsonError(
+            'INTERNAL_SERVER_ERROR',
+            'Applications are temporarily unavailable. Please try again later.',
+            500,
+        );
     }
 }

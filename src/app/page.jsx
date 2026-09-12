@@ -5,7 +5,6 @@ import Carousel from '../components/common/Carousel.jsx';
 
 import Accordion from '../components/common/Accordion.jsx';
 
-import BeamsWrapper from '../components/common/BeamsWrapper';
 import Link from 'next/link';
 import Image from 'next/image';
 import { cn } from "@/lib/utils";
@@ -87,16 +86,6 @@ const HomePage = () => {
 
             {/* --- Hero Section --- */}
             <section id="home" className="w-full h-screen min-h-[800px] flex flex-col items-center justify-center relative overflow-hidden bg-[#00244b]">
-
-                {/* 1. The Terminal Engine Background */}
-                {/* Applied linear-gradient mask for burn-in fade at bottom */}
-                <div className="absolute inset-0 z-0 h-screen w-full overflow-hidden">
-                    <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)] transform-gpu will-change-transform">
-                        <BeamsWrapper
-                            beamWidth={1.6}
-                        />
-                    </div>
-                </div>
 
                 {/* Content Container - Dead Center */}
                 <div className="relative z-10 flex flex-col items-center text-center gap-8 px-4 max-w-5xl mx-auto mt-[-5vh]">

@@ -5,12 +5,13 @@ import { motion } from 'framer-motion';
 import { Github, Shield, Radio, Layers, CheckCircle2 } from 'lucide-react';
 import DecryptedText from '../magicui/DecryptedText';
 
-const TalentPortal = () => {
-    // Generate static hex codes for the ring
-    const hexCodes = Array.from({ length: 12 }).map((_, i) =>
-        `0x${Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0').slice(0, 4)}...`
-    );
+const HEX_CODES = [
+    '0x9E37...', '0x3C6E...', '0xDAA6...', '0x78DD...',
+    '0x1715...', '0xB54C...', '0x5384...', '0xF1BB...',
+    '0x8FF3...', '0x2E2A...', '0xCC62...', '0x6A99...',
+];
 
+const TalentPortal = () => {
     const features = [
         {
             title: "Selective stealth mode",
@@ -72,7 +73,7 @@ const TalentPortal = () => {
                             animate={{ rotate: 360 }}
                             transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
                         >
-                            {hexCodes.map((code, i) => (
+                            {HEX_CODES.map((code, i) => (
                                 <div
                                     key={i}
                                     className="absolute text-[10px] font-mono text-blue-300/40"

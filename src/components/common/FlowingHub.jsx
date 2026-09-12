@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Github, Zap, GraduationCap, FileText, CheckCircle2 } from 'lucide-react';
 import './FlowingHub.css';
 
@@ -59,57 +59,6 @@ const AnimatedBeam = ({ path, delay = 0, duration = 3, isTargeted = false, side 
     );
 };
 
-const Particle = ({ path, delay, isTargeted, onEnteringHub }) => {
-    return (
-        <motion.div
-            style={{
-                position: 'absolute',
-                width: isTargeted ? 8 : 4,
-                height: isTargeted ? 8 : 4,
-                borderRadius: '50%',
-                background: '#fff',
-                offsetPath: `path("${path}")`,
-                zIndex: 15,
-            }}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{
-                opacity: [0, 1, 1, 0],
-                scale: [0.5, 1, 1.2, 0.8],
-                background: [
-                    '#ffffff',
-                    '#ffffff',
-                    '#10b981',
-                    '#06b6d4'
-                ],
-                offsetDistance: '100%',
-            }}
-            transition={{
-                duration: 3,
-                delay: delay,
-                repeat: Infinity,
-                ease: "linear"
-            }}
-            onUpdate={(latest) => {
-                const dist = parseFloat(latest.offsetDistance);
-                if (dist > 48 && dist < 52) {
-                    onEnteringHub();
-                }
-            }}
-        >
-            <div className="particle-streak" style={{
-                position: 'absolute',
-                top: '50%',
-                right: '100%',
-                width: '30px',
-                height: '2px',
-                background: 'linear-gradient(to left, #10b981, transparent)',
-                transform: 'translateY(-50%)',
-                opacity: 0.6
-            }} />
-        </motion.div>
-    );
-};
-
 const SourceNode = ({ node, index, total, onHover, isMobile }) => {
     const styleSource = isMobile
         ? { top: '10%', left: `${(index + 1) * (100 / (total + 1))}%` }
@@ -158,15 +107,7 @@ const ProjectNode = ({ index, total, isMobile }) => {
 
 const FlowingHub = () => {
     const [hoveredSource, setHoveredSource] = useState(null);
-    const [isFlashActive, setIsFlashActive] = useState(false);
     const isMobile = useMobile();
-
-    const triggerFlash = () => {
-        if (!isFlashActive) {
-            setIsFlashActive(true);
-            setTimeout(() => setIsFlashActive(false), 300);
-        }
-    };
 
     const generatePath = (side, index, total) => {
         const viewW = 1200;
@@ -258,19 +199,8 @@ const FlowingHub = () => {
                         transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
                     />
                     <div className="hub-main overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
+                        <div className="noise-texture absolute inset-0 opacity-10 mix-blend-overlay pointer-events-none"></div>
                         <img src="/agora4logo.webp" alt="Agora4" className="hub-image" />
-                        <AnimatePresence>
-                            {isFlashActive && (
-                                <motion.div
-                                    className="hub-flash"
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 0.5, scale: 1.4 }}
-                                    exit={{ opacity: 0, scale: 1.8 }}
-                                    transition={{ duration: 0.4 }}
-                                />
-                            )}
-                        </AnimatePresence>
                     </div>
                 </div>
 
@@ -331,15 +261,6 @@ const FlowingHub = () => {
                                     isTargeted={hoveredSource === node.id}
                                     side="left"
                                 />
-                                {[0].map((delay) => (
-                                    <Particle
-                                        key={`p-left-${node.id}-${delay}`}
-                                        path={path}
-                                        delay={delay + (i * 1.5)}
-                                        isTargeted={hoveredSource === node.id}
-                                        onEnteringHub={triggerFlash}
-                                    />
-                                ))}
                             </React.Fragment>
                         );
                     })}
@@ -364,36 +285,6 @@ const FlowingHub = () => {
                                     duration={3.5}
                                     side="right"
                                 />
-                                {[0].map((delay) => (
-                                    <motion.div
-                                        key={`p-right-${node.id}-${delay}`}
-                                        style={{
-                                            position: 'absolute',
-                                            width: 14,
-                                            height: 14,
-                                            offsetPath: `path("${path}")`,
-                                            zIndex: 15,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                        initial={{ opacity: 0 }}
-                                        animate={{
-                                            opacity: [0, 1, 1, 0],
-                                            offsetDistance: ['0%', '100%'],
-                                        }}
-                                        transition={{
-                                            duration: 1.5,
-                                            delay: baseDelay + (i * 1.2),
-                                            repeat: Infinity,
-                                            ease: "linear"
-                                        }}
-                                    >
-                                        <div className="bg-emerald-500 rounded-full p-1 shadow-lg shadow-emerald-500/50">
-                                            <CheckCircle2 size={10} className="text-white" />
-                                        </div>
-                                    </motion.div>
-                                ))}
                             </React.Fragment>
                         );
                     })}
