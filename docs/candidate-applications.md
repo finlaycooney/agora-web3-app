@@ -6,6 +6,23 @@ Local edits and commits do not affect Vercel. Pushing this feature branch may cr
 
 The database migration is additive and must be applied before deploying the application code. If the code is deployed first, submissions will fail safely and uploaded CVs will be removed, but candidates will not be able to complete applications.
 
+An `APPLICATION_SAVE_FAILED` response means the CV upload succeeded but the applicant row could not be inserted. On Preview, verify that its Supabase project has the migration before debugging the file upload. The API attempts to remove the uploaded CV when this happens.
+
+## Canonical branch migration
+
+The Next.js application currently runs from Vercel's `production-v1` branch while GitHub's default branch is `main`. Use this order to make `main` canonical without interrupting production:
+
+1. Apply the additive Supabase migration and verify the production bucket before deploying application code.
+2. Merge the tested Next.js migration PR into `main` while Vercel still treats `production-v1` as its Production Branch. The existing production deployment remains live.
+3. Let Vercel build the resulting `main` commit as a Preview and run smoke tests against that exact deployment.
+4. In Vercel Project Settings, change the Production Branch to `main` and deploy or promote the tested `main` commit.
+5. Verify `/`, `/jobs`, GitHub authentication, and one controlled candidate submission on the production domain.
+6. Keep the previous Vercel production deployment available for immediate rollback. Stop using `production-v1` for new work after the cutover.
+
+Vercel deployments are immutable and the production alias changes only after a successful deployment, so the existing site continues serving during the build. Do not delete `production-v1` or the previous deployment as part of the cutover.
+
+GitHub Actions now validates pull requests and pushes to `main`; it does not deploy the site. Vercel remains the only application deployment system. The former GitHub Pages workflow was removed because a server-rendered Next.js API cannot be deployed as a static `dist` artifact.
+
 ## Local setup
 
 Prerequisites are Node 22 and a running Docker-compatible container runtime.
