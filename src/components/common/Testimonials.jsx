@@ -1,5 +1,7 @@
+"use client";
+
 import React, { useState } from 'react';
-import '@/components/common/Testimonials.css'; // This is the stylesheet we'll create next
+import './Testimonials.css'; // This is the stylesheet we'll create next
 
 // --- Your Testimonial Data ---
 // You can easily add, remove, or change these quotes
