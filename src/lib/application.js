@@ -26,6 +26,10 @@ export function normalizeProfessionalUrl(value) {
         return { ok: true, value: '' };
     }
 
+    if (/^[^\s/@]+@[^\s/@]+$/.test(input)) {
+        return error('INVALID_URL', 'Enter a LinkedIn, GitHub, or portfolio URL, not an email address.');
+    }
+
     if (input.includes('\\')) {
         return error('INVALID_URL', 'Enter a valid professional URL.');
     }
@@ -39,7 +43,7 @@ export function normalizeProfessionalUrl(value) {
             return error('INVALID_URL', 'Use a valid HTTP or HTTPS professional URL.');
         }
         if (url.username || url.password) {
-            return error('INVALID_URL', 'Professional URLs cannot contain credentials.');
+            return error('INVALID_URL', 'Enter a public profile URL without a username or password.');
         }
 
         return { ok: true, value: url.href };

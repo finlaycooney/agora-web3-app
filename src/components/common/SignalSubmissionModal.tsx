@@ -26,6 +26,7 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
     const { data: session, status } = useSession();
     const [step, setStep] = useState<'initial' | 'submitting' | 'success'>('initial');
     const [errorMessage, setErrorMessage] = useState('');
+    const [professionalUrlError, setProfessionalUrlError] = useState('');
     const [data, setData] = useState({
         fullName: '',
         email: '',
@@ -41,6 +42,7 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
         if (isOpen) {
             setStep('initial');
             setErrorMessage('');
+            setProfessionalUrlError('');
             setTerminalLines([]);
             setSelectedFile(null);
             setWebsite('');
@@ -62,6 +64,9 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
+        if (name === 'professionalUrl') {
+            setProfessionalUrlError('');
+        }
         setData(prev => ({ ...prev, [name]: value }));
     };
 
@@ -83,7 +88,13 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
 
     const handleProfessionalUrlBlur = () => {
         const result = normalizeProfessionalUrl(data.professionalUrl);
-        if (result.ok && result.value !== data.professionalUrl) {
+        if (!result.ok) {
+            setProfessionalUrlError(result.message);
+            return;
+        }
+
+        setProfessionalUrlError('');
+        if (result.value !== data.professionalUrl) {
             setData(previous => ({ ...previous, professionalUrl: result.value }));
         }
     };
@@ -97,6 +108,11 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
         }, job ? [job] : []);
 
         if (!fieldValidation.ok) {
+            if (fieldValidation.code === 'INVALID_URL') {
+                setProfessionalUrlError(fieldValidation.message);
+                setErrorMessage('');
+                return;
+            }
             setErrorMessage(fieldValidation.message);
             return;
         }
@@ -296,11 +312,22 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                     placeholder="Professional URL (LinkedIn/GitHub)"
                                                     maxLength={2048}
                                                     autoComplete="url"
-                                                    className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
+                                                    aria-invalid={Boolean(professionalUrlError)}
+                                                    aria-describedby={professionalUrlError ? 'application-professional-url-error' : undefined}
+                                                    className={`w-full bg-transparent border-b text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit ${professionalUrlError ? 'border-red-400/70 focus:border-red-400' : 'border-white/10 focus:border-teal-500'}`}
                                                     value={data.professionalUrl}
                                                     onChange={handleInputChange}
                                                     onBlur={handleProfessionalUrlBlur}
                                                 />
+                                                {professionalUrlError && (
+                                                    <p
+                                                        id="application-professional-url-error"
+                                                        role="alert"
+                                                        className="px-3 text-sm text-red-200"
+                                                    >
+                                                        {professionalUrlError}
+                                                    </p>
+                                                )}
                                                 <label htmlFor="application-achievement" className="sr-only">Technical achievement</label>
                                                 <textarea
                                                     id="application-achievement"

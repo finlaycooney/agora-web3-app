@@ -68,7 +68,13 @@ To exercise the complete API, storage, and database flow against local Supabase:
 npm run test:e2e:backend
 ```
 
-The integration test refuses to run against a non-local Supabase hostname and removes its test row and uploaded PDF.
+The shared Playwright configuration rejects non-allowlisted Supabase targets before starting any test, including filtered backend cases. Only `http://127.0.0.1:54321` and `http://localhost:54321` (with an optional trailing slash) are permitted. Backend mode also requires the local `SERVICE_ROLE_KEY` JWT printed by `supabase status`, not a hosted project key. The credential check is an accidental-environment safeguard, not JWT authentication; the local service authenticates the actual requests.
+
+Playwright always starts its own app server. Stop any existing app on port 3000 before running the suite so it cannot reuse a server initialized with different credentials. Do not forward these allowed loopback ports to a remote database/API. Extending the suite to preview requires a reviewed environment identity guard; changing an environment variable does not authorize production testing.
+
+The integration cases submit structurally valid synthetic PDF and DOCX files, compare downloaded private bytes, deny unauthenticated file access, and remove their own rows and objects. The legacy route still uses administrative credentials; these tests do not establish the future restricted-role authorization or scanning guarantees.
+
+See [the architecture implementation documents](architecture/README.md) for the proposed schema, outstanding decisions and acceptance gates.
 
 ## Maintainer handoff
 
