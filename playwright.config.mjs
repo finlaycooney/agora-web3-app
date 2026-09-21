@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
+import { assertNonproductionTestEnvironment } from './tests/support/nonproduction.js';
 
 loadEnv({ path: '.env.local', quiet: true });
+assertNonproductionTestEnvironment();
 
 export default defineConfig({
     testDir: './tests/e2e',
@@ -16,10 +18,12 @@ export default defineConfig({
     webServer: {
         command: 'npm run dev -- --hostname 127.0.0.1',
         url: 'http://127.0.0.1:3000/jobs',
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         timeout: 120_000,
         env: {
             ...process.env,
+            NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+            SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
             NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://127.0.0.1:3000',
             NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'local-playwright-secret',
             GITHUB_ID: process.env.GITHUB_ID || 'local-playwright-client',

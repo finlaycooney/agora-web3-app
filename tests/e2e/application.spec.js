@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createSyntheticDocx } from '../support/cv-fixtures.js';
 
 const openApplication = async (page) => {
     await page.route('**/api/auth/session', (route) => route.fulfill({ json: {} }));
@@ -16,7 +17,7 @@ const completeApplication = async (page) => {
     await page.getByLabel('Upload CV as PDF or DOCX, maximum 4 MB').setInputFiles({
         name: 'ada-cv.docx',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        buffer: Buffer.from('PK local mocked browser test'),
+        buffer: createSyntheticDocx(),
     });
 };
 
@@ -39,6 +40,27 @@ test('submits the selected job and all visible candidate fields', async ({ page 
     expect(requestBody).toContain('https://www.linkedin.com/in/ada');
     expect(requestBody).toContain('ada-cv.docx');
     expect(requestBody).toContain('Built a protocol.');
+});
+
+test('explains an email entered as a professional URL and clears the error when corrected', async ({ page }) => {
+    await openApplication(page);
+
+    const professionalUrl = page.getByLabel('Professional URL');
+    await professionalUrl.fill('ada@example.com');
+    await professionalUrl.blur();
+
+    const professionalUrlError = page.locator('#application-professional-url-error');
+    await expect(professionalUrlError).toHaveText(
+        'Enter a LinkedIn, GitHub, or portfolio URL, not an email address.',
+    );
+    await expect(professionalUrl).toHaveAttribute('aria-invalid', 'true');
+
+    await professionalUrl.fill('github.com/ada');
+    await professionalUrl.blur();
+
+    await expect(professionalUrl).toHaveValue('https://github.com/ada');
+    await expect(professionalUrl).toHaveAttribute('aria-invalid', 'false');
+    await expect(professionalUrlError).toBeHidden();
 });
 
 test('does not show verified when the server response has no application reference', async ({ page }) => {

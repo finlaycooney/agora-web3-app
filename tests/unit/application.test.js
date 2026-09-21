@@ -69,6 +69,14 @@ test('normalizes domain-like professional URLs and rejects unsafe or typo scheme
     assert.equal(normalizeProfessionalUrl('hhtp://linkedin.com/in/ada').code, 'INVALID_URL');
     assert.equal(normalizeProfessionalUrl('javascript:alert(1)').code, 'INVALID_URL');
     assert.equal(normalizeProfessionalUrl('www\\.linkedin.com').code, 'INVALID_URL');
+    assert.equal(
+        normalizeProfessionalUrl('ada@example.com').message,
+        'Enter a LinkedIn, GitHub, or portfolio URL, not an email address.',
+    );
+    assert.equal(
+        normalizeProfessionalUrl('https://ada:secret@example.com/profile').message,
+        'Enter a public profile URL without a username or password.',
+    );
 });
 
 test('recognizes only server-issued application reference shapes', () => {
