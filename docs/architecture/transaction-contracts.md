@@ -1,6 +1,6 @@
 # Proposed authorization and transaction contracts
 
-Status: proposed for review, paired with the [schema](schema-specification.md). Function names/signatures below are the intended versioned interfaces, not implemented database functions. No runtime path is switched by this PR.
+Status: proposed for review, paired with the [schema](schema-specification.md). The staff authorization core subset — `context_uuid_v1`, `has_permission_v1`, `resolve_staff_principal_v1`, `change_membership_v1` and `change_role_grants_v1` plus `audit_events` — is implemented by the staff authorization core migration; all remaining interfaces below are still intended versioned contracts, not implemented functions. No runtime path is switched.
 
 ## 1. Database boundary and permissions
 
@@ -57,7 +57,7 @@ Raw staff INSERT/UPDATE/DELETE must fail on all invariant-bearing tables, includ
 
 Global order for participating resources:
 
-1. Organization row: `FOR SHARE` for ordinary authorized mutations/publication; `FOR UPDATE` for role/membership changes. This serializes revocation/grant changes against already-authorized committing mutations.
+1. Organization row: `FOR SHARE` for ordinary authorized mutations/publication; an exclusive row lock for role/membership changes. The implemented procedures acquire that lock with `SELECT ... FOR UPDATE` on the organization row, which serializes revocation/grant changes against already-authorized committing mutations.
 2. Job rows in UUID order where eligibility/publication is relevant, using `FOR SHARE` for intake and `FOR UPDATE` for editing/closing.
 3. Candidate rows in UUID order, `FOR UPDATE` for ownership/lifecycle/document changes.
 4. Applications, blobs and documents, each class in UUID order.
@@ -77,8 +77,11 @@ All UUID arguments are organization-scoped by verified context; worker/intake sc
 
 | Interface | Transaction obligations / result |
 | --- | --- |
-| `change_membership_v1(membership_id, role_id, status, expected_version)` | Organization exclusive lock, grant check, same-org role, last-admin check, update and audit |
-| `change_role_grants_v1(role_id, expected_version, grant_keys, revoke_keys)` | Same lock; supported keys, protected Admin grants, no protected grants to other initial roles, audit before/after keys |
+| `context_uuid_v1(setting text)` | Reads `app.actor_id`/`app.organization_id`; returns null on missing/malformed/unsupported settings, never leaks setting contents |
+| `has_permission_v1(key text)` | True only for active actor, organization, membership and non-viewer role with the nonretired grant in context |
+| `resolve_staff_principal_v1(provider, issuer, subject, organization_id)` | Maps a server-verified identity to user/membership/role ids; clears all context settings before returning; zero rows on any unmapped/inactive/revoked link |
+| `change_membership_v1(membership_id, role_id, status, expected_version, audit_id, correlation_id)` | Organization exclusive lock, grant check, same-org role, last-admin check, update and audit |
+| `change_role_grants_v1(role_id, expected_version, grant_keys, revoke_keys, audit_id, correlation_id)` | Same lock; supported keys, protected Admin grants, no protected grants to other initial roles, audit before/after keys |
 | `save_candidate_v1(candidate_id, expected_version, allowed_fields)` | Active lifecycle/purpose, validate assigned membership; profile/version increment and derived-work invalidation |
 | `save_job_v1(job_id, expected_version, allowed_fields)` | Same-org client/pipeline/owner; public-field changes revoke editorial approval |
 | `publish_job_v1(job_id, expected_version, reviewed_content_hash)` | Explicit editorial action; content still matches review; set published state; no persistent public cache initially |
@@ -88,6 +91,8 @@ All UUID arguments are organization-scoped by verified context; worker/intake sc
 | `erase_candidate_v1(candidate_id, expected_version, request_id)` | Restrict first; clear PII/current pointers, schedule checked deletion of every primary/legacy/derived copy; fulfillment waits for completion/ledger evidence |
 | `prepare_download_v1(document_id, application_id?)` | Record read + download permission; candidate/purpose/document active; scan fresh and clean; verified primary exists; return only selected locator and audit issuance intent |
 | `merge_candidates_v1(source_id,target_id,versions,resolution)` | Not exposed until later merge PR. Confirmed preview/version, lock order and duplicate-blob consolidation below |
+
+The mutation interfaces take caller-generated `audit_id`/`correlation_id` UUIDs: the application mints UUIDv4 values per request, the database never generates UUIDs, and a duplicate `audit_id` rolls back the whole mutation so retries cannot fabricate divergent evidence.
 
 Minimal staff shell and operator commands in PR 3 expose these supported operations. Finalization alone creates the initial stage event; raw insert cannot omit it. No-op stage transitions do not fabricate a history entry. Reopening a terminal stage requires explicit action/reason and preserves prior outcome history.
 
