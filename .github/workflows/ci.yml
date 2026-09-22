@@ -56,3 +56,29 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser tests
         run: npm run test:e2e
+
+  database-foundation:
+    name: Database foundation (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [postgres, supabase]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        if: matrix.mode == 'supabase'
+        run: npx playwright install --with-deps chromium
+      - name: Run foundation database tests
+        env:
+          FOUNDATION_TEST_MODE: ${{ matrix.mode }}
+        run: npm run test:db:foundation

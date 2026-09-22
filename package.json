@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/*.test.js",
+    "test:db:foundation": "node --test tests/database/foundation.test.js",
     "test:e2e": "playwright test",
     "test:e2e:backend": "E2E_REAL_BACKEND=1 playwright test tests/e2e/application-backend.spec.js",
     "local:start": "supabase start",
