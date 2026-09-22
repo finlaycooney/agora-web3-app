@@ -88,7 +88,7 @@ Tenant junction, no common ID: `(organization_id uuid,role_id uuid,permission_ke
 
 ### `organization_memberships`
 
-Tenant. Columns: `user_id uuid → users`, `role_id uuid → roles`, `status text{invited,active,revoked}`, `activated_at timestamptz?`, `revoked_at timestamptz?`, `updated_at timestamptz`, `version bigint`. Unique `(organization_id,user_id)`; index `(organization_id,role_id,status,id)`. Active implies activated timestamp and no revoked timestamp; revoked implies revoked timestamp. Invited users are already mapped to a verified stable provider identity via an operator enrollment procedure. Email-only invitations are deferred. Revocation preserves historic assignments/actors. Role/organization changes use the organization lock.
+Tenant. Columns: `user_id uuid → users`, `role_id uuid → roles`, `status text{invited,active,revoked}`, `activated_at timestamptz?`, `revoked_at timestamptz?`, `updated_at timestamptz`, `version bigint`. Unique `(organization_id,user_id)` and `(organization_id,id,user_id)` — the latter added by the staff authorization core so audit rows can reference the tenant-bound actor triple; index `(organization_id,role_id,status,id)`. Active implies activated timestamp and no revoked timestamp; revoked implies revoked timestamp. Invited users are already mapped to a verified stable provider identity via an operator enrollment procedure. Email-only invitations are deferred. Revocation preserves historic assignments/actors. Role/organization changes use the organization lock.
 
 ## 4. Clients, jobs and pipelines — foundation batch
 
@@ -218,9 +218,9 @@ Tenant. Columns: `request_id uuid → privacy_requests`, `candidate_id uuid? →
 
 ### `audit_events`
 
-Tenant. Columns: `actor_kind text{staff,intake,worker,migration,recovery}`, `actor_user_id uuid? → users`, `actor_membership_id uuid? → organization_memberships`, `action text`, `target_type text`, `target_id uuid?`, `correlation_id uuid`, `occurred_at timestamptz`, `details jsonb DEFAULT '{}'`.
+Tenant. Implemented by the staff authorization core migration. Columns: `id uuid` PK, `actor_kind text{staff,intake,worker,migration,recovery}`, `actor_user_id uuid? → users`, `actor_membership_id uuid?`, `action text`, `target_type text`, `target_id uuid?`, `correlation_id uuid` NOT NULL, `occurred_at timestamptz`, `details jsonb DEFAULT '{}'`, `created_at timestamptz`. Unique `(organization_id,id)`; composite FKs `(organization_id,actor_membership_id)` → memberships `(organization_id,id)` and `(organization_id,actor_membership_id,actor_user_id)` → memberships `(organization_id,id,user_id)` tie the actor membership to the same tenant and user.
 
-Index `(organization_id,occurred_at DESC,id DESC)` and `(organization_id,target_type,target_id,occurred_at,id)`. Target ID is intentionally non-FK so evidence can outlive erased objects. Staff requires actor user and membership belonging to that user. `details` uses per-action allowlists and max 4 KiB; before/after role grants can contain permission keys, never CV/text/token/PII dumps. Only procedure writes, operator-controlled expiry/redaction.
+Index `(organization_id,occurred_at DESC,id DESC)` and `(organization_id,target_type,target_id,occurred_at,id)`, plus actor-user and `(organization_id,actor_membership_id,actor_user_id)` covering indexes. Target ID is intentionally non-FK so evidence can outlive erased objects. Staff rows require actor user and membership belonging to that user: a CHECK enforces presence for staff-kind rows and the composite foreign keys prove the membership belongs to that user and tenant. `details` uses per-action allowlists (`staff.membership.changed`, `staff.role_grants.changed`) and max 4 KiB; before/after role grants can contain permission keys, never CV/text/token/PII dumps. Future actions require a reviewed constraint extension. Forced RLS; insert-only through the executor policy, no runtime read interface yet; operator-controlled expiry/redaction.
 
 ## 9. Migration support — backfill batch
 

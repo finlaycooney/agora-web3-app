@@ -158,14 +158,22 @@ const dockerLogs = (name) => {
     return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 };
 
-export async function startPostgresContainer(purpose, image) {
+export async function startPostgresContainer(
+    purpose,
+    image,
+    { publish = false, password = randomUUID() } = {},
+) {
     const name = containerName(purpose);
-    runDockerCommand([
+    const args = [
         'run', '--detach', '--name', name,
         '--label', `${RUN_LABEL}=${RUN_ID}`,
-        '--env', `POSTGRES_PASSWORD=${randomUUID()}`,
-        image,
-    ]);
+        '--env', `POSTGRES_PASSWORD=${password}`,
+    ];
+    if (publish) {
+        args.push('--publish', '127.0.0.1::5432');
+    }
+    args.push(image);
+    runDockerCommand(args);
     try {
         assertOwnedContainer(name);
         const deadline = Date.now() + 60_000;
@@ -184,6 +192,19 @@ export async function startPostgresContainer(purpose, image) {
         stopAndRemoveContainer(name);
         throw error;
     }
+}
+
+export function publishedPort(name, containerPort) {
+    assertOwnedContainer(name);
+    const entry = inspectDockerResource('container', name);
+    const bindings = entry?.NetworkSettings?.Ports?.[`${containerPort}/tcp`];
+    const binding = bindings?.find(
+        ({ HostIp, HostPort }) => HostIp === '127.0.0.1' && Number(HostPort) > 0,
+    );
+    if (!binding) {
+        throw new Error(`Container ${name} has no localhost binding for port ${containerPort}.`);
+    }
+    return Number(binding.HostPort);
 }
 
 export function stopAndRemoveContainer(name) {

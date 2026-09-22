@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
     copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
@@ -29,6 +30,13 @@ import {
     stopAndRemoveContainer,
     tryDockerCommand,
 } from '../support/foundation-docker.js';
+import {
+    AUTHZ_ID,
+    AUTHZ_MIGRATION,
+    GITHUB_ISSUER,
+    SUBJECTS,
+    staffFixtureSql,
+} from '../support/staff-authorization.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -1143,6 +1151,119 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
         assert.equal(supabasePsql(`select count(*) from app.role_permissions
             where role_id = '${ID.ROLE_A_RECRUITER}' and permission_key = 'jobs.write'`).trim(), '0');
         assert.equal(supabasePsql(`select count(*) from app.roles`).trim(), '3');
+    });
+
+    await t.test('staff authorization upgrade applies and enforces on the provider stack', async () => {
+        const applicantsBeforeAuthz = supabasePsql(dumpApplicants);
+        const bucketBeforeAuthz = supabasePsql(dumpBucket);
+        copyFileSync(join(migrationsDir, AUTHZ_MIGRATION), join(tempMigrations, AUTHZ_MIGRATION));
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeAuthz);
+        assert.equal(supabasePsql(dumpBucket), bucketBeforeAuthz);
+        supabasePsql(staffFixtureSql);
+        supabasePsql('grant app_staff, app_intake, app_worker to postgres;');
+
+        const smokeSql = (inner) => `
+            begin;
+            set local role app_staff;
+            ${inner}
+            commit;
+        `;
+        const staffContext = `
+            select pg_catalog.set_config('app.actor_id', '${AUTHZ_ID.USER_ADMIN1}', true);
+            select pg_catalog.set_config('app.organization_id', '${AUTHZ_ID.ORG_A}', true);
+        `;
+
+        assert.equal(
+            supabasePsql(smokeSql(`${staffContext} select app.has_permission_v1('staff.manage');`))
+                .trim().split('\n').pop(),
+            't',
+        );
+        assert.equal(
+            supabasePsql(smokeSql(`
+                select user_id || '|' || membership_id || '|' || role_id
+                from app.resolve_staff_principal_v1(
+                    'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
+            `)).trim().split('\n').pop(),
+            `${AUTHZ_ID.USER_ADMIN1}|${AUTHZ_ID.MEMBER_ADMIN1}|${ID.ROLE_A_ADMIN}`,
+        );
+
+        const membershipVersion = Number(supabasePsql(`
+            select version from app.organization_memberships
+            where id = '${AUTHZ_ID.MEMBER_CUSTOM}'
+        `).trim());
+        const changed = supabasePsql(smokeSql(`
+            ${staffContext}
+            select membership_id || '|' || version
+            from app.change_membership_v1(
+                '${AUTHZ_ID.MEMBER_CUSTOM}', '${AUTHZ_ID.ROLE_A_CUSTOM}', 'revoked',
+                ${membershipVersion}, '${randomUUID()}', '${randomUUID()}');
+        `)).trim().split('\n').pop();
+        assert.equal(changed, `${AUTHZ_ID.MEMBER_CUSTOM}|${membershipVersion + 1}`);
+
+        const roleVersion = Number(supabasePsql(`
+            select version from app.roles where id = '${ID.ROLE_A_RECRUITER}'
+        `).trim());
+        const grantsChanged = supabasePsql(smokeSql(`
+            ${staffContext}
+            select role_id || '|' || version
+            from app.change_role_grants_v1(
+                '${ID.ROLE_A_RECRUITER}', ${roleVersion}, '{}', '{documents.download}',
+                '${randomUUID()}', '${randomUUID()}');
+        `)).trim().split('\n').pop();
+        assert.equal(grantsChanged, `${ID.ROLE_A_RECRUITER}|${roleVersion + 1}`);
+        assert.equal(
+            supabasePsql(`select count(*) from app.audit_events
+                where organization_id = '${AUTHZ_ID.ORG_A}'`).trim(),
+            '2',
+        );
+        assert.equal(
+            supabasePsql(`select action from app.audit_events
+                where organization_id = '${AUTHZ_ID.ORG_A}' order by occurred_at, id`).trim(),
+            'staff.membership.changed\nstaff.role_grants.changed',
+        );
+
+        for (const role of ['anon', 'authenticated', 'service_role', 'app_intake', 'app_worker']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.has_permission_v1('staff.manage');`),
+                /42501/,
+                `${role} must not call internal functions`,
+            );
+        }
+        assert.match(
+            supabasePsqlError(`set role app_staff; select count(*) from app.candidates;`),
+            /42501/,
+            'app_staff must not read candidate data',
+        );
+
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app' and (
+                p.proname not in ('context_uuid_v1', 'has_permission_v1',
+                    'resolve_staff_principal_v1', 'change_membership_v1', 'change_role_grants_v1')
+                or (p.proname = 'context_uuid_v1'
+                    and (p.prosecdef or r.rolname <> 'app_owner'))
+                or (p.proname in ('has_permission_v1', 'resolve_staff_principal_v1')
+                    and (not p.prosecdef or r.rolname <> 'app_authz_reader'))
+                or (p.proname in ('change_membership_v1', 'change_role_grants_v1')
+                    and (not p.prosecdef or r.rolname <> 'app_executor'))
+            )
+        `).trim(), '0');
+        assert.equal(supabasePsql(`
+            select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'app' and c.relname = 'audit_events'
+                and c.relrowsecurity and c.relforcerowsecurity
+        `).trim(), '1');
+        assert.equal(supabasePsql(`
+            select coalesce(bool_or(acl.grantee = 0), false)
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            cross join lateral aclexplode(
+                coalesce(p.proacl, acldefault('f', p.proowner))
+            ) acl
+            where n.nspname = 'app'
+        `).trim(), 'f');
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {
