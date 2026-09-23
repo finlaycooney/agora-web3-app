@@ -144,6 +144,8 @@ Composite from/to stage FKs include their own pipelines; both from fields are nu
 
 ## 6. Documents — document batch
 
+Implemented by `supabase/migrations/20260922210000_document_foundation.sql`. `original_filename` and `submitted_filename` are required (`NOT NULL`); controlled erasure/redaction of those fields is a future workflow concern, not a nullable column.
+
 ### `file_blobs`
 
 Tenant. Columns: `candidate_id uuid → candidates`, `sha256 bytea`, `size_bytes bigint CHECK (>0 AND <=4194304)`, `mime_type text`, `extension text{pdf,docx}`, `lifecycle text{live,unavailable,retired,deleting,deleted}`, `scan_state text{unscanned,pending,scanning,clean,infected,failed}`, `scan_engine text?`, `scan_definitions text?`, `scanned_at timestamptz?`, `scan_valid_until timestamptz?`, `scan_generation bigint DEFAULT 1 CHECK (>0)`, `lifecycle_generation bigint DEFAULT 1 CHECK (>0)`, `retired_into_id uuid? → file_blobs`, `updated_at timestamptz`, `version bigint`.
@@ -154,7 +156,7 @@ Unique `(organization_id,candidate_id,id)`. Partial unique `(organization_id,can
 
 Tenant. Columns: `blob_id uuid → file_blobs`, `backend_key text`, `bucket text`, `object_key text`, `state text{pending,available,missing,delete_pending,deleted}`, `is_primary boolean DEFAULT false`, `verified_sha256 bytea?`, `verified_size_bytes bigint?`, `verified_at timestamptz?`, `deleted_at timestamptz?`, `updated_at timestamptz`, `version bigint`.
 
-Unique `(backend_key,bucket,object_key)` globally, so one physical object is not accidentally attributed twice. Partial unique `(organization_id,blob_id) WHERE is_primary`. Primary may be missing but never deleted; recovery explicitly clears/moves primary. Available requires verified checksum, size and timestamp matching blob metadata via controlled procedure. No primary row is a defined unavailable state. Backup artifacts are recorded in external checkpoint manifests, not served as primary locations. Location index `(organization_id,blob_id,state,id)`. Delete records only after retention/reference checks; provider secrets are outside the database.
+Unique `(backend_key,bucket,object_key)` globally, so one physical object is not accidentally attributed twice. Partial unique `(organization_id,blob_id) WHERE is_primary`. Primary may be missing but never deleted; recovery explicitly clears/moves primary. Any present `verified_sha256` must be 32 bytes and any present `verified_size_bytes` must be in `(0,4194304]` regardless of state; `available` additionally requires all three verified fields plus `verified_at`, and a trigger requires the verified hash/size to equal the referenced blob's metadata under `FOR KEY SHARE`. No primary row is a defined unavailable state. Backup artifacts are recorded in external checkpoint manifests, not served as primary locations. Location index `(organization_id,blob_id,state,id)`. Delete records only after retention/reference checks; provider secrets are outside the database.
 
 ### `documents`
 
@@ -190,15 +192,15 @@ Tenant junction: `organization_id uuid`, `scope text{intent_source,upload_source
 
 ## 8. Privacy and audit — privacy batch before real intake
 
-These supporting catalog tables make notice/purpose versioning explicit rather than putting unreviewed strings on candidate rows.
+Implemented by `supabase/migrations/20260922210100_privacy_foundation.sql` and `20260922210200_privacy_tracking_foundation.sql` (data foundation only — no rights/deletion effects, disclosure execution or runtime read paths). These supporting catalog tables make notice/purpose versioning explicit rather than putting unreviewed strings on candidate rows.
 
 ### `processing_purposes`
 
-Tenant. Columns: `key text`, `policy_version integer CHECK (>0)`, `description text`, `legal_basis text`, `jurisdiction text`, `retention_rule text`, `status text{draft,active,retired}`, `approved_by_membership_id uuid? → organization_memberships`, `approved_at timestamptz?`. Unique `(organization_id,key,policy_version)` and `(organization_id,id)`. Active requires approval; approved versions immutable. No production seed guesses lawful basis or “one year.” Catalog retirement blocks new associations; historic links remain subject to current restriction policy.
+Tenant. Columns: `key text`, `policy_version integer CHECK (>0)`, `description text`, `legal_basis text`, `jurisdiction text`, `retention_rule text`, `status text{draft,active,retired}`, `approved_by_membership_id uuid? → organization_memberships`, `approved_at timestamptz?`. Unique `(organization_id,key,policy_version)` and `(organization_id,id)`. Approval fields are paired; active requires approval, and once `approved_at` is set the version's core fields are immutable to every writer including migration roles. `retired` cannot transition back to `draft`/`active`. No production seed guesses lawful basis or “one year.” Catalog retirement blocks new associations; historic links remain subject to current restriction policy.
 
 ### `privacy_notices`
 
-Tenant. Columns: `purpose_id uuid → processing_purposes`, `version text`, `locale text`, `content text`, `content_sha256 bytea`, `published_at timestamptz?`, `retired_at timestamptz?`. Unique `(organization_id,purpose_id,version,locale)` and `(organization_id,purpose_id,id)`. Published content immutable; public renderer serves only published approved-purpose versions. Notice IDs prove what was shown, not universal consent.
+Tenant. Columns: `purpose_id uuid → processing_purposes`, `version text`, `locale text`, `content text`, `content_sha256 bytea`, `published_at timestamptz?`, `retired_at timestamptz?`. Unique `(organization_id,purpose_id,version,locale)` and `(organization_id,purpose_id,id)`. `content_sha256` must equal `sha256(content)` and be 32 bytes. First publication requires the referenced purpose to be `active` and approved, checked under a row share lock; once `published_at` is set the notice's core fields are immutable, `retired_at` may only be set after publication at a time ≥ `published_at` and cannot be cleared. Notice IDs prove what was shown, not universal consent. No public renderer exists yet; publication is a stored fact pending the intake/renderer batch.
 
 ### `candidate_processing_purposes`
 
@@ -208,13 +210,51 @@ FK `(organization_id,purpose_id,notice_id)` enforces notice-purpose agreement; s
 
 ### `privacy_requests`
 
-Tenant. Columns: `candidate_id uuid? → candidates`, `kind text{access,correction,restriction,erasure}`, `status text{received,verified,in_progress,fulfilled,rejected}`, `received_at timestamptz`, `verified_by_membership_id uuid? → organization_memberships`, `verified_at timestamptz?`, `verification_method text?`, `due_at timestamptz?`, `resolution_code text?`, `resolved_at timestamptz?`, `ledger_sequence bigint?`, `ledger_confirmed_at timestamptz?`, `updated_at timestamptz`, `version bigint`.
+Tenant. Columns: `candidate_id uuid? → candidates`, `kind text{access,correction,restriction,erasure,objection,portability,withdrawal}`, `status text{received,verified,in_progress,fulfilled,rejected}`, `received_at timestamptz`, `verified_by_membership_id uuid? → organization_memberships`, `verified_at timestamptz?`, `verification_method text?`, `due_at timestamptz?`, `response_sent_at timestamptz?`, `response_code text?`, `resolution_code text?`, `resolved_at timestamptz?`, `ledger_sequence bigint? CHECK (>0)`, `ledger_confirmed_at timestamptz?`, `updated_at timestamptz`, `version bigint`.
 
-Index `(organization_id,status,due_at,id)`. Verified processing requires verified-at/by/method; do not retain identity-document scans. Unknown requester can be received before mapping to candidate. Fulfillment requires independently recoverable ledger confirmation for restriction/erasure plus documented completion state. Deadline and verification policy are jurisdiction decisions, never invented defaults. Remove candidate linkage when appropriate after fulfilled erasure; retain only justified case evidence.
+Index `(organization_id,status,due_at,id)`; `UNIQUE (organization_id,ledger_sequence)` — ordinary uniqueness over nullable keys, so unrecorded ledger states do not collide. Verified/in-progress/fulfilled processing requires paired verified-by/at plus nonblank method; do not retain identity-document scans. Unknown requester can be received before mapping to candidate: `candidate_id` is optional context, and the authoritative reviewed target list lives in `privacy_request_subjects`. Response fields are paired (`response_sent_at`/`response_code`). Terminal fulfilled/rejected requires `resolved_at` plus nonblank `resolution_code`; fulfilled restriction/erasure additionally requires positive `ledger_sequence` with `ledger_confirmed_at`. `ledger_confirmed_at` requires `ledger_sequence`, but a sequence may be recorded while external ledger acknowledgment is still pending — an `in_progress` request may carry a sequence with no confirmation yet. Fulfillment for other kinds, including access, may rely on valid verification. Deadline and verification policy are jurisdiction decisions, never invented defaults. Remove candidate linkage when appropriate after fulfilled erasure; retain only justified case evidence.
+
+### `privacy_complaints`
+
+Tenant. Columns: `candidate_id uuid?`, `related_request_id uuid? → privacy_requests`, `owner_membership_id uuid? → organization_memberships`, `status text{received,in_progress,resolved}`, `received_at timestamptz`, `acknowledgment_due_at timestamptz?`, `acknowledged_at timestamptz?`, `next_update_due_at timestamptz?`, `summary text? CHECK (<=2048 chars)`, `outcome_code text?`, `resolved_at timestamptz?`, `updated_at timestamptz`, `version bigint`. Composite same-organization FKs for candidate, related request and owner. Index `(organization_id,status,acknowledgment_due_at,id)` plus FK covering indexes.
+
+Resolved status requires `resolved_at` plus nonblank `outcome_code`; non-resolved states require both null. Due/acknowledged/resolved clock fields must be ≥ `received_at`. Deadlines are supplied policy values, never encoded defaults.
+
+### `privacy_request_subjects`
+
+Tenant. Columns: `request_id uuid → privacy_requests`, `candidate_id uuid?`, `legacy_record_id uuid? → legacy_records`, `candidate_version bigint? CHECK (>0)`, `source_sha256 bytea?`, `reviewed_by_membership_id uuid → organization_memberships`, `reviewed_at timestamptz`. Exactly one of `candidate_id`/`legacy_record_id` must be set; candidate targets require `candidate_version`, legacy targets require `source_sha256` and forbid `candidate_version`.
+
+Unique `(organization_id,id)`, `(organization_id,request_id,id)`, `(organization_id,request_id,id,candidate_id)`, `(organization_id,request_id,candidate_id)` and `(organization_id,request_id,legacy_record_id)`. This is the explicit reviewed scope of a case — staff assert which candidate or legacy record a request covers; it is not automatic identity matching. Verified legacy-only requests stay representable without manufacturing a canonical candidate.
 
 ### `privacy_events`
 
-Tenant. Columns: `request_id uuid → privacy_requests`, `candidate_id uuid? → candidates`, `sequence bigint CHECK (>0)`, `action text`, `lifecycle_generation bigint?`, `actor_membership_id uuid? → organization_memberships`, `occurred_at timestamptz`, `evidence_code text`. Unique `(organization_id,request_id,sequence)`; index `(organization_id,candidate_id,occurred_at,id)`. Append-only minimized evidence of decisions. Export decision sequence to the independent ledger; separate expiry policy. No snapshot of erased fields.
+Tenant. Columns: `request_id uuid → privacy_requests`, `subject_id uuid? → privacy_request_subjects`, `candidate_id uuid? → candidates`, `sequence bigint CHECK (>0)`, `action text`, `lifecycle_generation bigint? CHECK (>0)`, `actor_membership_id uuid? → organization_memberships`, `occurred_at timestamptz`, `evidence_code text`. Composite FK `(organization_id,request_id,subject_id)` ties the event to a subject of the same case; composite FK `(organization_id,request_id,subject_id,candidate_id)` additionally pins the event candidate to the subject's reviewed candidate. `candidate_id` requires `subject_id`; request-level events may leave both null, and legacy-subject events keep `candidate_id` null.
+
+Unique `(organization_id,request_id,sequence)`; index `(organization_id,candidate_id,occurred_at,id)` plus FK covering indexes. Append-only minimized evidence of decisions. Export decision sequence to the independent ledger; separate expiry policy. No snapshot of erased fields.
+
+### `legacy_datasets`
+
+Tenant. Columns: `key text`, `connection_key text`, `source_kind text{legacy_applicants}`, `status text{active,inactive}`, `updated_at timestamptz`, `version bigint`. `key` is globally unique and `(connection_key,source_kind)` is globally unique so one tenant-less external source cannot be bound to two organizations. `connection_key` is an opaque reviewed adapter configuration key, never a URL or credential. Identity fields (`id`, `organization_id`, `key`, `connection_key`, `source_kind`, `created_at`) are immutable once bound; `status` may change through review.
+
+### `legacy_records`
+
+Tenant. Columns: `dataset_id uuid → legacy_datasets`, `native_id bigint`, `candidate_id uuid? → candidates`, `source_sha256 bytea?`, `verified_by_membership_id uuid? → organization_memberships`, `verified_at timestamptz?`, `updated_at timestamptz`, `version bigint`. Unique `(organization_id,dataset_id,native_id)`; same-organization composite FKs for dataset, candidate and reviewer. `native_id` accepts any bigint: legacy identity is preserved, not validated.
+
+`verified_by_membership_id`/`verified_at` are paired, and verification requires a nonnull `source_sha256` fingerprint. Dataset and native identity are immutable after binding; fingerprint, candidate mapping and review state may change through future procedures. No foreign key to `public.applicants` and no storage dependency: real adapter linkage verification is not yet implemented or claimed.
+
+### `disclosure_recipients`
+
+Tenant. Columns: `client_id uuid? → clients`, `legal_name text CHECK (nonblank, <=256)`, `relationship text{unassessed,independent_controller,processor,joint_controller}`, `country_code text? CHECK (2 uppercase letters)`, `contact_reference text? CHECK (<=1024)`, `terms_reference text? CHECK (<=1024)`, `transfer_reference text? CHECK (<=1024)`, `status text{active,inactive}`, `updated_at timestamptz`, `version bigint`. Index `(organization_id,status,legal_name,id)` plus client FK index.
+
+Known recipients are ordinary runtime records entered through review, not a prerequisite inventory or seed. `relationship` starts `unassessed` and legal classification is a reviewed value, not a schema default. `country_code` is a format check only; references carry business contact/agreement identifiers, never credentials.
+
+### `document_disclosures`
+
+Tenant. Columns: `recipient_id uuid → disclosure_recipients`, `candidate_id uuid?`, `document_id uuid?`, `legacy_record_id uuid? → legacy_records`, `application_id uuid?`, `purpose_id uuid? → processing_purposes`, `actor_membership_id uuid? → organization_memberships`, `origin text{planned,historical}`, `channel text{email,chat,ats,secure_link,other}`, `status text{intended,sent,failed,unknown,cancelled}`, `source_version bigint? CHECK (>0)`, `source_sha256 bytea?`, `approval_reference text? CHECK (<=1024)`, `external_reference text? CHECK (<=1024)`, `sent_at timestamptz?`, `updated_at timestamptz`, `version bigint`.
+
+Exactly one subject shape: either (`document_id` and `candidate_id`, no legacy record) or (`legacy_record_id` alone, no document/candidate/application). Deferrable candidate triple FKs pin document and optional application to the same candidate; recipient, purpose, actor and legacy record are same-organization composite FKs. `planned` rows require actor, purpose, nonblank approval reference and source hash, plus `source_version` for document sources — historical rows may keep provenance null rather than manufacturing approval. `sent_at` is present exactly when `status='sent'` and may predate `created_at` for historical recording. Indexes `(organization_id,recipient_id,created_at,id)`, `(organization_id,candidate_id,created_at,id)` plus FK covering indexes.
+
+These records store provenance only: no deduplication unique key exists on candidate/client pairs because repeated legitimate sends are valid. Disclosure execution, ledger persistence, request fulfillment effects, runtime verification procedures, document cycle detection and candidate-merge repointing remain pending future batches and are not claimed by this structure.
 
 ### `audit_events`
 

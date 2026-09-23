@@ -37,6 +37,12 @@ import {
     SUBJECTS,
     staffFixtureSql,
 } from '../support/staff-authorization.js';
+import {
+    AUTH_ROUTINE_SNAPSHOT_SQL,
+    PRIVACY_MIGRATIONS,
+    assertPrivacyFoundation,
+    privacyFixtureSql,
+} from '../support/privacy-foundation.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -1264,6 +1270,64 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             ) acl
             where n.nspname = 'app'
         `).trim(), 'f');
+    });
+
+    await t.test('privacy and document foundations apply and enforce on the provider stack', async () => {
+        const applicantsBeforePrivacy = supabasePsql(dumpApplicants);
+        const bucketBeforePrivacy = supabasePsql(dumpBucket);
+        const authRoutinesBeforePrivacy = supabasePsql(AUTH_ROUTINE_SNAPSHOT_SQL);
+        for (const fileName of PRIVACY_MIGRATIONS) {
+            copyFileSync(join(migrationsDir, fileName), join(tempMigrations, fileName));
+        }
+        const privacyMigrateStarted = performance.now();
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        t.diagnostic(`supabase privacy migration up elapsed ms: ${Math.round(
+            performance.now() - privacyMigrateStarted)}`);
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforePrivacy);
+        assert.equal(supabasePsql(dumpBucket), bucketBeforePrivacy);
+        assert.equal(supabasePsql(`
+            select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'app' and c.relkind = 'r'
+        `).trim(), '32');
+        assert.equal(supabasePsql(`
+            select count(*) from app.candidates
+            where current_document_id is not null`).trim(), '0');
+        assert.equal(supabasePsql(`
+            select count(*) from app.applications where notice_id is not null`).trim(), '0');
+
+        supabasePsql(privacyFixtureSql);
+        supabasePsql('grant app_executor, app_authz_reader to postgres;');
+        assertPrivacyFoundation(
+            (sql) => supabasePsql(sql),
+            (sql) => supabasePsqlError(sql),
+            authRoutinesBeforePrivacy,
+        );
+        for (const role of ['app_executor', 'app_authz_reader']) {
+            for (const statement of [
+                'select count(*) from app.documents',
+                'update app.file_blobs set version = version + 1',
+                'delete from app.legacy_datasets',
+            ]) {
+                assert.match(
+                    supabasePsqlError(`set role ${role}; ${statement};`),
+                    /42501/,
+                    `${role} must be denied on new tables`,
+                );
+            }
+        }
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select count(*) from app.documents;`),
+                /42501/,
+                `${role} must not read app.documents`,
+            );
+            assert.match(
+                supabasePsqlError(
+                    `set role ${role}; select count(*) from app.privacy_requests;`),
+                /42501/,
+                `${role} must not read app.privacy_requests`,
+            );
+        }
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {
