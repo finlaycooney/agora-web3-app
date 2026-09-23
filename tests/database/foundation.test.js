@@ -39,10 +39,18 @@ import {
 } from '../support/staff-authorization.js';
 import {
     AUTH_ROUTINE_SNAPSHOT_SQL,
+    HASH,
+    PRIVACY_ID,
     PRIVACY_MIGRATIONS,
     assertPrivacyFoundation,
     privacyFixtureSql,
 } from '../support/privacy-foundation.js';
+import {
+    PRIVACY_FUNCTIONS,
+    PRIVACY_HELPER_FUNCTIONS,
+    PRIVACY_OPS_MIGRATION,
+    privacyOpsFixtureSql,
+} from '../support/privacy-operations.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -1328,6 +1336,151 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 `${role} must not read app.privacy_requests`,
             );
         }
+    });
+
+    await t.test('privacy operations apply and enforce on the provider stack', () => {
+        const applicantsBeforeOps = supabasePsql(dumpApplicants);
+        const bucketBeforeOps = supabasePsql(dumpBucket);
+        const authRoutinesBeforeOps = supabasePsql(AUTH_ROUTINE_SNAPSHOT_SQL);
+        copyFileSync(
+            join(migrationsDir, PRIVACY_OPS_MIGRATION),
+            join(tempMigrations, PRIVACY_OPS_MIGRATION),
+        );
+        const opsMigrateStarted = performance.now();
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        t.diagnostic(`supabase privacy operations migration up elapsed ms: ${Math.round(
+            performance.now() - opsMigrateStarted)}`);
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeOps);
+        assert.equal(supabasePsql(dumpBucket), bucketBeforeOps);
+        assert.equal(
+            supabasePsql(AUTH_ROUTINE_SNAPSHOT_SQL),
+            authRoutinesBeforeOps,
+            'authorization routines must be unchanged by the operations migration',
+        );
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('${PRIVACY_FUNCTIONS.join("','")}')
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(), '5');
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('${PRIVACY_HELPER_FUNCTIONS.join("','")}')
+                and not p.prosecdef and r.rolname = 'app_owner'`).trim(), '3');
+
+        supabasePsql(privacyOpsFixtureSql);
+
+        const opsSql = (inner) => `
+            begin;
+            set local role app_staff;
+            select pg_catalog.set_config('app.actor_id', '${AUTHZ_ID.USER_ADMIN1}', true),
+                   pg_catalog.set_config('app.organization_id', '${AUTHZ_ID.ORG_A}', true);
+            ${inner}
+            commit;
+        `;
+        const tailLines = (output, count) => output.trim().split('\n').slice(-count);
+
+        const restrictionRequest = randomUUID();
+        const restrictionSubject = randomUUID();
+        assert.deepEqual(
+            tailLines(supabasePsql(opsSql(`
+                select (app.create_privacy_request_v1('${restrictionRequest}', 'restriction',
+                    now() - interval '1 day', null,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.review_privacy_subject_v1('${restrictionRequest}', 1,
+                    '${restrictionSubject}', '${PRIVACY_ID.CAND_1}', null, 1, null,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'request_version';
+                select (app.verify_privacy_request_v1('${restrictionRequest}', 2,
+                    'synthetic-staff-review', '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.restrict_privacy_subject_v1('${restrictionRequest}', 3,
+                    '${restrictionSubject}', 1,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'scope';
+            `)), 4),
+            ['received', '2', 'verified', 'candidate_records_only'],
+        );
+
+        const correctionRequest = randomUUID();
+        const correctionSubject = randomUUID();
+        assert.deepEqual(
+            tailLines(supabasePsql(opsSql(`
+                select (app.create_privacy_request_v1('${correctionRequest}', 'correction',
+                    now() - interval '1 day', null,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.review_privacy_subject_v1('${correctionRequest}', 1,
+                    '${correctionSubject}', '${PRIVACY_ID.CAND_2}', null, 1, null,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'request_version';
+                select (app.verify_privacy_request_v1('${correctionRequest}', 2,
+                    'synthetic-staff-review', '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.correct_privacy_candidate_v1('${correctionRequest}', 3,
+                    '${correctionSubject}', 1,
+                    '{"professional_summary":"Synthetic provider correction"}'::jsonb,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'scope';
+            `)), 4),
+            ['received', '2', 'verified', 'candidate_profile_only'],
+        );
+
+        const legacyRequest = randomUUID();
+        const legacySubject = randomUUID();
+        assert.deepEqual(
+            tailLines(supabasePsql(opsSql(`
+                select (app.create_privacy_request_v1('${legacyRequest}', 'restriction',
+                    now() - interval '1 day', null,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.review_privacy_subject_v1('${legacyRequest}', 1,
+                    '${legacySubject}', null, '${PRIVACY_ID.LR_2}', 1,
+                    decode('${HASH.H6}', 'hex'),
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'request_version';
+                select (app.verify_privacy_request_v1('${legacyRequest}', 2,
+                    'synthetic-staff-review', '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+                select (app.restrict_privacy_subject_v1('${legacyRequest}', 3,
+                    '${legacySubject}', 1,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'scope';
+            `)), 4),
+            ['received', '2', 'verified', 'legacy_metadata_only'],
+        );
+
+        assert.equal(supabasePsql(`
+            select lifecycle from app.candidates where id = '${PRIVACY_ID.CAND_1}'`).trim(),
+        'restricted');
+        assert.equal(supabasePsql(`
+            select processing_restricted and candidate_id is null
+            from app.legacy_records where id = '${PRIVACY_ID.LR_2}'`).trim(), 't');
+        assert.equal(supabasePsql(`
+            select count(*) from app.privacy_events
+            where request_id in
+                ('${restrictionRequest}', '${correctionRequest}', '${legacyRequest}')`).trim(),
+        '12');
+        assert.equal(supabasePsql(`
+            select count(*) from app.audit_events
+            where target_id in
+                ('${restrictionRequest}', '${correctionRequest}', '${legacyRequest}')`).trim(),
+        '12');
+
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`
+                    set role ${role}; select app.create_privacy_request_v1(
+                        '${randomUUID()}', 'access', now(), null,
+                        '${randomUUID()}', '${randomUUID()}')`),
+                /42501/,
+                `${role} must not execute privacy procedures`,
+            );
+        }
+        assert.match(
+            supabasePsqlError(`set role app_staff;
+                select app.privacy_actor_v1('${randomUUID()}', '${randomUUID()}')`),
+            /42501/,
+            'app_staff must not execute the internal helpers',
+        );
+        assert.match(
+            supabasePsqlError(`set role app_staff; select count(*) from app.privacy_events`),
+            /42501/,
+            'app_staff must not read privacy tables directly',
+        );
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {
