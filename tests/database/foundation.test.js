@@ -34,6 +34,8 @@ import {
     AUTHZ_ID,
     AUTHZ_MIGRATION,
     GITHUB_ISSUER,
+    GOOGLE_ISSUER,
+    GOOGLE_MIGRATION,
     SUBJECTS,
     staffFixtureSql,
 } from '../support/staff-authorization.js';
@@ -1175,6 +1177,7 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
         const applicantsBeforeAuthz = supabasePsql(dumpApplicants);
         const bucketBeforeAuthz = supabasePsql(dumpBucket);
         copyFileSync(join(migrationsDir, AUTHZ_MIGRATION), join(tempMigrations, AUTHZ_MIGRATION));
+        copyFileSync(join(migrationsDir, GOOGLE_MIGRATION), join(tempMigrations, GOOGLE_MIGRATION));
         runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
         assert.equal(supabasePsql(dumpApplicants), applicantsBeforeAuthz);
         assert.equal(supabasePsql(dumpBucket), bucketBeforeAuthz);
@@ -1201,9 +1204,16 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             supabasePsql(smokeSql(`
                 select user_id || '|' || membership_id || '|' || role_id
                 from app.resolve_staff_principal_v1(
-                    'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
+                    'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
             `)).trim().split('\n').pop(),
             `${AUTHZ_ID.USER_ADMIN1}|${AUTHZ_ID.MEMBER_ADMIN1}|${ID.ROLE_A_ADMIN}`,
+        );
+        assert.equal(
+            supabasePsql(smokeSql(`
+                select count(*) from app.resolve_staff_principal_v1(
+                    'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
+            `)).trim().split('\n').pop(),
+            '0',
         );
 
         const membershipVersion = Number(supabasePsql(`

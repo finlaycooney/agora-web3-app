@@ -18,7 +18,8 @@ import {
 } from '../support/foundation-docker.js';
 import {
     AUTHZ_ID,
-    GITHUB_ISSUER,
+    GOOGLE_ISSUER,
+    GOOGLE_MIGRATION,
     installStaffFixture,
     staffPoolOptions,
 } from '../support/staff-authorization.js';
@@ -57,12 +58,13 @@ const PREFIX_MIGRATIONS = [
     '20260922090100_foundation_schema.sql',
     '20260922090200_foundation_seed.sql',
     '20260922130000_staff_authorization_core.sql',
+    GOOGLE_MIGRATION,
     ...PRIVACY_MIGRATIONS,
     PRIVACY_OPS_MIGRATION,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const identity = (subject) => ({ provider: 'github', issuer: GITHUB_ISSUER, subject });
+const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
 const { ORG_A, ORG_B } = AUTHZ_ID;
 const scalar = (container, sql) => psql(container, sql).trim();
 
@@ -1240,7 +1242,8 @@ test('client job workflows on PostgreSQL 17', async (t) => {
             join pg_roles r on r.oid = p.proowner
             where n.nspname = 'app'
                 and p.proname in ('${WORKFLOW_FUNCTIONS.join("','")}')
-                and p.prosecdef and r.rolname = 'app_executor'`), '11');
+                and p.prosecdef and r.rolname = 'app_executor'`),
+            String(WORKFLOW_FUNCTIONS.length));
         assert.equal(scalar(pgOperator, `
             select count(*) from pg_class c
             join pg_namespace n on n.oid = c.relnamespace

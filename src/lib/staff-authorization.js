@@ -24,9 +24,9 @@ const KNOWN_PERMISSION_KEYS = new Set([
     'staff.manage',
 ]);
 
-const SUPPORTED_PROVIDER = 'github';
-const SUPPORTED_ISSUER = 'https://github.com';
-const SUBJECT_PATTERN = /^[1-9][0-9]{0,19}$/;
+export const STAFF_PROVIDER = 'google';
+export const STAFF_ISSUER = 'https://accounts.google.com';
+const SUBJECT_PATTERN = /^[1-9][0-9]{0,20}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class StaffAuthorizationError extends Error {
@@ -45,8 +45,8 @@ export async function withStaffTransaction(
     operation,
 ) {
     if (!verifiedIdentity
-        || verifiedIdentity.provider !== SUPPORTED_PROVIDER
-        || verifiedIdentity.issuer !== SUPPORTED_ISSUER
+        || verifiedIdentity.provider !== STAFF_PROVIDER
+        || verifiedIdentity.issuer !== STAFF_ISSUER
         || typeof verifiedIdentity.subject !== 'string'
         || !SUBJECT_PATTERN.test(verifiedIdentity.subject)) {
         throw new StaffAuthorizationError(

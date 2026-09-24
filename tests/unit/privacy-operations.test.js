@@ -10,7 +10,7 @@ import {
 import { StaffAuthorizationError } from '../../src/lib/staff-authorization.js';
 
 const ORG = '9c4edd11-2571-490b-a87c-ef30b9e0a001';
-const IDENTITY = { provider: 'github', issuer: 'https://github.com', subject: '12345' };
+const IDENTITY = { provider: 'google', issuer: 'https://accounts.google.com', subject: '12345' };
 const PRINCIPAL_ROW = {
     user_id: '70000000-0000-4000-8000-000000000101',
     membership_id: '70000000-0000-4000-8000-000000000201',

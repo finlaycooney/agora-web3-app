@@ -1,4 +1,4 @@
-import { AUTHZ_ID, GITHUB_ISSUER } from './staff-authorization.js';
+import { AUTHZ_ID, GOOGLE_ISSUER } from './staff-authorization.js';
 
 export const WORKFLOW_MIGRATION = '20260924090000_client_job_workflows.sql';
 
@@ -94,9 +94,9 @@ insert into app.organization_memberships
         '${CJ_ID.ROLE_B_VIEWER}', 'active', now());
 insert into app.auth_identities
         (id, user_id, provider, issuer, provider_subject, verified_at) values
-    ('${CJ_ID.IDENTITY_B_REC}', '${CJ_ID.USER_B_REC}', 'github', '${GITHUB_ISSUER}',
+    ('${CJ_ID.IDENTITY_B_REC}', '${CJ_ID.USER_B_REC}', 'google', '${GOOGLE_ISSUER}',
         '${CJ_SUBJECTS.RECRUITER}', now()),
-    ('${CJ_ID.IDENTITY_B_VIEW}', '${CJ_ID.USER_B_VIEW}', 'github', '${GITHUB_ISSUER}',
+    ('${CJ_ID.IDENTITY_B_VIEW}', '${CJ_ID.USER_B_VIEW}', 'google', '${GOOGLE_ISSUER}',
         '${CJ_SUBJECTS.VIEWER}', now());
 insert into app.pipelines (id, organization_id, key, name, status) values
     ('${CJ_ID.PIPELINE_B}', '${CJ_ID.ORG_B}', 'default', 'Default recruitment', 'active');
