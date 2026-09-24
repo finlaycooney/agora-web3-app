@@ -10,7 +10,8 @@ begin
     end if;
 
     if not (select rolsuper from pg_catalog.pg_roles where rolname = session_user) then
-        execute format('grant app_owner, app_authz_reader to %I with set true, inherit false',
+        execute format('grant app_owner to %I with inherit true, set true', session_user);
+        execute format('grant app_authz_reader to %I with set true, inherit false',
             session_user);
     end if;
 end
