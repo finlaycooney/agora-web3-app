@@ -1512,7 +1512,8 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             join pg_roles r on r.oid = p.proowner
             where n.nspname = 'app'
                 and p.proname in ('${WORKFLOW_FUNCTIONS.join("','")}')
-                and p.prosecdef and r.rolname = 'app_executor'`).trim(), '10');
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(),
+            String(WORKFLOW_FUNCTIONS.length));
         assert.equal(supabasePsql(`
             select count(*) from pg_class c
             join pg_namespace n on n.oid = c.relnamespace

@@ -299,14 +299,16 @@ test('client job workflows on PostgreSQL 17', async (t) => {
                 and p.proname in ('${WORKFLOW_FUNCTIONS.join("','")}')
                 and p.prosecdef and r.rolname = 'app_executor'
                 and coalesce(p.proconfig::text, '')
-                    like '%search_path=pg_catalog, app, pg_temp%'`), '11');
+                    like '%search_path=pg_catalog, app, pg_temp%'`),
+            String(WORKFLOW_FUNCTIONS.length));
         assert.equal(scalar(pg17, `
             select count(*) from pg_proc p
             join pg_namespace n on n.oid = p.pronamespace
             join pg_roles r on r.oid = p.proowner
             where n.nspname = 'app'
                 and p.proname in ('${WORKFLOW_HELPER_FUNCTIONS.join("','")}')
-                and not p.prosecdef and r.rolname = 'app_owner'`), '24');
+                and not p.prosecdef and r.rolname = 'app_owner'`),
+            String(WORKFLOW_HELPER_FUNCTIONS.length));
         assert.equal(scalar(pg17, `
             select coalesce(bool_or(acl.grantee = 0), false)
             from pg_proc p
