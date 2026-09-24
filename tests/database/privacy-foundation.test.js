@@ -32,7 +32,7 @@ const PREFIX_MIGRATIONS = [
     '20260922090100_foundation_schema.sql',
     '20260922090200_foundation_seed.sql',
     '20260922130000_staff_authorization_core.sql',
-    '20260925090000_staff_google_identities.sql',
+    '20260922131000_staff_google_identities.sql',
 ];
 
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { publishedPort, psql } from './foundation-docker.js';
 
 export const AUTHZ_MIGRATION = '20260922130000_staff_authorization_core.sql';
-export const GOOGLE_MIGRATION = '20260925090000_staff_google_identities.sql';
+export const GOOGLE_MIGRATION = '20260922131000_staff_google_identities.sql';
 export const RUNTIME_ROLE = 'agora_authz_test';
 
 export const AUTHZ_ID = {
