@@ -1526,8 +1526,14 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
         const sqlJson = (value) => JSON.stringify(value).replaceAll("'", "''");
         const staffSql = (inner) => `
             set role app_staff;
-            select pg_catalog.set_config('app.actor_id', '${AUTHZ_ID.USER_ADMIN1}', false),
-                   pg_catalog.set_config('app.organization_id', '${AUTHZ_ID.ORG_A}', false);
+            do $$
+            begin
+                perform pg_catalog.set_config('app.actor_id',
+                    '${AUTHZ_ID.USER_ADMIN1}', false);
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
             ${inner}
         `;
         const namedClient = randomUUID();
