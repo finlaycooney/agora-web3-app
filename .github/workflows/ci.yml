@@ -150,3 +150,20 @@ jobs:
         run: npm ci
       - name: Run client and job workflow database tests
         run: npm run test:db:client-jobs
+
+  database-staff-totp:
+    name: Database staff TOTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run staff TOTP database tests
+        run: npm run test:db:totp

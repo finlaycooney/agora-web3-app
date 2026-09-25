@@ -1,33 +1,40 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { staffIdentityFromSession } from '@/lib/staff-identity';
-import { getStaffPool, resolveStaffPrincipal } from '@/lib/staff-db.server';
+import { staffGate } from '@/lib/staff-gate.server';
+import {
+    STAFF_MFA_COOKIE,
+    readStaffMfaProof,
+} from '@/lib/staff-mfa-cookie';
 import { StaffSignOutButton } from './staff-auth-buttons';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StaffHomePage() {
-    const session = await getServerSession(authOptions);
-    const identity = staffIdentityFromSession(session);
-    if (!identity) {
+    const gate = await staffGate();
+    if (gate.stage === 'signed-out') {
         redirect('/staff/sign-in');
     }
-
-    const pool = getStaffPool();
-    const organizationId = process.env.STAFF_ORGANIZATION_ID;
-
-    let principal = null;
-    if (pool && organizationId) {
-        try {
-            principal = await resolveStaffPrincipal(pool, identity, organizationId);
-        } catch (error) {
-            // Fail closed: an unreachable database must never look like access.
-            console.error('staff principal resolution failed', error);
-        }
-    }
-    if (!principal) {
+    if (gate.stage === 'unresolved') {
         redirect('/staff/no-access');
+    }
+
+    const totp = gate.totp;
+    if (!totp || totp.status === 'pending') {
+        redirect('/staff/mfa/enroll');
+    }
+
+    const cookieStore = await cookies();
+    const proof = readStaffMfaProof(
+        process.env.NEXTAUTH_SECRET!,
+        cookieStore.get(STAFF_MFA_COOKIE)?.value,
+        {
+            subject: gate.identity.subject,
+            userId: gate.principal.user_id,
+            credentialId: totp.credentialId,
+        },
+    );
+    if (!proof) {
+        redirect('/staff/mfa/verify');
     }
 
     return (
@@ -37,11 +44,11 @@ export default async function StaffHomePage() {
             <dl className="mt-8 space-y-3 text-sm">
                 <div className="flex gap-3">
                     <dt className="w-28 text-foreground/50">Account</dt>
-                    <dd>{session?.user?.email ?? session?.user?.name ?? 'Signed in'}</dd>
+                    <dd>{gate.session?.user?.email ?? gate.session?.user?.name ?? 'Signed in'}</dd>
                 </div>
                 <div className="flex gap-3">
                     <dt className="w-28 text-foreground/50">Role</dt>
-                    <dd className="font-mono text-xs leading-5">{principal.role_id}</dd>
+                    <dd className="font-mono text-xs leading-5">{gate.principal.role_id}</dd>
                 </div>
             </dl>
             <div className="mt-10">

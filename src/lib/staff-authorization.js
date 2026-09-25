@@ -150,3 +150,79 @@ export async function withStaffTransaction(
         throw error;
     }
 }
+
+// Resolve the identity to a principal AND install the trusted actor context
+// (app.actor_id / app.organization_id) for the duration of one transaction.
+// Unlike withStaffTransaction this performs no permission check — it exists
+// for self-service operations whose procedures assert only an active
+// membership (TOTP enrollment/verification).
+export async function withStaffActor(pool, identity, organizationId, operation) {
+    if (!identity
+        || identity.provider !== STAFF_PROVIDER
+        || identity.issuer !== STAFF_ISSUER
+        || typeof identity.subject !== 'string'
+        || !SUBJECT_PATTERN.test(identity.subject)) {
+        throw new StaffAuthorizationError(
+            'INVALID_CONTEXT',
+            'identity must be a server-verified supported provider subject',
+        );
+    }
+    if (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId)) {
+        throw new StaffAuthorizationError('INVALID_CONTEXT', 'organizationId must be a UUID');
+    }
+    if (typeof operation !== 'function') {
+        throw new StaffAuthorizationError('INVALID_CONTEXT', 'operation must be a function');
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('begin isolation level read committed');
+        await client.query(`set local lock_timeout = '2s'`);
+        await client.query(`set local statement_timeout = '10s'`);
+        await client.query('set local role app_staff');
+        await client.query(
+            `select
+                pg_catalog.set_config('app.actor_id', '', true),
+                pg_catalog.set_config('app.organization_id', '', true),
+                pg_catalog.set_config('app.identity_provider', '', true),
+                pg_catalog.set_config('app.identity_issuer', '', true),
+                pg_catalog.set_config('app.identity_subject', '', true)`,
+        );
+        const resolved = await client.query(
+            'select user_id, membership_id, role_id'
+                + ' from app.resolve_staff_principal_v1($1, $2, $3, $4)',
+            [identity.provider, identity.issuer, identity.subject, organizationId],
+        );
+        if (resolved.rows.length !== 1) {
+            throw new StaffAuthorizationError(
+                'UNAUTHORIZED',
+                'identity does not resolve to an active staff membership',
+            );
+        }
+        const principal = resolved.rows[0];
+        await client.query(
+            `select
+                pg_catalog.set_config('app.actor_id', $1, true),
+                pg_catalog.set_config('app.organization_id', $2, true)`,
+            [principal.user_id, organizationId],
+        );
+        const result = await operation({
+            client,
+            principal: {
+                userId: principal.user_id,
+                membershipId: principal.membership_id,
+                roleId: principal.role_id,
+                organizationId,
+            },
+            auditId: randomUUID(),
+            correlationId: randomUUID(),
+        });
+        await client.query('commit');
+        return result;
+    } catch (error) {
+        await client.query('rollback').catch(() => {});
+        throw error;
+    } finally {
+        client.release();
+    }
+}

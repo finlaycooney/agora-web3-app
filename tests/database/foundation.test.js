@@ -64,6 +64,7 @@ const supabaseBin = join(repoRoot, 'node_modules', '.bin', 'supabase');
 const playwrightBin = join(repoRoot, 'node_modules', '.bin', 'playwright');
 
 const LEGACY_MIGRATION = '20260911120000_candidate_applications.sql';
+const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1647,6 +1648,73 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 array['jobs.read'], null, null, false)`),
             /42501/,
             'app_staff must not execute the recruitment helpers',
+        );
+    });
+
+    await t.test('staff totp migration applies and enforces on the provider stack', () => {
+        const applicantsBeforeTotp = supabasePsql(dumpApplicants);
+        copyFileSync(
+            join(migrationsDir, TOTP_MIGRATION),
+            join(tempMigrations, TOTP_MIGRATION),
+        );
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeTotp);
+
+        const staffSql = (inner) => `
+            set role app_staff;
+            do $$
+            begin
+                perform pg_catalog.set_config('app.actor_id',
+                    '${AUTHZ_ID.USER_ADMIN1}', false);
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
+            ${inner}
+        `;
+        const credentialId = supabasePsql(staffSql(`
+            select app.totp_enroll_v1('ABCDEFGHIJKLMNOP',
+                '${randomUUID()}', '${randomUUID()}');
+        `)).trim();
+        assert.match(credentialId, /^[0-9a-f-]{36}$/);
+        assert.equal(supabasePsql(staffSql(`
+            select status from app.totp_status_v1();
+        `)).trim(), 'pending');
+        supabasePsql(staffSql(`
+            select app.totp_confirm_v1('${credentialId}',
+                '${randomUUID()}', '${randomUUID()}');
+        `));
+        assert.equal(supabasePsql(staffSql(`
+            select status from app.totp_status_v1();
+        `)).trim(), 'active');
+        supabasePsql(staffSql(`
+            select app.totp_record_use_v1('${credentialId}', 7,
+                '${randomUUID()}', '${randomUUID()}');
+        `));
+        assert.match(
+            supabasePsqlError(staffSql(`
+                select app.totp_record_use_v1('${credentialId}', 7,
+                    '${randomUUID()}', '${randomUUID()}');
+            `)),
+            /23514/,
+            'replaying the same TOTP counter must fail',
+        );
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.totp_status_v1()`),
+                /42501/,
+                `${role} must not execute totp procedures`,
+            );
+            assert.match(
+                supabasePsqlError(`set role ${role}; select count(*) from app.totp_credentials`),
+                /42501/,
+                `${role} must not read app.totp_credentials`,
+            );
+        }
+        assert.match(
+            supabasePsqlError(`set role app_staff; select app.totp_actor_v1(false)`),
+            /42501/,
+            'app_staff must not execute the totp actor helper',
         );
     });
 

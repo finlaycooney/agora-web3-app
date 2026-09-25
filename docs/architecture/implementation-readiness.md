@@ -147,7 +147,8 @@ values (gen_random_uuid(), '9c4edd11-2571-490b-a87c-ef30b9e0a001', '<user_id>',
 reset role;
 ```
 
-- Remaining gates: TOTP MFA before data-bearing staff routes, real workspace pages and operations wiring, Viewer activation (D05), and all earlier gates.
+- TOTP second factor (D04's enforceable half for a personal Gmail — Google cannot attest Workspace 2SV for `@gmail.com`): `20260925100000_staff_totp.sql` adds `app.totp_credentials` (one pending + one active per user, actor-bound executor RLS, forced RLS, deny-all runtime ACLs) and four procedures — `totp_status_v1` (server-only read of the acting user's credential incl. secret), `totp_enroll_v1` (pending create, revokes prior pending), `totp_confirm_v1` (pending→active, atomically revokes any prior active), `totp_record_use_v1` (strictly monotonic counter = replay protection). `totp_actor_v1` asserts context + active org/membership with no permission — every staff member must enroll regardless of role. Codes are verified server-side (`src/lib/totp.js`, RFC 6238 HMAC-SHA1, ±1 step drift) against the secret the status procedure returns; successful verification mints an HMAC-signed `staff_mfa` cookie (`src/lib/staff-mfa-cookie.js`, 12 h, bound to subject+user+credential, independent of the NextAuth session). `/staff` now resolves session → principal → TOTP status → MFA proof: pending → `/staff/mfa/enroll` (QR + code), active without proof → `/staff/mfa/verify`, valid proof → shell. Audit rows: `staff.totp.enrolled/activated/verified`.
+- Remaining gates: real workspace pages and operations wiring, Viewer activation (D05), and all earlier gates.
 
 ## Full privacy workflow design and policy drafts
 
