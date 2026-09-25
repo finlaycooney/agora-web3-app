@@ -16,10 +16,6 @@ export default async function StaffHomePage() {
                     <dt className="w-28 text-foreground/50">Account</dt>
                     <dd>{gate.session?.user?.email ?? gate.session?.user?.name ?? 'Signed in'}</dd>
                 </div>
-                <div className="flex gap-3">
-                    <dt className="w-28 text-foreground/50">Role</dt>
-                    <dd className="font-mono text-xs leading-5">{gate.principal.role_id}</dd>
-                </div>
             </dl>
             <nav className="mt-10 flex gap-4 text-sm">
                 <Link href="/staff/clients" className="underline underline-offset-4 hover:opacity-70">Clients</Link>

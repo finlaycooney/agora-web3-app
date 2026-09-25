@@ -2,28 +2,50 @@
 
 import { useState } from 'react';
 
-async function postCode(url: string, code: string) {
+type MfaError = { message: string; returnToStaff?: boolean };
+
+async function postCode(url: string, code: string): Promise<MfaError | null> {
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ code }),
     });
-    return response.ok;
+    if (response.ok) {
+        return null;
+    }
+    if (response.status === 409) {
+        return {
+            message: 'Your two-factor setup has changed or is already complete. Continue to the staff page.',
+            returnToStaff: true,
+        };
+    }
+    const body = await response.json().catch(() => null);
+    if (response.status === 401 && body?.error === 'invalid code') {
+        return { message: 'Invalid code — wait for a new code in your authenticator app and try again.' };
+    }
+    if (response.status === 401) {
+        return { message: 'Your session could not be verified. Return to the staff page to sign in again.', returnToStaff: true };
+    }
+    return { message: 'Two-factor authentication is temporarily unavailable. Please try again.' };
 }
 
-function CodeForm({ onSubmit, label }: { onSubmit: (code: string) => Promise<boolean>; label: string }) {
+function CodeForm({ onSubmit, label }: { onSubmit: (code: string) => Promise<MfaError | null>; label: string }) {
     const [code, setCode] = useState('');
-    const [error, setError] = useState(false);
+    const [error, setError] = useState<MfaError | null>(null);
     const [busy, setBusy] = useState(false);
 
     const submit = async () => {
         setBusy(true);
-        setError(false);
+        setError(null);
         try {
-            const ok = await onSubmit(code);
-            if (!ok) {
-                setError(true);
+            const failure = await onSubmit(code);
+            if (failure) {
+                setError(failure);
+            } else {
+                window.location.assign('/staff');
             }
+        } catch {
+            setError({ message: 'Could not connect. Check your connection and try again.' });
         } finally {
             setBusy(false);
         }
@@ -46,7 +68,16 @@ function CodeForm({ onSubmit, label }: { onSubmit: (code: string) => Promise<boo
                 placeholder="000000"
                 className="w-40 rounded-md border border-foreground/20 bg-transparent px-3 py-2 text-center font-mono text-lg tracking-[0.4em] outline-none focus:border-foreground/50"
             />
-            {error && <p className="text-sm text-red-400">Invalid code — try again.</p>}
+            {error && (
+                <div role="alert" className="text-sm text-red-400">
+                    <p>{error.message}</p>
+                    {error.returnToStaff && (
+                        <a href="/staff" className="mt-2 inline-block text-foreground underline">
+                            Continue to staff
+                        </a>
+                    )}
+                </div>
+            )}
             <button
                 type="submit"
                 disabled={busy || code.length !== 6}
@@ -76,13 +107,7 @@ export function MfaVerifyForm() {
     return (
         <CodeForm
             label="Verify"
-            onSubmit={async (code) => {
-                const ok = await postCode('/api/staff/mfa/verify', code);
-                if (ok) {
-                    window.location.assign('/staff');
-                }
-                return ok;
-            }}
+            onSubmit={(code) => postCode('/api/staff/mfa/verify', code)}
         />
     );
 }
