@@ -1,0 +1,56 @@
+name: Migrate database
+
+# Applies pending files in supabase/migrations to the linked production
+# project after a green CI run on main. The production environment gate
+# lets a reviewer approve each deploy in the Actions UI.
+#
+# Required repository secrets:
+#   SUPABASE_ACCESS_TOKEN  - dashboard -> account -> access tokens
+#   SUPABASE_PROJECT_REF   - project settings -> general -> reference id
+#   SUPABASE_DB_PASSWORD   - database password for the linked project
+#
+# One-time bootstrap on a project whose schema predates migrations:
+#   supabase link --project-ref <ref>
+#   supabase migration list --linked
+#   supabase migration repair --status applied 20260911120000
+# so the existing baseline is recorded instead of re-applied.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Apply pending migrations
+        run: supabase db push --linked
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
