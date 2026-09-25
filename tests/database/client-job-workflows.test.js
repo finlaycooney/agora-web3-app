@@ -43,6 +43,8 @@ import {
     getClient,
     getJobPublication,
     getJobWorkspace,
+    listClients,
+    listJobs,
     previewJobPublic,
     publishJobRevision,
     saveClient,
@@ -62,6 +64,7 @@ const PREFIX_MIGRATIONS = [
     ...PRIVACY_MIGRATIONS,
     PRIVACY_OPS_MIGRATION,
 ];
+const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
@@ -206,6 +209,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
     const authRoutinesBefore = psql(pg17, AUTH_ROUTINE_SNAPSHOT_SQL);
 
     psql(pg17, readMigration(WORKFLOW_MIGRATION));
+    psql(pg17, readMigration(LISTING_MIGRATION));
 
     pool = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 4));
     pool1 = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 1));
@@ -1203,6 +1207,42 @@ test('client job workflows on PostgreSQL 17', async (t) => {
             assert.equal(check.rows[0].org, null);
         } finally {
             probe.release();
+        }
+    });
+
+    await t.test('listing procedures enforce context and permission conjunctions', async () => {
+        const clientId = await createClient();
+        const job = await createDraft(clientId);
+
+        const clients = await recruiter(listClients, {});
+        const listedClient = clients.find((entry) => entry.id === clientId);
+        assert.equal(listedClient.name, CLIENT_FIELDS.name);
+        assert.equal(typeof listedClient.jobCount, 'number');
+        assert.ok(listedClient.jobCount >= 1);
+
+        const jobs = await recruiter(listJobs, {});
+        const listedJob = jobs.find((entry) => entry.id === job.jobId);
+        assert.equal(listedJob.clientId, clientId);
+        assert.equal(listedJob.clientName, CLIENT_FIELDS.name);
+        assert.equal(listedJob.publicationState, 'draft');
+        assert.ok(listedJob.draftRevisionId);
+
+        const publishedOnly = await recruiter(listJobs, { publicationState: 'published' });
+        assert.equal(publishedOnly.some((entry) => entry.id === job.jobId), false);
+        const owned = await recruiter(listJobs, { ownerMembershipId: CJ_ID.MEMBER_B_REC });
+        assert.ok(owned.every((entry) => entry.ownerMembershipId === CJ_ID.MEMBER_B_REC));
+
+        // Input validation and permission conjunction.
+        await rejectCode(recruiter(listJobs, { publicationState: 'bogus' }), 'INVALID_INPUT');
+        await rejectCode(recruiter(listClients, { limit: 501 }), 'INVALID_INPUT');
+        await rejectCode(viewer(listClients, {}), 'FORBIDDEN');
+        await rejectCode(viewer(listJobs, {}), 'FORBIDDEN');
+        staffBad(pg17, CJ_ID.USER_B_REC, '', `
+            select app.list_clients_v1(10)`, '42501');
+        staffBad(pg17, '', ORG_B, `
+            select app.list_jobs_v1(10, null, null)`, '42501');
+        for (const role of ['app_intake', 'app_worker']) {
+            assertSqlstate(pg17, `set role ${role}; select app.list_clients_v1(10)`, '42501');
         }
     });
 

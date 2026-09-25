@@ -1,41 +1,11 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { staffGate } from '@/lib/staff-gate.server';
-import {
-    STAFF_MFA_COOKIE,
-    readStaffMfaProof,
-} from '@/lib/staff-mfa-cookie';
+import Link from 'next/link';
+import { requireStaffVerified } from '@/lib/staff-gate.server';
 import { StaffSignOutButton } from './staff-auth-buttons';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StaffHomePage() {
-    const gate = await staffGate();
-    if (gate.stage === 'signed-out') {
-        redirect('/staff/sign-in');
-    }
-    if (gate.stage === 'unresolved') {
-        redirect('/staff/no-access');
-    }
-
-    const totp = gate.totp;
-    if (!totp || totp.status === 'pending') {
-        redirect('/staff/mfa/enroll');
-    }
-
-    const cookieStore = await cookies();
-    const proof = readStaffMfaProof(
-        process.env.NEXTAUTH_SECRET!,
-        cookieStore.get(STAFF_MFA_COOKIE)?.value,
-        {
-            subject: gate.identity.subject,
-            userId: gate.principal.user_id,
-            credentialId: totp.credentialId,
-        },
-    );
-    if (!proof) {
-        redirect('/staff/mfa/verify');
-    }
+    const gate = await requireStaffVerified();
 
     return (
         <section className="mx-auto max-w-3xl px-6 py-16">
@@ -51,6 +21,10 @@ export default async function StaffHomePage() {
                     <dd className="font-mono text-xs leading-5">{gate.principal.role_id}</dd>
                 </div>
             </dl>
+            <nav className="mt-10 flex gap-4 text-sm">
+                <Link href="/staff/clients" className="underline underline-offset-4 hover:opacity-70">Clients</Link>
+                <Link href="/staff/jobs" className="underline underline-offset-4 hover:opacity-70">Jobs</Link>
+            </nav>
             <div className="mt-10">
                 <StaffSignOutButton />
             </div>

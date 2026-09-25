@@ -17,3 +17,34 @@ test('staff MFA pages redirect unauthenticated visitors to sign-in', async ({ pa
         await expect(page).toHaveURL(/\/staff\/sign-in/);
     }
 });
+
+test('staff workspace pages redirect unauthenticated visitors to sign-in', async ({ page }) => {
+    const id = '00000000-0000-4000-8000-000000000000';
+    for (const path of [
+        '/staff/clients',
+        '/staff/clients/new',
+        `/staff/clients/${id}`,
+        '/staff/jobs',
+        '/staff/jobs/new',
+        `/staff/jobs/${id}`,
+        `/staff/jobs/${id}/edit`,
+    ]) {
+        await page.goto(path);
+        await expect(page).toHaveURL(/\/staff\/sign-in/);
+    }
+});
+
+test('staff data API routes reject unauthenticated requests', async ({ request }) => {
+    const id = '00000000-0000-4000-8000-000000000000';
+    for (const path of [
+        '/api/staff/clients',
+        `/api/staff/clients/${id}`,
+        '/api/staff/jobs',
+        `/api/staff/jobs/${id}/draft`,
+        `/api/staff/jobs/${id}/revision`,
+        `/api/staff/jobs/${id}/publish`,
+    ]) {
+        const response = await request.post(path, { data: {} });
+        expect(response.status()).toBe(401);
+    }
+});

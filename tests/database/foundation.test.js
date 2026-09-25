@@ -65,6 +65,7 @@ const playwrightBin = join(repoRoot, 'node_modules', '.bin', 'playwright');
 
 const LEGACY_MIGRATION = '20260911120000_candidate_applications.sql';
 const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
+const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1716,6 +1717,56 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             /42501/,
             'app_staff must not execute the totp actor helper',
         );
+    });
+
+    await t.test('staff listing migration applies and enforces on the provider stack', () => {
+        const applicantsBeforeListing = supabasePsql(dumpApplicants);
+        copyFileSync(
+            join(migrationsDir, LISTING_MIGRATION),
+            join(tempMigrations, LISTING_MIGRATION),
+        );
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeListing);
+
+        const staffSql = (inner) => `
+            set role app_staff;
+            do $$
+            begin
+                perform pg_catalog.set_config('app.actor_id',
+                    '${AUTHZ_ID.USER_ADMIN1}', false);
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
+            ${inner}
+        `;
+        assert.match(
+            supabasePsql(staffSql(`select jsonb_typeof(app.list_clients_v1(10))`)).trim(),
+            /^array$/,
+            'list_clients_v1 must return a jsonb array under staff context',
+        );
+        assert.match(
+            supabasePsql(staffSql(`select jsonb_typeof(app.list_jobs_v1(10, null, null))`)).trim(),
+            /^array$/,
+            'list_jobs_v1 must return a jsonb array under staff context',
+        );
+        assert.match(
+            supabasePsqlError(`set role app_staff; select app.list_clients_v1(10)`),
+            /42501/,
+            'list_clients_v1 must deny missing tenant context',
+        );
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.list_clients_v1(10)`),
+                /42501/,
+                `${role} must not execute list_clients_v1`,
+            );
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.list_jobs_v1(10, null, null)`),
+                /42501/,
+                `${role} must not execute list_jobs_v1`,
+            );
+        }
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {

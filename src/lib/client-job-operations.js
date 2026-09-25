@@ -225,6 +225,47 @@ export async function publishJobRevision(pool, verifiedIdentity, organizationId,
     );
 }
 
+const requireLimit = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (!Number.isInteger(value) || value < 1 || value > 500) {
+        throw invalidInput('limit must be an integer between 1 and 500');
+    }
+    return value;
+};
+
+export async function listClients(pool, verifiedIdentity, organizationId, input = {}) {
+    const record = requireRecord(input, 'input', ['limit']);
+    const limit = requireLimit(record.limit);
+    return run(
+        pool, verifiedIdentity, organizationId, CLIENT_READ_PERMISSIONS,
+        'select app.list_clients_v1($1::integer) as result',
+        [limit],
+    );
+}
+
+const PUBLICATION_STATES = new Set(['draft', 'published', 'withdrawn', 'archived']);
+
+export async function listJobs(pool, verifiedIdentity, organizationId, input = {}) {
+    const record = requireRecord(
+        input, 'input', ['limit', 'publicationState', 'ownerMembershipId']);
+    const limit = requireLimit(record.limit);
+    const publicationState = record.publicationState ?? null;
+    if (publicationState !== null && !PUBLICATION_STATES.has(publicationState)) {
+        throw invalidInput('publicationState must be a valid publication state');
+    }
+    const ownerMembershipId = record.ownerMembershipId ?? null;
+    if (ownerMembershipId !== null) {
+        requireUuid(ownerMembershipId, 'ownerMembershipId');
+    }
+    return run(
+        pool, verifiedIdentity, organizationId, JOB_READ_PERMISSIONS,
+        'select app.list_jobs_v1($1::integer, $2::text, $3::uuid) as result',
+        [limit, publicationState, ownerMembershipId],
+    );
+}
+
 export async function getClient(pool, verifiedIdentity, organizationId, input) {
     const record = requireRecord(input, 'input', ['clientId']);
     const clientId = requireUuid(record.clientId, 'clientId');
