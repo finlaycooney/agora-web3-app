@@ -34,6 +34,8 @@ import {
     AUTHZ_ID,
     AUTHZ_MIGRATION,
     GITHUB_ISSUER,
+    GOOGLE_ISSUER,
+    GOOGLE_MIGRATION,
     SUBJECTS,
     staffFixtureSql,
 } from '../support/staff-authorization.js';
@@ -51,6 +53,10 @@ import {
     PRIVACY_OPS_MIGRATION,
     privacyOpsFixtureSql,
 } from '../support/privacy-operations.js';
+import {
+    WORKFLOW_FUNCTIONS,
+    WORKFLOW_MIGRATION,
+} from '../support/client-job-workflows.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -1171,6 +1177,7 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
         const applicantsBeforeAuthz = supabasePsql(dumpApplicants);
         const bucketBeforeAuthz = supabasePsql(dumpBucket);
         copyFileSync(join(migrationsDir, AUTHZ_MIGRATION), join(tempMigrations, AUTHZ_MIGRATION));
+        copyFileSync(join(migrationsDir, GOOGLE_MIGRATION), join(tempMigrations, GOOGLE_MIGRATION));
         runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
         assert.equal(supabasePsql(dumpApplicants), applicantsBeforeAuthz);
         assert.equal(supabasePsql(dumpBucket), bucketBeforeAuthz);
@@ -1197,9 +1204,16 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             supabasePsql(smokeSql(`
                 select user_id || '|' || membership_id || '|' || role_id
                 from app.resolve_staff_principal_v1(
-                    'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
+                    'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
             `)).trim().split('\n').pop(),
             `${AUTHZ_ID.USER_ADMIN1}|${AUTHZ_ID.MEMBER_ADMIN1}|${ID.ROLE_A_ADMIN}`,
+        );
+        assert.equal(
+            supabasePsql(smokeSql(`
+                select count(*) from app.resolve_staff_principal_v1(
+                    'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', '${AUTHZ_ID.ORG_A}')
+            `)).trim().split('\n').pop(),
+            '0',
         );
 
         const membershipVersion = Number(supabasePsql(`
@@ -1480,6 +1494,159 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             supabasePsqlError(`set role app_staff; select count(*) from app.privacy_events`),
             /42501/,
             'app_staff must not read privacy tables directly',
+        );
+    });
+
+    await t.test('client and job workflows apply and enforce on the provider stack', () => {
+        const applicantsBeforeWorkflows = supabasePsql(dumpApplicants);
+        const bucketBeforeWorkflows = supabasePsql(dumpBucket);
+        const authRoutinesBeforeWorkflows = supabasePsql(AUTH_ROUTINE_SNAPSHOT_SQL);
+        copyFileSync(
+            join(migrationsDir, WORKFLOW_MIGRATION),
+            join(tempMigrations, WORKFLOW_MIGRATION),
+        );
+        const workflowMigrateStarted = performance.now();
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        t.diagnostic(`supabase client job migration up elapsed ms: ${Math.round(
+            performance.now() - workflowMigrateStarted)}`);
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeWorkflows);
+        assert.equal(supabasePsql(dumpBucket), bucketBeforeWorkflows);
+        assert.equal(
+            supabasePsql(AUTH_ROUTINE_SNAPSHOT_SQL),
+            authRoutinesBeforeWorkflows,
+            'authorization routines must be unchanged by the workflow migration',
+        );
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('${WORKFLOW_FUNCTIONS.join("','")}')
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(),
+            String(WORKFLOW_FUNCTIONS.length));
+        assert.equal(supabasePsql(`
+            select count(*) from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            join pg_roles r on r.oid = c.relowner
+            where n.nspname = 'app' and c.relkind = 'r'
+                and c.relname in ('job_revisions', 'recruitment_operation_receipts')
+                and r.rolname = 'app_owner'
+                and c.relrowsecurity and c.relforcerowsecurity`).trim(), '2');
+
+        const sqlJson = (value) => JSON.stringify(value).replaceAll("'", "''");
+        const staffSql = (inner) => `
+            set role app_staff;
+            do $$
+            begin
+                perform pg_catalog.set_config('app.actor_id',
+                    '${AUTHZ_ID.USER_ADMIN1}', false);
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
+            ${inner}
+        `;
+        const namedClient = randomUUID();
+        const stealthClient = randomUUID();
+        const clientFields = (name, stealth) => ({
+            name,
+            contactName: 'Synthetic Contact',
+            contactEmail: 'contact@synthetic-client.example',
+            telegramUsername: null,
+            website: stealth ? 'https://stealth-internal.example' : null,
+            socialLinks: [],
+            isStealth: stealth,
+            anonymousDescription: stealth ? 'A synthetic confidential client.' : null,
+        });
+        const jobFields = {
+            title: 'Synthetic Provider Job',
+            employmentType: 'full_time',
+            workplaceMode: 'remote',
+            locations: [],
+            remoteRegions: ['Worldwide'],
+            compensationMin: '100000',
+            compensationMax: '140000',
+            currency: 'EUR',
+            payPeriod: 'year',
+            bonuses: [],
+            descriptionDocument: {
+                type: 'doc',
+                content: [{
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Synthetic provider description' }],
+                }],
+            },
+        };
+
+        assert.deepEqual(
+            supabasePsql(staffSql(`
+                select (app.save_client_v1('${namedClient}', null,
+                    '${sqlJson(clientFields('Synthetic Named Client', false))}'::jsonb,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'publicProfileVersion';
+                select (app.save_client_v1('${stealthClient}', null,
+                    '${sqlJson(clientFields('Synthetic Stealth Client', true))}'::jsonb,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'publicProfileVersion';
+            `)).trim().split('\n'),
+            ['1', '1'],
+        );
+
+        const jobId = randomUUID();
+        const revisionId = randomUUID();
+        assert.equal(
+            supabasePsql(staffSql(`
+                select (app.create_job_draft_v1('${jobId}', '${revisionId}',
+                    '${stealthClient}', '${sqlJson(jobFields)}'::jsonb,
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+            `)).trim(),
+            'draft',
+        );
+        const reviewHash = supabasePsql(staffSql(`
+            select (app.preview_job_public_v1('${revisionId}')) ->> 'reviewHash';
+        `)).trim();
+        assert.match(reviewHash, /^[0-9a-f]{64}$/);
+        assert.equal(
+            supabasePsql(staffSql(`
+                select (app.publish_job_revision_v1('${revisionId}', 1, 1,
+                    decode('${reviewHash}', 'hex'),
+                    '${randomUUID()}', '${randomUUID()}')) ->> 'status';
+            `)).trim(),
+            'published',
+        );
+        const projection = JSON.parse(supabasePsql(staffSql(`
+            select app.get_job_publication_v1('${jobId}')::text;
+        `)).trim());
+        assert.equal(projection.company.name, 'Stealth company');
+        assert.equal(projection.company.description, 'A synthetic confidential client.');
+        assert.equal(projection.compensation.currency, 'EUR');
+        assert.ok(
+            !JSON.stringify(projection).includes('Synthetic Stealth Client'),
+            'the public projection must not leak the internal client name',
+        );
+
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.get_job_publication_v1(
+                    '${jobId}')`),
+                /42501/,
+                `${role} must not execute workflow procedures`,
+            );
+            assert.match(
+                supabasePsqlError(`set role ${role}; select count(*) from app.job_revisions`),
+                /42501/,
+                `${role} must not read app.job_revisions`,
+            );
+            assert.match(
+                supabasePsqlError(
+                    `set role ${role}; select count(*) from app.recruitment_operation_receipts`),
+                /42501/,
+                `${role} must not read operation receipts`,
+            );
+        }
+        assert.match(
+            supabasePsqlError(`set role app_staff; select app.recruitment_actor_v1(
+                array['jobs.read'], null, null, false)`),
+            /42501/,
+            'app_staff must not execute the recruitment helpers',
         );
     });
 

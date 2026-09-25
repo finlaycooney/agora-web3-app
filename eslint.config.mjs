@@ -26,6 +26,7 @@ export default defineConfig([
     ...nextTypescript.map(preserveLegacyWarnings),
     globalIgnores([
         '.next/**',
+        'design-preview/.next/**',
         'out/**',
         'build/**',
         'next-env.d.ts',

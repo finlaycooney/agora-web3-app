@@ -18,7 +18,8 @@ import {
 } from '../support/foundation-docker.js';
 import {
     AUTHZ_ID,
-    GITHUB_ISSUER,
+    GOOGLE_ISSUER,
+    GOOGLE_MIGRATION,
     SUBJECTS,
     installStaffFixture,
     staffPoolOptions,
@@ -51,11 +52,12 @@ const PREFIX_MIGRATIONS = [
     '20260922090100_foundation_schema.sql',
     '20260922090200_foundation_seed.sql',
     '20260922130000_staff_authorization_core.sql',
+    GOOGLE_MIGRATION,
     ...PRIVACY_MIGRATIONS,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const identity = (subject) => ({ provider: 'github', issuer: GITHUB_ISSUER, subject });
+const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
 const H6 = Buffer.from(HASH.H6, 'hex');
 
 const {

@@ -6,7 +6,7 @@ import {
 } from '../../src/lib/staff-authorization.js';
 
 const ORG = '9c4edd11-2571-490b-a87c-ef30b9e0a001';
-const IDENTITY = { provider: 'github', issuer: 'https://github.com', subject: '12345' };
+const IDENTITY = { provider: 'google', issuer: 'https://accounts.google.com', subject: '12345' };
 const PRINCIPAL_ROW = {
     user_id: '70000000-0000-4000-8000-000000000101',
     membership_id: '70000000-0000-4000-8000-000000000201',
@@ -54,10 +54,14 @@ test('rejects invalid context before touching the pool', async () => {
     const pool = makePool(client);
     const invalid = [
         [null, ORG, ['staff.manage']],
+        // Applicant GitHub identities must never reach the staff workspace.
+        [{ provider: 'github', issuer: 'https://github.com', subject: '12345' }, ORG, ['staff.manage']],
         [{ provider: 'google', issuer: 'https://github.com', subject: '1' }, ORG, ['staff.manage']],
-        [{ provider: 'github', issuer: 'https://evil.example', subject: '1' }, ORG, ['staff.manage']],
-        [{ provider: 'github', issuer: 'https://github.com', subject: 'abc' }, ORG, ['staff.manage']],
-        [{ provider: 'github', issuer: 'https://github.com', subject: '0' }, ORG, ['staff.manage']],
+        [{ provider: 'google', issuer: 'https://evil.example', subject: '1' }, ORG, ['staff.manage']],
+        [{ provider: 'google', issuer: 'https://accounts.google.com', subject: 'abc' }, ORG, ['staff.manage']],
+        [{ provider: 'google', issuer: 'https://accounts.google.com', subject: '0' }, ORG, ['staff.manage']],
+        [{ provider: 'google', issuer: 'https://accounts.google.com', subject: '1234567890123456789012' },
+            ORG, ['staff.manage']],
         [IDENTITY, 'not-a-uuid', ['staff.manage']],
         [IDENTITY, ORG, []],
         [IDENTITY, ORG, ['not.a.key']],
@@ -94,7 +98,7 @@ test('resolves principal, checks every permission and commits', async () => {
     assert.equal(texts[0], 'begin isolation level read committed');
     assert.equal(texts.at(-1), 'commit');
     const resolverCall = client.queries.find(({ text }) => text.includes('resolve_staff_principal_v1'));
-    assert.deepEqual(resolverCall.params, ['github', 'https://github.com', '12345', ORG]);
+    assert.deepEqual(resolverCall.params, ['google', 'https://accounts.google.com', '12345', ORG]);
     const permissionCalls = client.queries.filter(({ text }) => text.includes('has_permission_v1'));
     assert.deepEqual(permissionCalls.map(({ params }) => params), [['staff.manage'], ['roles.manage']]);
     assert.equal(operationContext.principal.userId, PRINCIPAL_ROW.user_id);
@@ -287,7 +291,7 @@ test('query parameters are never interpolated into SQL text', async () => {
     const pool = makePool(client);
     await withStaffTransaction(
         pool,
-        { provider: 'github', issuer: 'https://github.com', subject: '777' },
+        { provider: 'google', issuer: 'https://accounts.google.com', subject: '777' },
         ORG,
         ['staff.manage'],
         () => {},

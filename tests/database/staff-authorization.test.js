@@ -18,6 +18,8 @@ import {
     AUTHZ_ID,
     AUTHZ_MIGRATION,
     GITHUB_ISSUER,
+    GOOGLE_ISSUER,
+    GOOGLE_MIGRATION,
     RUNTIME_ROLE,
     SUBJECTS,
     installStaffFixture,
@@ -32,10 +34,11 @@ const MIGRATIONS = [
     '20260922090100_foundation_schema.sql',
     '20260922090200_foundation_seed.sql',
     AUTHZ_MIGRATION,
+    GOOGLE_MIGRATION,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const identity = (subject) => ({ provider: 'github', issuer: GITHUB_ISSUER, subject });
+const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
 const {
     ORG_A,
     ORG_B,
@@ -212,7 +215,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
                 [provider, issuer, subject, org],
             );
 
-            const adminRow = await resolve('github', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_A);
+            const adminRow = await resolve('google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, ORG_A);
             assert.equal(adminRow.rows.length, 1);
             assert.deepEqual(Object.keys(adminRow.rows[0]).sort(), [
                 'membership_id', 'role_id', 'user_id',
@@ -221,28 +224,32 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             assert.equal(adminRow.rows[0].membership_id, MEMBER_ADMIN1);
             assert.equal(adminRow.rows[0].role_id, ROLE_A_ADMIN);
 
-            const sharedA = await resolve('github', GITHUB_ISSUER, SUBJECTS.SHARED, ORG_A);
+            const sharedA = await resolve('google', GOOGLE_ISSUER, SUBJECTS.SHARED, ORG_A);
             assert.equal(sharedA.rows[0].role_id, ROLE_A_RECRUITER);
             assert.equal(sharedA.rows[0].membership_id, MEMBER_SHARED_A);
-            const sharedB = await resolve('github', GITHUB_ISSUER, SUBJECTS.SHARED, ORG_B);
+            const sharedB = await resolve('google', GOOGLE_ISSUER, SUBJECTS.SHARED, ORG_B);
             assert.equal(sharedB.rows[0].role_id, ROLE_B_ADMIN);
             assert.equal(sharedB.rows[0].membership_id, MEMBER_SHARED_B);
 
             const identityCount = Number(scalar(pg17, 'select count(*) from app.auth_identities'));
             const userCount = Number(scalar(pg17, 'select count(*) from app.users'));
             const zeroRows = [
-                ['github', 'https://login.example', SUBJECTS.ADMIN1, ORG_A],
-                ['gitlab', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_A],
-                ['github', GITHUB_ISSUER, 'abc', ORG_A],
-                ['github', GITHUB_ISSUER, '0', ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.REVOKED, ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.UNMAPPED, ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.INVITED, ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.DISABLED, ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.VIEWER, ORG_A],
-                ['github', GITHUB_ISSUER, SUBJECTS.ADMIN1, null],
-                ['github', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_B],
-                ['github', GITHUB_ISSUER, SUBJECTS.ADMIN1, randomUUID()],
+                // A GitHub identity exists for ADMIN1 but GitHub is an applicant
+                // sign-in only — it must never resolve to a staff principal.
+                ['github', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_A],
+                ['google', 'https://login.example', SUBJECTS.ADMIN1, ORG_A],
+                ['gitlab', GOOGLE_ISSUER, SUBJECTS.ADMIN1, ORG_A],
+                ['google', GOOGLE_ISSUER, 'abc', ORG_A],
+                ['google', GOOGLE_ISSUER, '0', ORG_A],
+                ['google', GOOGLE_ISSUER, '1234567890123456789012', ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.REVOKED, ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.UNMAPPED, ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.INVITED, ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.DISABLED, ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.VIEWER, ORG_A],
+                ['google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, null],
+                ['google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, ORG_B],
+                ['google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, randomUUID()],
             ];
             for (const args of zeroRows) {
                 const result = await resolve(...args);
@@ -259,7 +266,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             await client.query(
                 `select pg_catalog.set_config('app.identity_provider', 'stale', true)`,
             );
-            await resolve('github', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_A);
+            await resolve('google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, ORG_A);
             const settings = await client.query(
                 `select
                     current_setting('app.actor_id', true) as actor,
@@ -280,7 +287,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
     await t.test('fixture state changes deny then restore access', async () => {
         const resolveCount = async () => Number((await pool.query(
             'select count(*) as hits from app.resolve_staff_principal_v1($1, $2, $3, $4)',
-            ['github', GITHUB_ISSUER, SUBJECTS.ADMIN1, ORG_A],
+            ['google', GOOGLE_ISSUER, SUBJECTS.ADMIN1, ORG_A],
         )).rows[0].hits);
         const helperCheck = () => withStaffTransaction(
             pool,
@@ -813,7 +820,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
 
         const resolving = await pool.query(
             'select count(*) as hits from app.resolve_staff_principal_v1($1, $2, $3, $4)',
-            ['github', GITHUB_ISSUER, SUBJECTS.RECRUITER, ORG_A],
+            ['google', GOOGLE_ISSUER, SUBJECTS.RECRUITER, ORG_A],
         );
         assert.equal(Number(resolving.rows[0].hits), 0);
 
@@ -823,7 +830,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
         );
         const denied = await pool.query(
             'select count(*) as hits from app.resolve_staff_principal_v1($1, $2, $3, $4)',
-            ['github', GITHUB_ISSUER, SUBJECTS.ADMIN2, ORG_A],
+            ['google', GOOGLE_ISSUER, SUBJECTS.ADMIN2, ORG_A],
         );
         assert.equal(Number(denied.rows[0].hits), 0);
         await admin.query(

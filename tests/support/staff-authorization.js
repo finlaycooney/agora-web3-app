@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { publishedPort, psql } from './foundation-docker.js';
 
 export const AUTHZ_MIGRATION = '20260922130000_staff_authorization_core.sql';
+export const GOOGLE_MIGRATION = '20260922131000_staff_google_identities.sql';
 export const RUNTIME_ROLE = 'agora_authz_test';
 
 export const AUTHZ_ID = {
@@ -43,6 +44,7 @@ export const AUTHZ_ID = {
     IDENTITY_SHARED: '70000000-0000-4000-8000-000000000307',
     IDENTITY_REVOKED: '70000000-0000-4000-8000-000000000308',
     IDENTITY_DISABLED: '70000000-0000-4000-8000-000000000309',
+    IDENTITY_ADMIN1_GITHUB: '70000000-0000-4000-8000-00000000030a',
 };
 
 export const SUBJECTS = {
@@ -59,6 +61,7 @@ export const SUBJECTS = {
 };
 
 export const GITHUB_ISSUER = 'https://github.com';
+export const GOOGLE_ISSUER = 'https://accounts.google.com';
 
 export const staffFixtureSql = `
 insert into app.users (id, display_name, status) values
@@ -100,15 +103,16 @@ insert into app.organization_memberships (id, organization_id, user_id, role_id,
     ('${AUTHZ_ID.MEMBER_DISABLED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_DISABLED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', now(), null),
     ('${AUTHZ_ID.MEMBER_B_ADMIN}', '${AUTHZ_ID.ORG_B}', '${AUTHZ_ID.USER_ADMIN2}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'active', now(), null);
 insert into app.auth_identities (id, user_id, provider, issuer, provider_subject, verified_at, revoked_at) values
-    ('${AUTHZ_ID.IDENTITY_ADMIN1}', '${AUTHZ_ID.USER_ADMIN1}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_ADMIN2}', '${AUTHZ_ID.USER_ADMIN2}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN2}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_RECRUITER}', '${AUTHZ_ID.USER_RECRUITER}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.RECRUITER}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_VIEWER}', '${AUTHZ_ID.USER_VIEWER}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.VIEWER}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_CUSTOM}', '${AUTHZ_ID.USER_CUSTOM}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.CUSTOM}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_INVITED}', '${AUTHZ_ID.USER_INVITED}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.INVITED}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_SHARED}', '${AUTHZ_ID.USER_SHARED}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.SHARED}', now(), null),
-    ('${AUTHZ_ID.IDENTITY_REVOKED}', '${AUTHZ_ID.USER_REVOKED}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.REVOKED}', now(), now()),
-    ('${AUTHZ_ID.IDENTITY_DISABLED}', '${AUTHZ_ID.USER_DISABLED}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.DISABLED}', now(), null);
+    ('${AUTHZ_ID.IDENTITY_ADMIN1}', '${AUTHZ_ID.USER_ADMIN1}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN1}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_ADMIN2}', '${AUTHZ_ID.USER_ADMIN2}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN2}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_RECRUITER}', '${AUTHZ_ID.USER_RECRUITER}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.RECRUITER}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_VIEWER}', '${AUTHZ_ID.USER_VIEWER}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.VIEWER}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_CUSTOM}', '${AUTHZ_ID.USER_CUSTOM}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.CUSTOM}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_INVITED}', '${AUTHZ_ID.USER_INVITED}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.INVITED}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_SHARED}', '${AUTHZ_ID.USER_SHARED}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.SHARED}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_REVOKED}', '${AUTHZ_ID.USER_REVOKED}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.REVOKED}', now(), now()),
+    ('${AUTHZ_ID.IDENTITY_DISABLED}', '${AUTHZ_ID.USER_DISABLED}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.DISABLED}', now(), null),
+    ('${AUTHZ_ID.IDENTITY_ADMIN1_GITHUB}', '${AUTHZ_ID.USER_ADMIN1}', 'github', '${GITHUB_ISSUER}', '${SUBJECTS.ADMIN1}', now(), null);
 `;
 
 export const runtimeRoleSql = (password) => `

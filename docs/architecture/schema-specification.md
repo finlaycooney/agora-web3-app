@@ -94,7 +94,9 @@ Tenant. Columns: `user_id uuid → users`, `role_id uuid → roles`, `status tex
 
 ### `clients`
 
-Tenant. Columns: `name text`, `status text{active,archived}`, `updated_at timestamptz`, `version bigint`. Index `(organization_id,status,created_at DESC,id DESC)`. No unique company name and no public default serialization. Contacts/CRM correspondence are deferred. Archive clients with referenced jobs; removal uses reviewed retention rules.
+Tenant. Columns: `name text`, `status text{active,archived}`, `updated_at timestamptz`, `version bigint`. Index `(organization_id,status,created_at DESC,id DESC)`. No unique company name and no public default serialization. Archive clients with referenced jobs; removal uses reviewed retention rules.
+
+The client/job workflow batch adds `contact_name text?`, `contact_email text?`, `telegram_username text?`, `website text?`, `social_links jsonb DEFAULT '[]'`, `is_stealth boolean?`, `anonymous_description text?`, `public_profile_version bigint DEFAULT 1`. `is_stealth NULL` means unassessed — not public by default; a stealth client always keeps its real internal identity and additionally requires a nonblank `anonymous_description` public brief. `social_links` holds at most 8 `{platform{linkedin,x,github,other}, url}` entries with HTTPS URLs and unique lowercase URLs. `public_profile_version` advances only when `name`, `is_stealth` or `anonymous_description` change, so private contact edits never invalidate published job snapshots. New and saved clients always carry the full field set through `save_client_v1`; legacy rows may stay unconfigured until saved. Revealing a stealth client (stealth → named) requires an Admin membership; recruiters may create and edit stealth clients but cannot reveal them.
 
 ### `pipelines`
 
@@ -109,6 +111,18 @@ Tenant. Columns: `pipeline_id uuid → pipelines`, `key text`, `label text`, `ki
 Tenant. Columns: `client_id uuid → clients`, `pipeline_id uuid → pipelines`, `owner_membership_id uuid? → organization_memberships`, `slug text`, `title text`, `description text`, `responsibilities text[] DEFAULT '{}'`, `tags text[] DEFAULT '{}'`, `salary_display text?`, `location_display text`, `employment_type text`, `public_client_name text?`, `publication_state text{draft,published,withdrawn,archived}`, `application_state text{open,closed}`, `publication_reviewed_by uuid? → organization_memberships`, `publication_reviewed_at timestamptz?`, `published_at timestamptz?`, `updated_at timestamptz`, `version bigint`.
 
 Unique `slug` globally for the initial single public site namespace; preserve all existing slugs, including after withdrawal. Index `(organization_id,publication_state,application_state,created_at DESC,id DESC)`. Published requires reviewed-at/by and published-at. Editing any public text clears approval and removes it from publication until reapproved through the publishing procedure. Client identity is internal; optional public name requires explicit editorial approval. `application_state=open` alone never authorizes intake for an unpublished job. Job UUID is stable; do not rename the slug in initial workflows. Archive jobs with applications.
+
+The client/job workflow batch adds `published_revision_id uuid?`, bound to a revision of the same job by the deferrable `(organization_id,id,published_revision_id) → job_revisions(organization_id,job_id,id)` FK. Workflow-created jobs use `job-<uuid>` slugs and hold derived `title`/`description`/`location_display`/`employment_type`/`salary_display` copies of the published revision; unpublished rows keep empty-string placeholders that satisfy the legacy NOT NULL columns.
+
+### `job_revisions`
+
+Tenant. Columns: `job_id uuid → jobs`, `revision_number integer CHECK (>0)`, `title text`, `employment_type text?{full_time,part_time,contract,internship}`, `workplace_mode text?{onsite,hybrid,remote}`, `locations text[]`, `remote_regions text[]`, `compensation_min/max numeric(14,2)?`, `currency text?`, `pay_period text?{year,month,day,hour}`, `bonuses jsonb`, `description_document jsonb`, `description_text text`, `status text{draft,published,superseded}`, publication metadata (`published_at`, `published_by_membership_id`, `published_client_profile_version`, `published_company_name`, `published_company_description`, `published_is_stealth`), `created_at`, `updated_at`, `version bigint`.
+
+Unique `(organization_id,id)`, `(organization_id,job_id,id)`, `(organization_id,job_id,revision_number)`; partial uniques allow exactly one `draft` and one `published` revision per job. `description_document` stores the canonical bounded Tiptap-subset JSON (validated by `job_document_valid_v1`, ≤64 KiB, depth ≤12, ≤2048 nodes) and `description_text` must equal `job_document_text_v1(description_document)`. Drafts carry NULL publication metadata; published/superseded rows carry the full snapshot (company description required only when stealth). A `BEFORE UPDATE` trigger makes non-draft rows immutable except the `published → superseded` status flip; drafts cannot change id/organization/job/revision number/creation time. No DELETE grant exists.
+
+### `recruitment_operation_receipts`
+
+Tenant. Columns: `operation_id uuid`, `actor_user_id uuid`, `actor_membership_id uuid`, `kind text{client.saved,job.draft.created,job.draft.saved,job.revision.started,job.duplicated,job.published}`, `target_id uuid`, `request_sha256 bytea` (32 bytes), `result jsonb` (object ≤4 KiB, minimal IDs/versions/status), `created_at`. Primary key `operation_id`, unique `(organization_id,operation_id)`, composite `(organization_id,actor_membership_id,actor_user_id) → organization_memberships`. Stores no request payload or PII. Same-actor/same-kind/same-digest replays return the stored result; mismatches raise 23505 without exposing the old result. No UPDATE/DELETE grants.
 
 ## 5. Candidates and events — foundation and intake batches
 

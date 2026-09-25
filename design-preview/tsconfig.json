@@ -1,0 +1,25 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "strict": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "../src/*"
+            ]
+        }
+    },
+    "include": [
+        "next-env.d.ts",
+        "app/**/*.ts",
+        "app/**/*.tsx",
+        "../src/components/staff-preview/**/*.ts",
+        "../src/components/staff-preview/**/*.tsx",
+        "../src/components/staff-ui/**/*.ts",
+        "../src/components/staff-ui/**/*.tsx",
+        ".next/types/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
