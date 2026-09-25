@@ -58,6 +58,7 @@
     "react-icons": "^5.5.0",
     "react-slick": "^0.31.0",
     "resend": "^6.9.2",
+    "server-only": "^0.0.1",
     "slick-carousel": "^1.8.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",

@@ -127,6 +127,28 @@ This slice adds `supabase/migrations/20260924090000_client_job_workflows.sql`, t
 - Evidence: `npm run test:db:client-jobs` exercises the migration on disposable PostgreSQL 17 (with a PostgreSQL 16 rejection check and a non-superuser operator), plus `tests/unit/client-job-contracts.test.js` for the shared validators. The Supabase foundation test applies the migration on the provider stack, creates named + stealth clients, drafts/publishes a rich-text job, reads the safe projection and asserts provider-role denial.
 - Remaining gates unchanged: staff routes/login/UI, runtime authorization activation, real job/client mapping backfill, public publication serving, candidate intake changes, disclosure/notification/ledger jobs, and all earlier gates.
 
+## Staff authentication shell batch
+
+Staff sign-in is Google OAuth only (`20260922131000_staff_google_identities.sql`); the GitHub provider stays an applicant mechanism and can never resolve a staff principal even for a user with an active admin membership. `/staff` mounts a server-gated shell: no session or non-Google provider → `/staff/sign-in`; Google session without a resolved principal → `/staff/no-access`, which displays provider/issuer/subject for operator linking; resolved principal → shell home. `src/lib/staff-identity.js` maps the session to the resolver identity (`google`/`https://accounts.google.com`/numeric subject); `src/lib/staff-db.server.js` resolves it through `app.resolve_staff_principal_v1` under `SET LOCAL ROLE app_staff` on a dedicated `STAFF_DATABASE_URL` pool. `STAFF_ORGANIZATION_ID` supplies the tenant UUID from configuration — `app_staff` holds no table grants, so an organization lookup is impossible by design. Resolution failure fails closed to no-access. No data-bearing routes, real records or MFA exist yet: TOTP enrollment must land before any route serves staff data, because a personal Gmail cannot carry Workspace-enforced 2-Step Verification.
+
+- Environment: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (OAuth client), `STAFF_DATABASE_URL` (runtime credential able to `SET ROLE app_staff`), `STAFF_ORGANIZATION_ID` (seeded org UUID `9c4edd11-2571-490b-a87c-ef30b9e0a001`).
+- Bootstrap (one-time, operator-run in the Supabase SQL editor — the subject is displayed on `/staff/no-access` after the first Google sign-in):
+
+```sql
+set role app_owner;
+insert into app.users (id, display_name, status)
+values (gen_random_uuid(), 'Finlay', 'active')
+returning id;  -- <user_id>
+insert into app.auth_identities (id, user_id, provider, issuer, provider_subject, verified_at)
+values (gen_random_uuid(), '<user_id>', 'google', 'https://accounts.google.com', '<subject>', now());
+insert into app.organization_memberships (id, organization_id, user_id, role_id, status, activated_at)
+values (gen_random_uuid(), '9c4edd11-2571-490b-a87c-ef30b9e0a001', '<user_id>',
+        '9c4edd11-2571-490b-a87c-ef30b9e0a011', 'active', now());  -- seeded Admin role
+reset role;
+```
+
+- Remaining gates: TOTP MFA before data-bearing staff routes, real workspace pages and operations wiring, Viewer activation (D05), and all earlier gates.
+
 ## Full privacy workflow design and policy drafts
 
 On 2026-09-22 the owner chose to design the full rights workflow before implementing the narrower request/restriction batch. CV viewing is intended to take place in Agora; client sharing also occurs through email, chat or ATS. Exact recipients, platforms, copies, legal roles and transfer arrangements are not yet inventoried. PR #4 is merged at `9ec9c26`; this establishes the reviewed code base, not production migration or activation.
