@@ -19,6 +19,12 @@ export const authOptions: NextAuthOptions = {
         GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            // Offline access yields a refresh token, which the staff gate
+            // re-verifies against Google so suspended accounts lose access
+            // without waiting for the session to expire.
+            authorization: {
+                params: { access_type: 'offline', prompt: 'consent' },
+            },
         }),
     ],
     secret: process.env.NEXTAUTH_SECRET,
@@ -44,6 +50,11 @@ export const authOptions: NextAuthOptions = {
                 token.id = (profile as any)?.id;
                 token.provider = account.provider;
                 token.providerAccountId = account.providerAccountId;
+                // Kept in the JWT only — never copied onto the session, which
+                // is readable client-side.
+                if (account.provider === 'google' && account.refresh_token) {
+                    token.googleRefreshToken = account.refresh_token;
+                }
                 // Staff invite claims only bind to Google-verified emails.
                 token.emailVerified = (profile as any)?.email_verified === true;
             }

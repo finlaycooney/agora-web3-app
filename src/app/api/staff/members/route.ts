@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { inviteStaffMember } from '@/lib/staff-operations';
+import {
+    changeStaffMembership,
+    inviteStaffMember,
+    setStaffInviteDomains,
+} from '@/lib/staff-operations';
 import {
     staffApiContext,
     staffErrorResponse,
@@ -15,18 +19,40 @@ export async function POST(request: Request) {
         return denied;
     }
     const body = await request.json().catch(() => ({}));
+    const action = typeof body?.action === 'string' ? body.action : 'invite';
     try {
-        const result = await inviteStaffMember(
-            context.pool, context.identity, context.organizationId,
-            {
-                userId: randomUUID(),
-                membershipId: randomUUID(),
-                displayName: body?.displayName,
-                email: body?.email,
-                roleId: body?.roleId,
-                operationId: randomUUID(),
-            },
-        );
+        let result;
+        if (action === 'invite') {
+            result = await inviteStaffMember(
+                context.pool, context.identity, context.organizationId,
+                {
+                    userId: randomUUID(),
+                    membershipId: randomUUID(),
+                    displayName: body?.displayName,
+                    email: body?.email,
+                    roleId: body?.roleId,
+                    operationId: randomUUID(),
+                },
+            );
+        } else if (action === 'setInviteDomains') {
+            result = await setStaffInviteDomains(
+                context.pool, context.identity, context.organizationId,
+                { domains: body?.domains, operationId: randomUUID() },
+            );
+        } else if (action === 'changeMembership') {
+            result = await changeStaffMembership(
+                context.pool, context.identity, context.organizationId,
+                {
+                    membershipId: body?.membershipId,
+                    roleId: body?.roleId,
+                    status: body?.status,
+                    version: body?.version,
+                    operationId: randomUUID(),
+                },
+            );
+        } else {
+            return Response.json({ error: 'unknown action' }, { status: 400 });
+        }
         return Response.json({ ok: true, result });
     } catch (error) {
         return staffErrorResponse(error);

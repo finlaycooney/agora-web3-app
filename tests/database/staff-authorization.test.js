@@ -21,6 +21,7 @@ import {
     GOOGLE_ISSUER,
     GOOGLE_MIGRATION,
     INVITES_MIGRATION,
+    INVITE_DOMAINS_MIGRATION,
     RUNTIME_ROLE,
     SUBJECTS,
     installStaffFixture,
@@ -37,6 +38,7 @@ const MIGRATIONS = [
     AUTHZ_MIGRATION,
     GOOGLE_MIGRATION,
     INVITES_MIGRATION,
+    INVITE_DOMAINS_MIGRATION,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1005,7 +1007,7 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             where n.nspname = 'app'
             order by p.proname
         `).split('\n');
-        assert.equal(functions.length, 8);
+        assert.equal(functions.length, 10);
         const expected = {
             'app.change_membership_v1': ['t', 'app_executor'],
             'app.change_role_grants_v1': ['t', 'app_executor'],
@@ -1014,7 +1016,9 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             'app.has_permission_v1': ['t', 'app_authz_reader'],
             'app.invite_staff_member_v1': ['t', 'app_executor'],
             'app.resolve_staff_principal_v1': ['t', 'app_authz_reader'],
+            'app.set_staff_invite_domains_v1': ['t', 'app_executor'],
             'app.staff_directory_v1': ['t', 'app_executor'],
+            'app.valid_domain_list_v1': ['f', 'app_owner'],
         };
         for (const line of functions) {
             const name = `app.${line.split(':')[0]}`;
@@ -1049,7 +1053,9 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             has_permission_v1: 'app_authz_reader,app_executor,app_staff',
             invite_staff_member_v1: 'app_executor,app_staff',
             resolve_staff_principal_v1: 'app_authz_reader,app_staff',
+            set_staff_invite_domains_v1: 'app_executor,app_staff',
             staff_directory_v1: 'app_executor,app_staff',
+            valid_domain_list_v1: 'app_executor,app_owner',
         };
         for (const line of grants) {
             const [name, grantees] = line.split('|');
@@ -1709,6 +1715,116 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             'directory requires staff.manage',
         );
     });
+
+    await t.test('invite domain allowlist gates invite and claim', async () => {
+        const admin = identity(SUBJECTS.ADMIN1);
+        const setDomains = (domains) => withStaffTransaction(
+            pool, admin, ORG_A, ['staff.manage'],
+            async ({ client }) => client.query(
+                'select app.set_staff_invite_domains_v1($1::text[], $2::uuid, $3::uuid)',
+                [domains, randomUUID(), randomUUID()],
+            ),
+        );
+        const invite = (email, subject = SUBJECTS.ADMIN1) => withStaffTransaction(
+            pool, identity(subject), ORG_A, ['staff.manage'],
+            async ({ client }) => client.query(
+                'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7)',
+                [
+                    randomUUID(), randomUUID(), 'Domain Hire', email,
+                    ROLE_A_RECRUITER, randomUUID(), randomUUID(),
+                ],
+            ),
+        );
+        // Claims need only the organization context — the procedure binds the
+        // actor itself once the invite is claimed.
+        const claim = async (subject, email) => {
+            const client = await pool.connect();
+            try {
+                await client.query('begin isolation level read committed');
+                await client.query('set local role app_staff');
+                await client.query(
+                    `select pg_catalog.set_config('app.organization_id', $1, true)`,
+                    [ORG_A],
+                );
+                const result = await client.query(
+                    `select user_id, membership_id, role_id
+                       from app.claim_staff_invite_v1($1, $2, $3, $4, $5, $6, $7)`,
+                    [
+                        randomUUID(), 'google', GOOGLE_ISSUER, subject, email,
+                        randomUUID(), randomUUID(),
+                    ],
+                );
+                await client.query('commit');
+                return result;
+            } catch (error) {
+                await client.query('rollback').catch(() => {});
+                throw error;
+            } finally {
+                client.release();
+            }
+        };
+
+        // No allowlist configured — any verified email domain is invitable.
+        await invite('anyone@elsewhere.example');
+
+        await setDomains(['allowed.example']);
+        assert.equal(
+            scalar(pg17,
+                `select staff_invite_domains::text from app.organizations
+                    where id = '${ORG_A}'`),
+            '{allowed.example}',
+            'allowlist is stored normalized',
+        );
+
+        await rejectCode(
+            invite('denied@blocked.example'),
+            '42501',
+            'a domain outside the allowlist must not be invitable',
+        );
+        await rejectCode(
+            invite('denied@sub.allowed.example'),
+            '42501',
+            'subdomains of an allowed domain are not implied',
+        );
+        const invited = await invite('hire@allowed.example');
+        assert.equal(invited.rows[0].invite_staff_member_v1.email, 'hire@allowed.example');
+
+        const claimed = await claim('71717', 'hire@allowed.example');
+        assert.equal(claimed.rows.length, 1, 'allowed-domain invite claims');
+
+        // Tightening the allowlist unclaims a stale pending invite: the pending
+        // row survives, but claim returns no rows until the domains are relaxed.
+        await invite('pending@allowed.example');
+        await setDomains(['other.example']);
+        assert.equal(
+            (await claim('72727', 'pending@allowed.example')).rows.length,
+            0,
+            'a pending invite outside the new allowlist cannot be claimed',
+        );
+        await setDomains(null);
+        assert.equal(
+            (await claim('72727', 'pending@allowed.example')).rows.length,
+            1,
+            'clearing the allowlist restores claimability',
+        );
+
+        await rejectCode(
+            setDomains(['not a domain!']),
+            '22023',
+            'malformed domain entries are rejected',
+        );
+        await rejectCode(
+            withStaffTransaction(
+                pool, identity('90909'), ORG_A, ['candidates.read'],
+                async ({ client }) => client.query(
+                    'select app.set_staff_invite_domains_v1($1::text[], $2::uuid, $3::uuid)',
+                    [['sneaky.example'], randomUUID(), randomUUID()],
+                ),
+            ),
+            '42501',
+            'setting domains requires staff.manage',
+        );
+    });
 });
 
 test('non-superuser migration operator applies staff authorization core', async (t) => {
@@ -1725,7 +1841,7 @@ test('non-superuser migration operator applies staff authorization core', async 
     assert.equal(scalar(pgOperator, `
         select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'app'
-    `), '8');
+    `), '10');
     assert.equal(scalar(pgOperator, `
         select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'app' and c.relname = 'audit_events'

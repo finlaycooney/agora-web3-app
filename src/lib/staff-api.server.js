@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
 import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
 import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { staffGoogleCredentialStatus } from './staff-google.server';
 import { StaffOperationsError } from './staff-operations';
 import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
@@ -23,6 +24,11 @@ export async function staffApiContext() {
     const secret = process.env.NEXTAUTH_SECRET;
     if (!pool || !organizationId || !secret) {
         return { status: 'unconfigured' };
+    }
+    // Same Google-credential revalidation as the page gate: a suspended
+    // account is denied on the next API call, not at next sign-in.
+    if (await staffGoogleCredentialStatus(identity.subject) === 'revoked') {
+        return { status: 'unauthorized' };
     }
     const principal = await resolveOrClaimStaffPrincipal(
         pool, identity, staffInviteEmailFromSession(session), organizationId);
@@ -73,7 +79,10 @@ export function staffErrorResponse(error) {
         const status = error.code === 'FORBIDDEN' ? 403 : 401;
         return Response.json({ error: error.code.toLowerCase() }, { status });
     }
-    const mapped = { '22023': 400, '23505': 409, '23514': 422, '40001': 409, P0002: 404 };
+    const mapped = {
+        '22023': 400, '23505': 409, '23514': 422, '40001': 409,
+        '42501': 403, P0002: 404,
+    };
     if (typeof error?.code === 'string' && error.code in mapped) {
         return Response.json({ error: 'operation rejected', code: error.code }, { status: mapped[error.code] });
     }

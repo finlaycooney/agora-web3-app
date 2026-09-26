@@ -1,7 +1,11 @@
 import { getStaffDirectory } from '@/lib/staff-operations';
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
-import { MemberInviteForm } from '../workspace-forms';
+import {
+    InviteDomainsForm,
+    MemberInviteForm,
+    MemberRevokeButton,
+} from '../workspace-forms';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +16,11 @@ const td = 'px-3 py-2.5 text-sm border-t border-foreground/10';
 
 export default async function StaffMembersPage() {
     const gate = await requireStaffVerified();
-    let directory: { members: any[]; roles: any[] } | null = null;
+    let directory: {
+        members: any[];
+        roles: any[];
+        inviteDomains?: string[];
+    } | null = null;
     try {
         directory = await getStaffDirectory(
             gate.pool, gate.identity, gate.organizationId, {});
@@ -21,6 +29,7 @@ export default async function StaffMembersPage() {
             throw error;
         }
     }
+    const inviteDomains = directory?.inviteDomains ?? [];
 
     return (
         <section className="mx-auto max-w-4xl px-6 py-12">
@@ -38,6 +47,7 @@ export default async function StaffMembersPage() {
                                 <th className={th}>Email</th>
                                 <th className={th}>Role</th>
                                 <th className={th}>Status</th>
+                                <th className={th}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -50,6 +60,15 @@ export default async function StaffMembersPage() {
                                     <td className={td}>{member.invitedEmail ?? '—'}</td>
                                     <td className={td}>{member.roleName ?? member.roleKey}</td>
                                     <td className={td}>{member.status}</td>
+                                    <td className={td}>
+                                        {member.status !== 'revoked' && (
+                                            <MemberRevokeButton
+                                                membershipId={member.membershipId}
+                                                roleId={member.roleId}
+                                                version={member.version}
+                                            />
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -59,7 +78,16 @@ export default async function StaffMembersPage() {
                         The invite is bound to this email — the person signs in with that
                         Google account and is linked automatically on first sign-in.
                     </p>
-                    <MemberInviteForm roles={directory.roles} />
+                    <MemberInviteForm
+                        roles={directory.roles}
+                        inviteDomains={inviteDomains}
+                    />
+                    <h2 className="mt-12 text-lg font-semibold">Invite domains</h2>
+                    <p className="mt-2 text-sm text-foreground/60">
+                        When set, only these email domains can be invited. Pending invites
+                        on other domains stop working the moment this changes.
+                    </p>
+                    <InviteDomainsForm domains={inviteDomains} />
                 </>
             )}
         </section>

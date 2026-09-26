@@ -67,6 +67,7 @@ const LEGACY_MIGRATION = '20260911120000_candidate_applications.sql';
 const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
 const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
 const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
+const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1772,10 +1773,12 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
 
     await t.test('staff invites migration applies and claims on the provider stack', () => {
         const applicantsBeforeInvites = supabasePsql(dumpApplicants);
-        copyFileSync(
-            join(migrationsDir, INVITES_MIGRATION),
-            join(tempMigrations, INVITES_MIGRATION),
-        );
+        for (const file of [INVITES_MIGRATION, INVITE_DOMAINS_MIGRATION]) {
+            copyFileSync(
+                join(migrationsDir, file),
+                join(tempMigrations, file),
+            );
+        }
         runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
         assert.equal(supabasePsql(dumpApplicants), applicantsBeforeInvites);
 
@@ -1854,7 +1857,35 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 /42501/,
                 `${role} must not execute claim_staff_invite_v1`,
             );
+            assert.match(
+                supabasePsqlError(`set role ${role};
+                    select app.set_staff_invite_domains_v1(
+                        '{a.example}'::text[], '${randomUUID()}', '${randomUUID()}')`),
+                /42501/,
+                `${role} must not execute set_staff_invite_domains_v1`,
+            );
         }
+
+        // The invite-domain allowlist applies on the provider stack too:
+        // pinning to a domain rejects off-domain invites.
+        supabasePsql(staffSql(`
+            select app.set_staff_invite_domains_v1(
+                '{workspace.example}'::text[], '${randomUUID()}', '${randomUUID()}');
+        `));
+        assert.match(
+            supabasePsqlError(staffSql(`
+                select app.invite_staff_member_v1(
+                    '${randomUUID()}', '${randomUUID()}', 'Off Domain',
+                    'hire@elsewhere.example', '${AUTHZ_ID.ROLE_A_RECRUITER}',
+                    '${randomUUID()}', '${randomUUID()}');
+            `)),
+            /42501/,
+            'off-domain invites are rejected once the allowlist is set',
+        );
+        supabasePsql(staffSql(`
+            select app.set_staff_invite_domains_v1(
+                null, '${randomUUID()}', '${randomUUID()}');
+        `));
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {

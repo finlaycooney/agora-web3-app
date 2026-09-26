@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
 import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
 import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { staffGoogleCredentialStatus } from './staff-google.server';
 import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 
@@ -34,6 +35,13 @@ export async function staffGate() {
     const identity = staffIdentityFromSession(session);
     if (!identity) {
         return { stage: 'signed-out' };
+    }
+
+    // A suspended/deleted Google account must lose access on its next staff
+    // request, not when the session expires. 'unknown' fails open — a Google
+    // outage must not lock out the workspace — while 'revoked' fails closed.
+    if (await staffGoogleCredentialStatus(identity.subject) === 'revoked') {
+        return { stage: 'unresolved', session, identity };
     }
 
     const pool = getStaffPool();
