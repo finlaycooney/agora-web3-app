@@ -44,6 +44,8 @@ export const authOptions: NextAuthOptions = {
                 token.id = (profile as any)?.id;
                 token.provider = account.provider;
                 token.providerAccountId = account.providerAccountId;
+                // Staff invite claims only bind to Google-verified emails.
+                token.emailVerified = (profile as any)?.email_verified === true;
             }
             return token;
         },
@@ -53,6 +55,7 @@ export const authOptions: NextAuthOptions = {
             }
             (session as any).provider = token.provider;
             (session as any).subject = token.providerAccountId;
+            (session as any).emailVerified = token.emailVerified === true;
             return session;
         },
     },

@@ -2,8 +2,9 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-import { staffIdentityFromSession } from './staff-identity';
-import { getStaffPool, resolveStaffPrincipal } from './staff-db.server';
+import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
+import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { StaffOperationsError } from './staff-operations';
 import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 import { ClientJobContractError } from './client-job-contracts';
@@ -23,7 +24,8 @@ export async function staffApiContext() {
     if (!pool || !organizationId || !secret) {
         return { status: 'unconfigured' };
     }
-    const principal = await resolveStaffPrincipal(pool, identity, organizationId);
+    const principal = await resolveOrClaimStaffPrincipal(
+        pool, identity, staffInviteEmailFromSession(session), organizationId);
     if (!principal) {
         return { status: 'unauthorized' };
     }
@@ -62,7 +64,8 @@ export function staffGateResponse(context) {
 
 // Maps the contract/authorization/database error vocabulary onto HTTP.
 export function staffErrorResponse(error) {
-    if (error instanceof ClientJobContractError) {
+    if (error instanceof ClientJobContractError
+        || error instanceof StaffOperationsError) {
         return Response.json(
             { error: 'invalid input', fields: error.fieldErrors }, { status: 400 });
     }

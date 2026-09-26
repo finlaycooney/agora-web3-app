@@ -3,6 +3,7 @@ import { publishedPort, psql } from './foundation-docker.js';
 
 export const AUTHZ_MIGRATION = '20260922130000_staff_authorization_core.sql';
 export const GOOGLE_MIGRATION = '20260922131000_staff_google_identities.sql';
+export const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
 export const RUNTIME_ROLE = 'agora_authz_test';
 
 export const AUTHZ_ID = {
@@ -90,18 +91,18 @@ insert into app.role_permissions (organization_id, role_id, permission_key) valu
     ('${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.ROLE_A_CUSTOM}', 'candidates.read'),
     ('${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.ROLE_A_CUSTOM}', 'retired.key');
 update app.roles set status = 'active' where id = '${AUTHZ_ID.ROLE_A_VIEWER}';
-insert into app.organization_memberships (id, organization_id, user_id, role_id, status, activated_at, revoked_at) values
-    ('${AUTHZ_ID.MEMBER_ADMIN1}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_ADMIN1}', '${AUTHZ_ID.ROLE_A_ADMIN}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_ADMIN2}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_ADMIN2}', '${AUTHZ_ID.ROLE_A_ADMIN}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_RECRUITER}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_RECRUITER}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_VIEWER}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_VIEWER}', '${AUTHZ_ID.ROLE_A_VIEWER}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_CUSTOM}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_CUSTOM}', '${AUTHZ_ID.ROLE_A_CUSTOM}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_INVITED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_INVITED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'invited', null, null),
-    ('${AUTHZ_ID.MEMBER_SHARED_A}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_SHARED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_SHARED_B}', '${AUTHZ_ID.ORG_B}', '${AUTHZ_ID.USER_SHARED}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_REVOKED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_REVOKED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'revoked', now(), now()),
-    ('${AUTHZ_ID.MEMBER_DISABLED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_DISABLED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', now(), null),
-    ('${AUTHZ_ID.MEMBER_B_ADMIN}', '${AUTHZ_ID.ORG_B}', '${AUTHZ_ID.USER_ADMIN2}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'active', now(), null);
+insert into app.organization_memberships (id, organization_id, user_id, role_id, status, invited_email, activated_at, revoked_at) values
+    ('${AUTHZ_ID.MEMBER_ADMIN1}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_ADMIN1}', '${AUTHZ_ID.ROLE_A_ADMIN}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_ADMIN2}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_ADMIN2}', '${AUTHZ_ID.ROLE_A_ADMIN}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_RECRUITER}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_RECRUITER}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_VIEWER}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_VIEWER}', '${AUTHZ_ID.ROLE_A_VIEWER}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_CUSTOM}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_CUSTOM}', '${AUTHZ_ID.ROLE_A_CUSTOM}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_INVITED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_INVITED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'invited', 'invited@fixture.example', null, null),
+    ('${AUTHZ_ID.MEMBER_SHARED_A}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_SHARED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_SHARED_B}', '${AUTHZ_ID.ORG_B}', '${AUTHZ_ID.USER_SHARED}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_REVOKED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_REVOKED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'revoked', null, now(), now()),
+    ('${AUTHZ_ID.MEMBER_DISABLED}', '${AUTHZ_ID.ORG_A}', '${AUTHZ_ID.USER_DISABLED}', '${AUTHZ_ID.ROLE_A_RECRUITER}', 'active', null, now(), null),
+    ('${AUTHZ_ID.MEMBER_B_ADMIN}', '${AUTHZ_ID.ORG_B}', '${AUTHZ_ID.USER_ADMIN2}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'active', null, now(), null);
 insert into app.auth_identities (id, user_id, provider, issuer, provider_subject, verified_at, revoked_at) values
     ('${AUTHZ_ID.IDENTITY_ADMIN1}', '${AUTHZ_ID.USER_ADMIN1}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN1}', now(), null),
     ('${AUTHZ_ID.IDENTITY_ADMIN2}', '${AUTHZ_ID.USER_ADMIN2}', 'google', '${GOOGLE_ISSUER}', '${SUBJECTS.ADMIN2}', now(), null),

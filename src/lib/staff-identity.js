@@ -5,6 +5,7 @@
 export const STAFF_IDENTITY_PROVIDER = 'google';
 export const STAFF_IDENTITY_ISSUER = 'https://accounts.google.com';
 export const STAFF_SUBJECT_PATTERN = /^[1-9][0-9]{0,20}$/;
+export const STAFF_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 // Maps a NextAuth session onto the resolver identity, or returns null when the
 // session cannot represent a staff principal.
@@ -21,4 +22,18 @@ export function staffIdentityFromSession(session) {
         issuer: STAFF_IDENTITY_ISSUER,
         subject,
     };
+}
+
+// Returns the session email only when Google attested it (email_verified) —
+// that is what makes it safe to use as an invite-claim key. Anything else
+// returns null so the caller falls back to plain resolution.
+export function staffInviteEmailFromSession(session) {
+    const email = session?.user?.email;
+    if (session?.emailVerified !== true
+        || typeof email !== 'string'
+        || email.length > 320
+        || !STAFF_EMAIL_PATTERN.test(email)) {
+        return null;
+    }
+    return email;
 }

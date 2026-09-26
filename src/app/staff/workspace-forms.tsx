@@ -354,3 +354,64 @@ export function NewRevisionButton({ jobId, expectedJobVersion }: { jobId: string
         </span>
     );
 }
+
+export function MemberInviteForm({
+    roles,
+}: {
+    roles: { id: string; name: string; key: string }[];
+}) {
+    const router = useRouter();
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const submit = async (form: HTMLFormElement) => {
+        const data = new FormData(form);
+        const response = await fetch('/api/staff/members', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                displayName: String(data.get('displayName') ?? ''),
+                email: String(data.get('email') ?? ''),
+                roleId: String(data.get('roleId') ?? ''),
+            }),
+        });
+        if (response.ok) {
+            form.reset();
+            router.refresh();
+            return;
+        }
+        const payload = await response.json().catch(() => ({}));
+        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Invite failed');
+    };
+
+    return (
+        <form
+            className="mt-6 max-w-xl space-y-5"
+            onSubmit={(event) => {
+                event.preventDefault();
+                setError(null);
+                setBusy(true);
+                void submit(event.currentTarget).finally(() => setBusy(false));
+            }}
+        >
+            <Field label="Name">
+                <input name="displayName" required maxLength={256} className={inputClass} />
+            </Field>
+            <Field label="Email">
+                <input name="email" type="email" required maxLength={320} className={inputClass} />
+            </Field>
+            <Field label="Role">
+                <select name="roleId" required className={inputClass} defaultValue="">
+                    <option value="" disabled>Select a role</option>
+                    {roles.map((role) => (
+                        <option key={role.id} value={role.id}>{role.name}</option>
+                    ))}
+                </select>
+            </Field>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <button type="submit" disabled={busy} className={buttonClass}>
+                Send invite
+            </button>
+        </form>
+    );
+}
