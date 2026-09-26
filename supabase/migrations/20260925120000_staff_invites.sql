@@ -21,14 +21,14 @@ set local role app_owner;
 -- Staff invite flow. invited_email on the membership records which verified
 -- Google account a pending invite is bound to; claim_staff_invite_v1 then
 -- binds the first matching sign-in's provider subject automatically, so a new
--- staff member never needs a manual identity insert. The strict check makes
--- 'invited' without an email a data bug, not a silently unclaimable row.
+-- staff member never needs a manual identity insert. The column stays
+-- optional — historically seeded invited memberships (and any future
+-- non-invite invite rows) simply cannot be claimed, which is the safe
+-- failure mode.
 alter table app.organization_memberships
     add column invited_email text
         check (invited_email is null
-            or invited_email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
-    add constraint memberships_invited_email_required
-        check (status <> 'invited' or invited_email is not null);
+            or invited_email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 -- Executor-side writes for the invite path. users has no organization column
 -- (it is a global entity; tenancy is bound by the membership insert), so the

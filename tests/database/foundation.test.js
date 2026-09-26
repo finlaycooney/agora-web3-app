@@ -427,8 +427,8 @@ test('foundation migrations on plain PostgreSQL', { skip: mode !== 'postgres' },
 
         await t.test('cross-organization foreign keys are rejected (23503)', () => {
             const cases = [
-                `insert into app.organization_memberships (id, organization_id, user_id, role_id, status, invited_email)
-                 values ('${uuid(200)}', '${ID.ORG_A}', '${ID.USER_2}', '${ID.ROLE_B_RECRUITER}', 'invited', 'cross@example.com')`,
+                `insert into app.organization_memberships (id, organization_id, user_id, role_id, status)
+                 values ('${uuid(200)}', '${ID.ORG_A}', '${ID.USER_2}', '${ID.ROLE_B_RECRUITER}', 'invited')`,
                 `insert into app.role_permissions (organization_id, role_id, permission_key)
                  values ('${ID.ORG_A}', '${ID.ROLE_B_RECRUITER}', 'clients.read')`,
                 `insert into app.jobs (id, organization_id, client_id, pipeline_id, slug, title, description,

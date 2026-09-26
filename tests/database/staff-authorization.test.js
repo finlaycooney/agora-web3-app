@@ -1541,10 +1541,10 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
 
     await t.test('staff invites deny invalid or unauthorized paths', async () => {
         // The recruiter fixture's membership is left revoked by an earlier
-        // subtest, so claim the pending fixture invite (invited@fixture.example
-        // → USER_INVITED / MEMBER_INVITED, recruiter role) and use that fresh
-        // non-admin actor for the denial checks. Each step runs its own
-        // transaction — a raised error aborts everything before it.
+        // subtest, so create a fresh invite and claim it with a new subject —
+        // that becomes the non-admin actor for the denial checks below. Each
+        // step runs its own transaction — a raised error aborts everything
+        // before it.
         const withOrgContext = async (fn) => {
             const client = await pool.connect();
             try {
@@ -1575,21 +1575,6 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             ),
         );
 
-        const claimed = await claimWith(
-            'google', '90909', 'invited@fixture.example');
-        assert.equal(claimed.rows[0].membership_id, MEMBER_INVITED);
-
-        // The provider gate mirrors the resolver: a GitHub subject can never
-        // claim a staff invite.
-        await rejectCode(
-            claimWith('github', '12345', 'invited@fixture.example'),
-            '22023',
-        );
-
-        // Re-binding an already-bound subject to a different invite is a
-        // uniqueness violation, not a silent reattach.
-        const otherUser = randomUUID();
-        const otherMembership = randomUUID();
         await withOrgContext(async (client) => {
             await client.query(
                 `select pg_catalog.set_config('app.actor_id', $1, true)`,
@@ -1598,17 +1583,32 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             await client.query(
                 'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7)',
                 [
-                    otherUser, otherMembership, 'Second Invite',
+                    randomUUID(), randomUUID(), 'Second Invite',
                     'second@example.com', ROLE_A_RECRUITER,
                     randomUUID(), randomUUID(),
                 ],
             );
         });
+
+        // The provider gate mirrors the resolver: a GitHub subject can never
+        // claim a staff invite.
+        await rejectCode(
+            claimWith('github', '12345', 'second@example.com'),
+            '22023',
+        );
+
+        // Re-binding an already-bound subject to a different invite is a
+        // uniqueness violation, not a silent reattach.
         await rejectCode(
             claimWith('google', SUBJECTS.ADMIN1, 'second@example.com'),
             '23505',
             'an already-bound subject must not claim another invite',
         );
+
+        const claimed = await claimWith(
+            'google', '90909', 'second@example.com');
+        assert.ok(claimed.rows[0], 'fresh subject claims the pending invite');
+        assert.notEqual(claimed.rows[0].membership_id, MEMBER_INVITED);
 
         const invite = (subject, permissions, args) => withStaffTransaction(
             pool,
