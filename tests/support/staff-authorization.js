@@ -3,6 +3,8 @@ import { publishedPort, psql } from './foundation-docker.js';
 
 export const AUTHZ_MIGRATION = '20260922130000_staff_authorization_core.sql';
 export const GOOGLE_MIGRATION = '20260922131000_staff_google_identities.sql';
+export const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
+export const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
 export const RUNTIME_ROLE = 'agora_authz_test';
 
 export const AUTHZ_ID = {

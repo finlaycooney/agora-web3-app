@@ -20,6 +20,8 @@ import {
     GITHUB_ISSUER,
     GOOGLE_ISSUER,
     GOOGLE_MIGRATION,
+    INVITES_MIGRATION,
+    INVITE_DOMAINS_MIGRATION,
     RUNTIME_ROLE,
     SUBJECTS,
     installStaffFixture,
@@ -35,6 +37,8 @@ const MIGRATIONS = [
     '20260922090200_foundation_seed.sql',
     AUTHZ_MIGRATION,
     GOOGLE_MIGRATION,
+    INVITES_MIGRATION,
+    INVITE_DOMAINS_MIGRATION,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -59,6 +63,7 @@ const {
     MEMBER_ADMIN1,
     MEMBER_ADMIN2,
     MEMBER_RECRUITER,
+    MEMBER_INVITED,
     MEMBER_CUSTOM,
     MEMBER_SHARED_A,
     MEMBER_SHARED_B,
@@ -1002,13 +1007,18 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             where n.nspname = 'app'
             order by p.proname
         `).split('\n');
-        assert.equal(functions.length, 5);
+        assert.equal(functions.length, 10);
         const expected = {
             'app.change_membership_v1': ['t', 'app_executor'],
             'app.change_role_grants_v1': ['t', 'app_executor'],
+            'app.claim_staff_invite_v1': ['t', 'app_executor'],
             'app.context_uuid_v1': ['f', 'app_owner'],
             'app.has_permission_v1': ['t', 'app_authz_reader'],
+            'app.invite_staff_member_v1': ['t', 'app_executor'],
             'app.resolve_staff_principal_v1': ['t', 'app_authz_reader'],
+            'app.set_staff_invite_domains_v1': ['t', 'app_executor'],
+            'app.staff_directory_v1': ['t', 'app_executor'],
+            'app.valid_domain_list_v1': ['f', 'app_owner'],
         };
         for (const line of functions) {
             const name = `app.${line.split(':')[0]}`;
@@ -1038,9 +1048,14 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
         const expectedGrants = {
             change_membership_v1: 'app_executor,app_staff',
             change_role_grants_v1: 'app_executor,app_staff',
+            claim_staff_invite_v1: 'app_executor,app_staff',
             context_uuid_v1: 'app_authz_reader,app_executor,app_owner,app_staff',
             has_permission_v1: 'app_authz_reader,app_executor,app_staff',
+            invite_staff_member_v1: 'app_executor,app_staff',
             resolve_staff_principal_v1: 'app_authz_reader,app_staff',
+            set_staff_invite_domains_v1: 'app_executor,app_staff',
+            staff_directory_v1: 'app_executor,app_staff',
+            valid_domain_list_v1: 'app_executor,app_owner',
         };
         for (const line of grants) {
             const [name, grantees] = line.split('|');
@@ -1383,6 +1398,433 @@ test('staff authorization core on PostgreSQL 17', async (t) => {
             '1',
         );
     });
+
+    await t.test('staff invites bind a first sign-in to the pending membership', async () => {
+        const invitedUser = randomUUID();
+        const invitedMembership = randomUUID();
+        const inviteAuditId = randomUUID();
+        const newSubject = '70707';
+
+        const claim = async (email, subject, provider = 'google') => {
+            const ids = {
+                identityId: randomUUID(),
+                auditId: randomUUID(),
+                correlationId: randomUUID(),
+            };
+            const client = await pool.connect();
+            try {
+                await client.query('begin isolation level read committed');
+                await client.query(
+                    `select pg_catalog.set_config('app.organization_id', $1, true)`,
+                    [ORG_A],
+                );
+                const result = await client.query(
+                    `select user_id, membership_id, role_id
+                       from app.claim_staff_invite_v1($1, $2, $3, $4, $5, $6, $7)`,
+                    [
+                        ids.identityId, provider,
+                        provider === 'google' ? GOOGLE_ISSUER : GITHUB_ISSUER,
+                        subject, email, ids.auditId, ids.correlationId,
+                    ],
+                );
+                await client.query('commit');
+                return { ids, principal: result.rows[0] ?? null };
+            } catch (error) {
+                await client.query('rollback').catch(() => {});
+                throw error;
+            } finally {
+                client.release();
+            }
+        };
+
+        const invite = await withStaffTransaction(
+            pool,
+            identity(SUBJECTS.ADMIN1),
+            ORG_A,
+            ['staff.manage'],
+            async ({ client }) => (await client.query(
+                'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7) as result',
+                [
+                    invitedUser, invitedMembership, 'New Hire',
+                    'New.Hire@Example.COM', ROLE_A_RECRUITER,
+                    inviteAuditId, randomUUID(),
+                ],
+            )).rows[0].result,
+        );
+        assert.equal(invite.membershipId, invitedMembership);
+        assert.equal(invite.userId, invitedUser);
+        assert.equal(invite.email, 'new.hire@example.com');
+
+        const pending = (await admin.query(
+            `select status, invited_email, activated_at, version
+               from app.organization_memberships where id = $1`,
+            [invitedMembership],
+        )).rows[0];
+        assert.equal(pending.status, 'invited');
+        assert.equal(pending.invited_email, 'new.hire@example.com');
+        assert.equal(pending.activated_at, null);
+
+        const inviteAudit = (await admin.query(
+            `select action, target_type, target_id, actor_user_id,
+                actor_membership_id, details
+               from app.audit_events where id = $1`,
+            [inviteAuditId],
+        )).rows[0];
+        assert.equal(inviteAudit.action, 'staff.member.invited');
+        assert.equal(inviteAudit.target_type, 'organization_membership');
+        assert.equal(inviteAudit.target_id, invitedMembership);
+        assert.equal(inviteAudit.actor_user_id, USER_ADMIN1);
+        assert.equal(inviteAudit.actor_membership_id, MEMBER_ADMIN1);
+        assert.deepEqual(inviteAudit.details, {
+            user_id: invitedUser,
+            role_id: ROLE_A_RECRUITER,
+        });
+
+        const unresolved = await pool.query(
+            'select count(*) as hits'
+                + ' from app.resolve_staff_principal_v1($1, $2, $3, $4)',
+            ['google', GOOGLE_ISSUER, newSubject, ORG_A],
+        );
+        assert.equal(unresolved.rows[0].hits, '0');
+
+        // A different verified email finds no pending invite.
+        assert.equal(
+            (await claim('someone-else@example.com', newSubject)).principal,
+            null,
+        );
+
+        // The invited email claims: the subject binds and the membership
+        // activates — matching is case-insensitive on the stored email.
+        const claimed = await claim('NEW.HIRE@example.com', newSubject);
+        assert.equal(claimed.principal.user_id, invitedUser);
+        assert.equal(claimed.principal.membership_id, invitedMembership);
+        assert.equal(claimed.principal.role_id, ROLE_A_RECRUITER);
+
+        const after = (await admin.query(
+            `select status, activated_at, version
+               from app.organization_memberships where id = $1`,
+            [invitedMembership],
+        )).rows[0];
+        assert.equal(after.status, 'active');
+        assert.ok(after.activated_at !== null);
+        assert.equal(Number(after.version), 2);
+
+        const boundIdentity = (await admin.query(
+            `select provider_subject, verified_at, revoked_at
+               from app.auth_identities where id = $1`,
+            [claimed.ids.identityId],
+        )).rows[0];
+        assert.equal(boundIdentity.provider_subject, newSubject);
+        assert.ok(boundIdentity.verified_at !== null);
+        assert.equal(boundIdentity.revoked_at, null);
+
+        const claimAudit = (await admin.query(
+            `select action, actor_user_id, actor_membership_id, target_id, details
+               from app.audit_events where id = $1`,
+            [claimed.ids.auditId],
+        )).rows[0];
+        assert.equal(claimAudit.action, 'staff.invite.claimed');
+        assert.equal(claimAudit.actor_user_id, invitedUser);
+        assert.equal(claimAudit.actor_membership_id, invitedMembership);
+        assert.equal(claimAudit.target_id, invitedMembership);
+        assert.deepEqual(claimAudit.details, {
+            identity_id: claimed.ids.identityId,
+        });
+
+        const resolved = await pool.query(
+            'select user_id, membership_id, role_id'
+                + ' from app.resolve_staff_principal_v1($1, $2, $3, $4)',
+            ['google', GOOGLE_ISSUER, newSubject, ORG_A],
+        );
+        assert.equal(resolved.rows[0].membership_id, invitedMembership);
+
+        // The invite is consumed — a second claim finds nothing.
+        assert.equal(
+            (await claim('new.hire@example.com', '80808')).principal,
+            null,
+        );
+    });
+
+    await t.test('staff invites deny invalid or unauthorized paths', async () => {
+        // The recruiter fixture's membership is left revoked by an earlier
+        // subtest, so create a fresh invite and claim it with a new subject —
+        // that becomes the non-admin actor for the denial checks below. Each
+        // step runs its own transaction — a raised error aborts everything
+        // before it.
+        const withOrgContext = async (fn) => {
+            const client = await pool.connect();
+            try {
+                await client.query('begin isolation level read committed');
+                await client.query(
+                    `select pg_catalog.set_config('app.organization_id', $1, true)`,
+                    [ORG_A],
+                );
+                const result = await fn(client);
+                await client.query('commit');
+                return result;
+            } catch (error) {
+                await client.query('rollback').catch(() => {});
+                throw error;
+            } finally {
+                client.release();
+            }
+        };
+        const claimWith = (provider, subject, email) => withOrgContext(
+            (client) => client.query(
+                `select user_id, membership_id, role_id
+                   from app.claim_staff_invite_v1($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                    randomUUID(), provider,
+                    provider === 'google' ? GOOGLE_ISSUER : GITHUB_ISSUER,
+                    subject, email, randomUUID(), randomUUID(),
+                ],
+            ),
+        );
+
+        await withOrgContext(async (client) => {
+            await client.query(
+                `select pg_catalog.set_config('app.actor_id', $1, true)`,
+                [USER_ADMIN1],
+            );
+            await client.query(
+                'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7)',
+                [
+                    randomUUID(), randomUUID(), 'Second Invite',
+                    'second@example.com', ROLE_A_RECRUITER,
+                    randomUUID(), randomUUID(),
+                ],
+            );
+        });
+
+        // The provider gate mirrors the resolver: a GitHub subject can never
+        // claim a staff invite.
+        await rejectCode(
+            claimWith('github', '12345', 'second@example.com'),
+            '22023',
+        );
+
+        // Re-binding an already-bound subject to a different invite is a
+        // uniqueness violation, not a silent reattach.
+        await rejectCode(
+            claimWith('google', SUBJECTS.ADMIN1, 'second@example.com'),
+            '23505',
+            'an already-bound subject must not claim another invite',
+        );
+
+        const claimed = await claimWith(
+            'google', '90909', 'second@example.com');
+        assert.ok(claimed.rows[0], 'fresh subject claims the pending invite');
+        assert.notEqual(claimed.rows[0].membership_id, MEMBER_INVITED);
+
+        const invite = (subject, permissions, args) => withStaffTransaction(
+            pool,
+            identity(subject),
+            ORG_A,
+            permissions,
+            async ({ client }) => client.query(
+                'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7)',
+                args,
+            ),
+        );
+
+        // A non-admin reaches the procedure but the staff.manage assertion
+        // inside it still denies.
+        await rejectCode(
+            invite('90909', ['candidates.read'], [
+                randomUUID(), randomUUID(), 'No Perms',
+                'nope@example.com', ROLE_A_RECRUITER, randomUUID(), randomUUID(),
+            ]),
+            '42501',
+            'non-admin invite must be denied',
+        );
+        await rejectCode(
+            invite(SUBJECTS.ADMIN1, ['staff.manage'], [
+                randomUUID(), randomUUID(), 'Viewer Invite',
+                'viewer@example.com', ROLE_A_VIEWER, randomUUID(), randomUUID(),
+            ]),
+            '42501',
+            'viewer roles are not invitable',
+        );
+        await rejectCode(
+            invite(SUBJECTS.ADMIN1, ['staff.manage'], [
+                randomUUID(), randomUUID(), 'Paused Role',
+                'paused@example.com', ROLE_A_INACTIVE, randomUUID(), randomUUID(),
+            ]),
+            '42501',
+            'inactive roles are not invitable',
+        );
+        await rejectCode(
+            invite(SUBJECTS.ADMIN1, ['staff.manage'], [
+                randomUUID(), randomUUID(), 'Cross Org',
+                'cross@example.com', ROLE_B_ADMIN, randomUUID(), randomUUID(),
+            ]),
+            'P0002',
+            'roles from another organization must not resolve',
+        );
+        await rejectCode(
+            invite(SUBJECTS.ADMIN1, ['staff.manage'], [
+                randomUUID(), randomUUID(), 'Bad Email',
+                'not-an-email', ROLE_A_RECRUITER, randomUUID(), randomUUID(),
+            ]),
+            '22023',
+            'malformed invite emails are rejected',
+        );
+    });
+
+    await t.test('staff directory lists members and invitable roles for admins', async () => {
+        const directory = await withStaffTransaction(
+            pool,
+            identity(SUBJECTS.ADMIN1),
+            ORG_A,
+            ['staff.manage'],
+            async ({ client }) => (await client.query(
+                'select app.staff_directory_v1(null) as result',
+            )).rows[0].result,
+        );
+        const memberIds = directory.members.map((m) => m.membershipId);
+        assert.ok(memberIds.includes(MEMBER_ADMIN1));
+        assert.ok(memberIds.includes(MEMBER_INVITED));
+        assert.ok(!memberIds.includes(MEMBER_B_ADMIN), 'no cross-org members');
+        const invitedRow = directory.members.find(
+            (m) => m.membershipId === MEMBER_INVITED);
+        assert.ok(invitedRow.invitedEmail !== undefined);
+        const roleIds = directory.roles.map((r) => r.id);
+        assert.ok(roleIds.includes(ROLE_A_ADMIN));
+        assert.ok(roleIds.includes(ROLE_A_RECRUITER));
+        assert.ok(roleIds.includes(ROLE_A_CUSTOM));
+        assert.ok(
+            !roleIds.includes(ROLE_A_VIEWER),
+            'viewer roles are not invitable',
+        );
+        assert.ok(
+            !roleIds.includes(ROLE_A_INACTIVE),
+            'inactive roles are not invitable',
+        );
+        assert.ok(!roleIds.includes(ROLE_B_ADMIN), 'no cross-org roles');
+
+        await rejectCode(
+            withStaffTransaction(
+                pool,
+                identity('90909'),
+                ORG_A,
+                ['candidates.read'],
+                async ({ client }) => client.query(
+                    'select app.staff_directory_v1(null)'),
+            ),
+            '42501',
+            'directory requires staff.manage',
+        );
+    });
+
+    await t.test('invite domain allowlist gates invite and claim', async () => {
+        const admin = identity(SUBJECTS.ADMIN1);
+        const setDomains = (domains) => withStaffTransaction(
+            pool, admin, ORG_A, ['staff.manage'],
+            async ({ client }) => client.query(
+                'select app.set_staff_invite_domains_v1($1::text[], $2::uuid, $3::uuid)',
+                [domains, randomUUID(), randomUUID()],
+            ),
+        );
+        const invite = (email, subject = SUBJECTS.ADMIN1) => withStaffTransaction(
+            pool, identity(subject), ORG_A, ['staff.manage'],
+            async ({ client }) => client.query(
+                'select app.invite_staff_member_v1($1, $2, $3, $4, $5, $6, $7)',
+                [
+                    randomUUID(), randomUUID(), 'Domain Hire', email,
+                    ROLE_A_RECRUITER, randomUUID(), randomUUID(),
+                ],
+            ),
+        );
+        // Claims need only the organization context — the procedure binds the
+        // actor itself once the invite is claimed.
+        const claim = async (subject, email) => {
+            const client = await pool.connect();
+            try {
+                await client.query('begin isolation level read committed');
+                await client.query('set local role app_staff');
+                await client.query(
+                    `select pg_catalog.set_config('app.organization_id', $1, true)`,
+                    [ORG_A],
+                );
+                const result = await client.query(
+                    `select user_id, membership_id, role_id
+                       from app.claim_staff_invite_v1($1, $2, $3, $4, $5, $6, $7)`,
+                    [
+                        randomUUID(), 'google', GOOGLE_ISSUER, subject, email,
+                        randomUUID(), randomUUID(),
+                    ],
+                );
+                await client.query('commit');
+                return result;
+            } catch (error) {
+                await client.query('rollback').catch(() => {});
+                throw error;
+            } finally {
+                client.release();
+            }
+        };
+
+        // No allowlist configured — any verified email domain is invitable.
+        await invite('anyone@elsewhere.example');
+
+        await setDomains(['allowed.example']);
+        assert.equal(
+            scalar(pg17,
+                `select staff_invite_domains::text from app.organizations
+                    where id = '${ORG_A}'`),
+            '{allowed.example}',
+            'allowlist is stored normalized',
+        );
+
+        await rejectCode(
+            invite('denied@blocked.example'),
+            '42501',
+            'a domain outside the allowlist must not be invitable',
+        );
+        await rejectCode(
+            invite('denied@sub.allowed.example'),
+            '42501',
+            'subdomains of an allowed domain are not implied',
+        );
+        const invited = await invite('hire@allowed.example');
+        assert.equal(invited.rows[0].invite_staff_member_v1.email, 'hire@allowed.example');
+
+        const claimed = await claim('71717', 'hire@allowed.example');
+        assert.equal(claimed.rows.length, 1, 'allowed-domain invite claims');
+
+        // Tightening the allowlist unclaims a stale pending invite: the pending
+        // row survives, but claim returns no rows until the domains are relaxed.
+        await invite('pending@allowed.example');
+        await setDomains(['other.example']);
+        assert.equal(
+            (await claim('72727', 'pending@allowed.example')).rows.length,
+            0,
+            'a pending invite outside the new allowlist cannot be claimed',
+        );
+        await setDomains(null);
+        assert.equal(
+            (await claim('72727', 'pending@allowed.example')).rows.length,
+            1,
+            'clearing the allowlist restores claimability',
+        );
+
+        await rejectCode(
+            setDomains(['not a domain!']),
+            '22023',
+            'malformed domain entries are rejected',
+        );
+        await rejectCode(
+            withStaffTransaction(
+                pool, identity('90909'), ORG_A, ['candidates.read'],
+                async ({ client }) => client.query(
+                    'select app.set_staff_invite_domains_v1($1::text[], $2::uuid, $3::uuid)',
+                    [['sneaky.example'], randomUUID(), randomUUID()],
+                ),
+            ),
+            '42501',
+            'setting domains requires staff.manage',
+        );
+    });
 });
 
 test('non-superuser migration operator applies staff authorization core', async (t) => {
@@ -1399,7 +1841,7 @@ test('non-superuser migration operator applies staff authorization core', async 
     assert.equal(scalar(pgOperator, `
         select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'app'
-    `), '5');
+    `), '10');
     assert.equal(scalar(pgOperator, `
         select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'app' and c.relname = 'audit_events'

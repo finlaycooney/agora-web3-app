@@ -2,8 +2,10 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-import { staffIdentityFromSession } from './staff-identity';
-import { getStaffPool, resolveStaffPrincipal } from './staff-db.server';
+import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
+import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { staffGoogleCredentialStatus } from './staff-google.server';
+import { StaffOperationsError } from './staff-operations';
 import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 import { ClientJobContractError } from './client-job-contracts';
@@ -23,7 +25,13 @@ export async function staffApiContext() {
     if (!pool || !organizationId || !secret) {
         return { status: 'unconfigured' };
     }
-    const principal = await resolveStaffPrincipal(pool, identity, organizationId);
+    // Same Google-credential revalidation as the page gate: a suspended
+    // account is denied on the next API call, not at next sign-in.
+    if (await staffGoogleCredentialStatus(identity.subject) === 'revoked') {
+        return { status: 'unauthorized' };
+    }
+    const principal = await resolveOrClaimStaffPrincipal(
+        pool, identity, staffInviteEmailFromSession(session), organizationId);
     if (!principal) {
         return { status: 'unauthorized' };
     }
@@ -62,7 +70,8 @@ export function staffGateResponse(context) {
 
 // Maps the contract/authorization/database error vocabulary onto HTTP.
 export function staffErrorResponse(error) {
-    if (error instanceof ClientJobContractError) {
+    if (error instanceof ClientJobContractError
+        || error instanceof StaffOperationsError) {
         return Response.json(
             { error: 'invalid input', fields: error.fieldErrors }, { status: 400 });
     }
@@ -70,7 +79,10 @@ export function staffErrorResponse(error) {
         const status = error.code === 'FORBIDDEN' ? 403 : 401;
         return Response.json({ error: error.code.toLowerCase() }, { status });
     }
-    const mapped = { '22023': 400, '23505': 409, '23514': 422, '40001': 409, P0002: 404 };
+    const mapped = {
+        '22023': 400, '23505': 409, '23514': 422, '40001': 409,
+        '42501': 403, P0002: 404,
+    };
     if (typeof error?.code === 'string' && error.code in mapped) {
         return Response.json({ error: 'operation rejected', code: error.code }, { status: mapped[error.code] });
     }

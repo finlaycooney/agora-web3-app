@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 let staffPool;
@@ -41,6 +42,57 @@ export async function resolveStaffPrincipal(pool, identity, organizationId) {
     } finally {
         client.release();
     }
+}
+
+// Binds a first sign-in's verified Google subject to a pending invite whose
+// invited_email matches, via app.claim_staff_invite_v1. The claimer has no
+// active membership yet, so the transaction installs only the organization
+// context — the procedure asserts the rest. Returns the principal triple on
+// claim, null when no matching invite exists.
+export async function claimStaffInvite(pool, identity, email, organizationId) {
+    const client = await pool.connect();
+    try {
+        await client.query('begin isolation level read committed');
+        await client.query(`set local lock_timeout = '2s'`);
+        await client.query(`set local statement_timeout = '10s'`);
+        await client.query('set local role app_staff');
+        await client.query(
+            `select
+                pg_catalog.set_config('app.actor_id', '', true),
+                pg_catalog.set_config('app.organization_id', $1, true)`,
+            [organizationId],
+        );
+        const result = await client.query(
+            `select user_id, membership_id, role_id
+               from app.claim_staff_invite_v1($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                randomUUID(), identity.provider, identity.issuer, identity.subject,
+                email, randomUUID(), randomUUID(),
+            ],
+        );
+        await client.query('commit');
+        return result.rows[0] ?? null;
+    } catch (error) {
+        await client.query('rollback').catch(() => {});
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+// Canonical staff-principal lookup: resolve the bound identity first; on a
+// miss, try to claim a pending invite keyed by the session's verified email,
+// then re-resolve through the resolver so role/status rules stay centralized.
+export async function resolveOrClaimStaffPrincipal(pool, identity, email, organizationId) {
+    const resolved = await resolveStaffPrincipal(pool, identity, organizationId);
+    if (resolved || !email) {
+        return resolved;
+    }
+    const claimed = await claimStaffInvite(pool, identity, email, organizationId);
+    if (!claimed) {
+        return null;
+    }
+    return resolveStaffPrincipal(pool, identity, organizationId);
 }
 
 

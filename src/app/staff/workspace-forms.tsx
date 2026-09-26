@@ -354,3 +354,171 @@ export function NewRevisionButton({ jobId, expectedJobVersion }: { jobId: string
         </span>
     );
 }
+
+export function MemberInviteForm({
+    roles,
+    inviteDomains,
+}: {
+    roles: { id: string; name: string; key: string }[];
+    inviteDomains: string[];
+}) {
+    const router = useRouter();
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const submit = async (form: HTMLFormElement) => {
+        const data = new FormData(form);
+        const response = await fetch('/api/staff/members', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                displayName: String(data.get('displayName') ?? ''),
+                email: String(data.get('email') ?? ''),
+                roleId: String(data.get('roleId') ?? ''),
+            }),
+        });
+        if (response.ok) {
+            form.reset();
+            router.refresh();
+            return;
+        }
+        const payload = await response.json().catch(() => ({}));
+        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Invite failed');
+    };
+
+    return (
+        <form
+            className="mt-6 max-w-xl space-y-5"
+            onSubmit={(event) => {
+                event.preventDefault();
+                setError(null);
+                setBusy(true);
+                void submit(event.currentTarget).finally(() => setBusy(false));
+            }}
+        >
+            <Field label="Name">
+                <input name="displayName" required maxLength={256} className={inputClass} />
+            </Field>
+            <Field label="Email">
+                <input name="email" type="email" required maxLength={320} className={inputClass} />
+                {inviteDomains.length > 0 && (
+                    <span className="mt-1.5 block text-xs text-foreground/50">
+                        Restricted to: {inviteDomains.map((d) => `@${d}`).join(', ')}
+                    </span>
+                )}
+            </Field>
+            <Field label="Role">
+                <select name="roleId" required className={inputClass} defaultValue="">
+                    <option value="" disabled>Select a role</option>
+                    {roles.map((role) => (
+                        <option key={role.id} value={role.id}>{role.name}</option>
+                    ))}
+                </select>
+            </Field>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <button type="submit" disabled={busy} className={buttonClass}>
+                Send invite
+            </button>
+        </form>
+    );
+}
+
+export function InviteDomainsForm({ domains }: { domains: string[] }) {
+    const router = useRouter();
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const submit = async (form: HTMLFormElement) => {
+        const data = new FormData(form);
+        const response = await fetch('/api/staff/members', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                action: 'setInviteDomains',
+                domains: parseList(String(data.get('domains') ?? '')),
+            }),
+        });
+        if (response.ok) {
+            router.refresh();
+            return;
+        }
+        const payload = await response.json().catch(() => ({}));
+        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Save failed');
+    };
+
+    return (
+        <form
+            className="mt-4 max-w-xl"
+            onSubmit={(event) => {
+                event.preventDefault();
+                setError(null);
+                setBusy(true);
+                void submit(event.currentTarget).finally(() => setBusy(false));
+            }}
+        >
+            <Field label="Allowed invite domains (comma-separated, empty = any)">
+                <input
+                    name="domains"
+                    defaultValue={domains.join(', ')}
+                    placeholder="agora4.xyz"
+                    className={inputClass}
+                />
+            </Field>
+            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            <button type="submit" disabled={busy} className={`${buttonClass} mt-3`}>
+                Save domains
+            </button>
+        </form>
+    );
+}
+
+export function MemberRevokeButton({
+    membershipId,
+    roleId,
+    version,
+}: {
+    membershipId: string;
+    roleId: string;
+    version: string;
+}) {
+    const router = useRouter();
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const revoke = async () => {
+        const response = await fetch('/api/staff/members', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                action: 'changeMembership',
+                membershipId,
+                roleId,
+                status: 'revoked',
+                version: Number(version),
+            }),
+        });
+        if (response.ok) {
+            router.refresh();
+            return;
+        }
+        setError('Revoke failed');
+    };
+
+    return (
+        <span className="inline-flex items-center gap-2">
+            <button
+                type="button"
+                disabled={busy}
+                className={ghostButtonClass}
+                onClick={() => {
+                    setBusy(true);
+                    setError(null);
+                    void revoke().finally(() => setBusy(false));
+                }}
+            >
+                Revoke
+            </button>
+            {error && <span className="text-xs text-red-400">{error}</span>}
+        </span>
+    );
+}

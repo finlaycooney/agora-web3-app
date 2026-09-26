@@ -3,8 +3,9 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-import { staffIdentityFromSession } from './staff-identity';
-import { getStaffPool, resolveStaffPrincipal } from './staff-db.server';
+import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
+import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { staffGoogleCredentialStatus } from './staff-google.server';
 import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 
@@ -36,6 +37,13 @@ export async function staffGate() {
         return { stage: 'signed-out' };
     }
 
+    // A suspended/deleted Google account must lose access on its next staff
+    // request, not when the session expires. 'unknown' fails open — a Google
+    // outage must not lock out the workspace — while 'revoked' fails closed.
+    if (await staffGoogleCredentialStatus(identity.subject) === 'revoked') {
+        return { stage: 'unresolved', session, identity };
+    }
+
     const pool = getStaffPool();
     const organizationId = process.env.STAFF_ORGANIZATION_ID;
     if (!pool || !organizationId) {
@@ -45,7 +53,8 @@ export async function staffGate() {
     let principal = null;
     let totp = null;
     try {
-        principal = await resolveStaffPrincipal(pool, identity, organizationId);
+        principal = await resolveOrClaimStaffPrincipal(
+            pool, identity, staffInviteEmailFromSession(session), organizationId);
         if (principal) {
             totp = await getTotpStatus(pool, identity, organizationId);
         }

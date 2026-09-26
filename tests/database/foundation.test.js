@@ -66,6 +66,8 @@ const playwrightBin = join(repoRoot, 'node_modules', '.bin', 'playwright');
 const LEGACY_MIGRATION = '20260911120000_candidate_applications.sql';
 const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
 const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
+const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
+const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1767,6 +1769,123 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 `${role} must not execute list_jobs_v1`,
             );
         }
+    });
+
+    await t.test('staff invites migration applies and claims on the provider stack', () => {
+        const applicantsBeforeInvites = supabasePsql(dumpApplicants);
+        for (const file of [INVITES_MIGRATION, INVITE_DOMAINS_MIGRATION]) {
+            copyFileSync(
+                join(migrationsDir, file),
+                join(tempMigrations, file),
+            );
+        }
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeInvites);
+
+        const staffSql = (inner) => `
+            set role app_staff;
+            do $$
+            begin
+                perform pg_catalog.set_config('app.actor_id',
+                    '${AUTHZ_ID.USER_ADMIN1}', false);
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
+            ${inner}
+        `;
+        const invitedMembership = randomUUID();
+        const invitedUser = randomUUID();
+        supabasePsql(staffSql(`
+            select app.invite_staff_member_v1(
+                '${invitedUser}', '${invitedMembership}', 'Stack Hire',
+                'stack.hire@example.com', '${AUTHZ_ID.ROLE_A_RECRUITER}',
+                '${randomUUID()}', '${randomUUID()}');
+        `));
+        assert.equal(
+            supabasePsql(`select status from app.organization_memberships
+                where id = '${invitedMembership}'`).trim(),
+            'invited',
+        );
+        const claimSql = (email, subject) => `
+            set role app_staff;
+            do $$
+            begin
+                perform pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+            end
+            $$;
+            select membership_id::text
+                from app.claim_staff_invite_v1(
+                    '${randomUUID()}', 'google', 'https://accounts.google.com',
+                    '${subject}', '${email}', '${randomUUID()}', '${randomUUID()}');
+        `;
+        assert.equal(
+            supabasePsql(claimSql('nobody@example.com', '60606')).trim(),
+            '',
+            'claiming with an uninvited email must return no rows',
+        );
+        assert.equal(
+            supabasePsql(claimSql('stack.hire@example.com', '60606')).trim(),
+            invitedMembership,
+            'the invited email must claim the pending membership',
+        );
+        assert.equal(
+            supabasePsql(`select status from app.organization_memberships
+                where id = '${invitedMembership}'`).trim(),
+            'active',
+        );
+        assert.match(
+            supabasePsql(`select membership_id::text
+                from app.resolve_staff_principal_v1(
+                    'google', 'https://accounts.google.com', '60606',
+                    '${AUTHZ_ID.ORG_A}')`).trim(),
+            new RegExp(`^${invitedMembership}$`),
+            'the claimed subject must resolve to the membership',
+        );
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.staff_directory_v1(10)`),
+                /42501/,
+                `${role} must not execute staff_directory_v1`,
+            );
+            assert.match(
+                supabasePsqlError(`set role ${role};
+                    select app.claim_staff_invite_v1(
+                        '${randomUUID()}', 'google', 'https://accounts.google.com',
+                        '1', 'x@example.com', '${randomUUID()}', '${randomUUID()}')`),
+                /42501/,
+                `${role} must not execute claim_staff_invite_v1`,
+            );
+            assert.match(
+                supabasePsqlError(`set role ${role};
+                    select app.set_staff_invite_domains_v1(
+                        '{a.example}'::text[], '${randomUUID()}', '${randomUUID()}')`),
+                /42501/,
+                `${role} must not execute set_staff_invite_domains_v1`,
+            );
+        }
+
+        // The invite-domain allowlist applies on the provider stack too:
+        // pinning to a domain rejects off-domain invites.
+        supabasePsql(staffSql(`
+            select app.set_staff_invite_domains_v1(
+                '{workspace.example}'::text[], '${randomUUID()}', '${randomUUID()}');
+        `));
+        assert.match(
+            supabasePsqlError(staffSql(`
+                select app.invite_staff_member_v1(
+                    '${randomUUID()}', '${randomUUID()}', 'Off Domain',
+                    'hire@elsewhere.example', '${AUTHZ_ID.ROLE_A_RECRUITER}',
+                    '${randomUUID()}', '${randomUUID()}');
+            `)),
+            /42501/,
+            'off-domain invites are rejected once the allowlist is set',
+        );
+        supabasePsql(staffSql(`
+            select app.set_staff_invite_domains_v1(
+                null, '${randomUUID()}', '${randomUUID()}');
+        `));
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {
