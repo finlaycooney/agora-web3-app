@@ -1,5 +1,7 @@
+import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { staffGate } from '@/lib/staff-gate.server';
 import { StaffSignInButton } from '../staff-auth-buttons';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +11,10 @@ export const metadata = {
 };
 
 export default async function StaffSignInPage() {
+    // A fully-gated member should never see the sign-in form inside the shell.
+    if ((await staffGate()).stage === 'verified') {
+        redirect('/staff');
+    }
     const session = await getServerSession(authOptions);
     const signedInWithGoogle = (session as any)?.provider === 'google';
 
