@@ -65,6 +65,16 @@ const PREFIX_MIGRATIONS = [
     PRIVACY_OPS_MIGRATION,
 ];
 const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
+const PIPELINE_MIGRATION = '20260925140000_application_pipeline.sql';
+const PIPELINE_FUNCTIONS = [
+    'list_applications_v1',
+    'list_candidates_v1',
+    'get_candidate_workspace_v1',
+    'transition_application_stage_v1',
+    'add_candidate_note_v1',
+    'get_document_download_v1',
+    'import_public_application_v1',
+];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
@@ -210,6 +220,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
 
     psql(pg17, readMigration(WORKFLOW_MIGRATION));
     psql(pg17, readMigration(LISTING_MIGRATION));
+    psql(pg17, readMigration(PIPELINE_MIGRATION));
 
     pool = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 4));
     pool1 = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 1));
@@ -1246,6 +1257,265 @@ test('client job workflows on PostgreSQL 17', async (t) => {
         }
     });
 
+    await t.test('application pipeline: list, transition, notes and import', async () => {
+        const {
+            listApplications, listCandidates, getCandidateWorkspace,
+            transitionApplicationStage, addCandidateNote,
+        } = await import('../../src/lib/pipeline-operations.js');
+
+        // Directory reads.
+        const list = await admin(listApplications, {});
+        const listed = list.applications.find(
+            (entry) => entry.applicationId === CJ_ID.APPLICATION_B);
+        assert.equal(listed.candidateId, CJ_ID.CANDIDATE_B);
+        assert.equal(listed.jobTitle, 'Legacy Synthetic Job');
+        assert.equal(listed.clientName, 'Synthetic Legacy Client');
+        assert.equal(listed.stageKey, 'review');
+        assert.equal(listed.stageLabel, 'Review');
+
+        const candidates = await admin(listCandidates, {});
+        const listedCandidate = candidates.candidates.find(
+            (entry) => entry.candidateId === CJ_ID.CANDIDATE_B);
+        assert.equal(listedCandidate.fullName, 'Synthetic Candidate B');
+        assert.equal(listedCandidate.applicationCount, 1);
+
+        const workspace = await admin(getCandidateWorkspace, {
+            candidateId: CJ_ID.CANDIDATE_B,
+        });
+        assert.equal(workspace.candidate.fullName, 'Synthetic Candidate B');
+        assert.equal(workspace.applications.length, 1);
+        assert.equal(workspace.applications[0].applicationId, CJ_ID.APPLICATION_B);
+        assert.equal(workspace.stages.length, 2);
+        assert.equal(workspace.capabilities.changeStage, true);
+        assert.equal(workspace.capabilities.writeNotes, true);
+
+        // Stage transition: version-checked move with history + audit.
+        const moveAudit = randomUUID();
+        const moved = await admin(transitionApplicationStage, {
+            applicationId: CJ_ID.APPLICATION_B,
+            toStageId: CJ_ID.STAGE_B_2,
+            expectedVersion: '1',
+            reason: 'Strong CV',
+            operationId: moveAudit,
+        });
+        assert.equal(moved.stageId, CJ_ID.STAGE_B_2);
+        assert.equal(moved.version, '2');
+        assert.equal(scalar(pg17, `
+            select count(*) from app.application_stage_history
+            where application_id = '${CJ_ID.APPLICATION_B}'
+                and to_stage_id = '${CJ_ID.STAGE_B_2}'`), '1');
+        assert.equal(auditCount(pg17, moveAudit), 1);
+        assert.equal(scalar(pg17, `
+            select action from app.audit_events where id = '${moveAudit}'`),
+            'application.stage.changed');
+
+        // Stale version and unknown stage reject.
+        await rejectCode(admin(transitionApplicationStage, {
+            applicationId: CJ_ID.APPLICATION_B,
+            toStageId: CJ_ID.STAGE_B_1,
+            expectedVersion: '1',
+            reason: null,
+            operationId: randomUUID(),
+        }), '40001', 'a stale version is rejected');
+        await rejectCode(admin(transitionApplicationStage, {
+            applicationId: CJ_ID.APPLICATION_B,
+            toStageId: randomUUID(),
+            expectedVersion: '2',
+            reason: null,
+            operationId: randomUUID(),
+        }), 'P0002', 'a stage outside the pipeline is rejected');
+
+        // Notes land in the workspace and audit.
+        const noteAudit = randomUUID();
+        const note = await admin(addCandidateNote, {
+            candidateId: CJ_ID.CANDIDATE_B,
+            body: 'Followed up after screen.',
+            operationId: noteAudit,
+        });
+        assert.ok(note.noteId);
+        assert.equal(auditCount(pg17, noteAudit), 1);
+        const workspaceAfter = await admin(getCandidateWorkspace, {
+            candidateId: CJ_ID.CANDIDATE_B,
+        });
+        assert.equal(workspaceAfter.notes.length, 1);
+        assert.equal(workspaceAfter.notes[0].body, 'Followed up after screen.');
+        assert.equal(
+            workspaceAfter.applications[0].stageLabel, 'Interview');
+        // The fixture application had no recorded history, so the transition
+        // backfills a placement row before the actual move.
+        assert.equal(workspaceAfter.applications[0].history.length, 2);
+        assert.equal(
+            workspaceAfter.applications[0].history.at(-1).toStageLabel,
+            'Interview');
+    });
+
+    await t.test('application pipeline: import creates the full document chain', async () => {
+        const { importPublicApplication, getCandidateWorkspace, getDocumentDownload } =
+            await import('../../src/lib/pipeline-operations.js');
+        const sha256 = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+        const imported = await admin(importPublicApplication, {
+            jobSlug: 'legacy-synthetic-job',
+            reference: 'AG-BBBB00000001',
+            fullName: 'Imported Candidate',
+            email: 'imported@example.com',
+            professionalUrl: 'https://linkedin.com/in/imported',
+            achievement: 'Shipped a thing.',
+            receivedAt: '2026-09-20T10:00:00Z',
+            document: {
+                sha256,
+                sizeBytes: 12345,
+                mimeType: 'application/pdf',
+                extension: 'pdf',
+                bucket: 'cv-submissions',
+                objectKey: 'cvs/legacy-synthetic-job/AG-BBBB00000001.pdf',
+                filename: 'cv.pdf',
+            },
+            operationId: randomUUID(),
+        });
+        assert.equal(imported.imported, true);
+        assert.equal(imported.reusedCandidate, false);
+        const candidateId = imported.candidateId;
+
+        const workspace = await admin(getCandidateWorkspace, { candidateId });
+        assert.equal(workspace.candidate.fullName, 'Imported Candidate');
+        assert.equal(workspace.applications.length, 1);
+        assert.equal(
+            workspace.applications[0].publicReference, 'AG-BBBB00000001');
+        assert.equal(workspace.applications[0].stageLabel, 'Review');
+        assert.equal(workspace.applications[0].submittedEmail, 'imported@example.com');
+        assert.equal(workspace.documents.length, 1);
+        assert.equal(workspace.documents[0].filename, 'cv.pdf');
+        assert.equal(workspace.documents[0].scanState, 'unscanned');
+
+        const download = await admin(getDocumentDownload, {
+            documentId: workspace.documents[0].documentId,
+        });
+        assert.equal(download.bucket, 'cv-submissions');
+        assert.equal(
+            download.objectKey,
+            'cvs/legacy-synthetic-job/AG-BBBB00000001.pdf');
+
+        // Idempotent: the same public reference does not double-import.
+        const again = await admin(importPublicApplication, {
+            jobSlug: 'legacy-synthetic-job',
+            reference: 'AG-BBBB00000001',
+            fullName: 'Imported Candidate',
+            email: 'imported@example.com',
+            professionalUrl: null,
+            achievement: null,
+            receivedAt: '2026-09-20T10:00:00Z',
+            document: null,
+            operationId: randomUUID(),
+        });
+        assert.equal(again.imported, false);
+        assert.equal(again.reason, 'already_imported');
+
+        // Email dedupe: a second submission on the same email attaches to the
+        // existing candidate instead of creating a duplicate.
+        const second = await admin(importPublicApplication, {
+            jobSlug: 'legacy-synthetic-job',
+            reference: 'AG-BBBB00000002',
+            fullName: 'Imported Candidate',
+            email: 'IMPORTED@example.com',
+            professionalUrl: null,
+            achievement: null,
+            receivedAt: '2026-09-21T10:00:00Z',
+            document: null,
+            operationId: randomUUID(),
+        });
+        assert.equal(second.imported, true);
+        assert.equal(second.candidateId, candidateId);
+        assert.equal(second.reusedCandidate, true);
+        assert.equal(scalar(pg17, `
+            select count(*) from app.candidates
+            where id = '${candidateId}'`), '1');
+        const deduped = await admin(getCandidateWorkspace, { candidateId });
+        assert.equal(deduped.applications.length, 2);
+
+        // Unknown job slug and permission denial.
+        await rejectCode(admin(importPublicApplication, {
+            jobSlug: 'no-such-job',
+            reference: 'AG-BBBB00000003',
+            fullName: 'Nobody',
+            email: 'nobody@example.com',
+            professionalUrl: null,
+            achievement: null,
+            receivedAt: '2026-09-21T10:00:00Z',
+            document: null,
+            operationId: randomUUID(),
+        }), 'P0002', 'an unmatched job slug is rejected');
+        await rejectCode(viewer(importPublicApplication, {
+            jobSlug: 'legacy-synthetic-job',
+            reference: 'AG-BBBB00000004',
+            fullName: 'Nobody',
+            email: 'nobody@example.com',
+            professionalUrl: null,
+            achievement: null,
+            receivedAt: '2026-09-21T10:00:00Z',
+            document: null,
+            operationId: randomUUID(),
+        }), 'FORBIDDEN', 'import requires the write permissions');
+    });
+
+    await t.test('application pipeline: permission boundaries hold', async () => {
+        const {
+            listApplications, listCandidates, getCandidateWorkspace,
+            transitionApplicationStage, addCandidateNote, getDocumentDownload,
+        } = await import('../../src/lib/pipeline-operations.js');
+
+        // The viewer role carries no catalog permissions in this fixture.
+        await rejectCode(viewer(listApplications, {}), 'FORBIDDEN');
+        await rejectCode(viewer(listCandidates, {}), 'FORBIDDEN');
+        await rejectCode(viewer(getCandidateWorkspace, {
+            candidateId: CJ_ID.CANDIDATE_B,
+        }), 'FORBIDDEN');
+        await rejectCode(viewer(transitionApplicationStage, {
+            applicationId: CJ_ID.APPLICATION_B,
+            toStageId: CJ_ID.STAGE_B_1,
+            expectedVersion: '2',
+            reason: null,
+            operationId: randomUUID(),
+        }), 'FORBIDDEN');
+        await rejectCode(viewer(addCandidateNote, {
+            candidateId: CJ_ID.CANDIDATE_B,
+            body: 'nope',
+            operationId: randomUUID(),
+        }), 'FORBIDDEN');
+        await rejectCode(viewer(getDocumentDownload, {
+            documentId: randomUUID(),
+        }), 'FORBIDDEN');
+
+        // The recruiter has applications.read + candidates.read but neither
+        // applications.stage nor collaboration.write.
+        const workspace = await recruiter(getCandidateWorkspace, {
+            candidateId: CJ_ID.CANDIDATE_B,
+        });
+        assert.equal(workspace.capabilities.changeStage, false);
+        assert.equal(workspace.capabilities.writeNotes, false);
+        assert.equal(workspace.notes.length, 0,
+            'notes stay hidden without collaboration.read');
+        await rejectCode(recruiter(transitionApplicationStage, {
+            applicationId: CJ_ID.APPLICATION_B,
+            toStageId: CJ_ID.STAGE_B_1,
+            expectedVersion: '2',
+            reason: null,
+            operationId: randomUUID(),
+        }), 'FORBIDDEN');
+        await rejectCode(recruiter(addCandidateNote, {
+            candidateId: CJ_ID.CANDIDATE_B,
+            body: 'nope',
+            operationId: randomUUID(),
+        }), 'FORBIDDEN');
+
+        // Cross-organization isolation: org A admin sees nothing of org B.
+        const other = await listApplications(
+            pool, identity(CJ_SUBJECTS.ADMIN), ORG_A, {});
+        assert.equal(
+            other.applications.some(
+                (entry) => entry.applicationId === CJ_ID.APPLICATION_B),
+            false);
+    });
+
     const { child: lockChild } = holdExclusiveLock(pg17, 'app.organizations', 8);
     try {
         await t.test('organization lock waits are bounded', async () => {
@@ -1276,6 +1546,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
             psql(pgOperator, `set session authorization staff_operator;\n${readMigration(fileName)}`);
         }
         psql(pgOperator, `set session authorization staff_operator;\n${readMigration(WORKFLOW_MIGRATION)}`);
+        psql(pgOperator, `set session authorization staff_operator;\n${readMigration(PIPELINE_MIGRATION)}`);
         assert.equal(scalar(pgOperator, `
             select count(*) from pg_proc p
             join pg_namespace n on n.oid = p.pronamespace
@@ -1284,6 +1555,14 @@ test('client job workflows on PostgreSQL 17', async (t) => {
                 and p.proname in ('${WORKFLOW_FUNCTIONS.join("','")}')
                 and p.prosecdef and r.rolname = 'app_executor'`),
             String(WORKFLOW_FUNCTIONS.length));
+        assert.equal(scalar(pgOperator, `
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('${PIPELINE_FUNCTIONS.join("','")}')
+                and p.prosecdef and r.rolname = 'app_executor'`),
+            String(PIPELINE_FUNCTIONS.length));
         assert.equal(scalar(pgOperator, `
             select count(*) from pg_class c
             join pg_namespace n on n.oid = c.relnamespace

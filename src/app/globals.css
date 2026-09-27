@@ -192,3 +192,71 @@ body {
 .animate-spin-slow {
     animation: spin-slow 12s linear infinite;
 }
+
+/* Design tokens used by the staff-ui/staff-preview component set. Only tokens
+   not already provided by the HeroUI theme are mapped here — the shared ones
+   (foreground, background, primary, secondary, success, warning) keep their
+   HeroUI channels and are overridden per-scope via --heroui-* below. */
+@theme inline {
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-restriction: var(--restriction);
+    --color-restriction-foreground: var(--restriction-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-hover: var(--hover);
+    --color-primary-hover: var(--primary-hover);
+    --color-nav-active: var(--nav-active);
+    --color-sidebar: var(--sidebar);
+    --color-attention: var(--attention);
+    --color-attention-foreground: var(--attention-foreground);
+}
+
+/* Staff workspace palette from the design preview. Defining the raw vars only
+   inside this scope keeps the public site on its existing HeroUI palette:
+   utilities like text-muted-foreground resolve to nothing outside /staff. */
+.staff-scope {
+    --heroui-background: 0 0% 100%;
+    --heroui-foreground: 210 6% 13%;
+    --heroui-primary: 225 9% 16%;
+    --heroui-primary-foreground: 0 0% 100%;
+    --heroui-secondary: 45 100% 97%;
+    --heroui-secondary-foreground: 221 9% 28%;
+    --heroui-success: 141 46% 92%;
+    --heroui-success-foreground: 155 58% 26%;
+    --heroui-warning: 39 92% 92%;
+    --heroui-warning-foreground: 32 89% 29%;
+    --heroui-danger: 4 76% 36%;
+    --heroui-danger-foreground: 20 100% 98%;
+
+    --card: #ffffff;
+    --card-foreground: #202124;
+    --popover: #ffffff;
+    --popover-foreground: #202124;
+    --muted: #fafafa;
+    --muted-foreground: #68707b;
+    --accent: #fdfbf6;
+    --accent-foreground: #30363d;
+    --restriction: #fbe8ec;
+    --restriction-foreground: #9f2843;
+    --destructive: #b42318;
+    --destructive-foreground: #fef3f2;
+    --border: #e5e7eb;
+    --input: #d8dce2;
+    --ring: #73777f;
+    --hover: #faf2df;
+    --primary-hover: #faf2df;
+    --nav-active: #fae7b9;
+    --sidebar: #fdfbf6;
+    --attention: #fada5e;
+    --attention-foreground: #493814;
+}

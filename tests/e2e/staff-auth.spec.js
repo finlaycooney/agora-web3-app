@@ -28,6 +28,10 @@ test('staff workspace pages redirect unauthenticated visitors to sign-in', async
         '/staff/jobs/new',
         `/staff/jobs/${id}`,
         `/staff/jobs/${id}/edit`,
+        '/staff/applications',
+        '/staff/candidates',
+        `/staff/candidates/${id}`,
+        '/staff/members',
     ]) {
         await page.goto(path);
         await expect(page).toHaveURL(/\/staff\/sign-in/);
@@ -43,8 +47,17 @@ test('staff data API routes reject unauthenticated requests', async ({ request }
         `/api/staff/jobs/${id}/draft`,
         `/api/staff/jobs/${id}/revision`,
         `/api/staff/jobs/${id}/publish`,
+        '/api/staff/applications',
+        '/api/staff/candidates',
+        '/api/staff/members',
     ]) {
         const response = await request.post(path, { data: {} });
         expect(response.status()).toBe(401);
     }
+});
+
+test('staff document download rejects unauthenticated requests', async ({ request }) => {
+    const id = '00000000-0000-4000-8000-000000000000';
+    const response = await request.get(`/api/staff/documents/${id}`);
+    expect(response.status()).toBe(401);
 });

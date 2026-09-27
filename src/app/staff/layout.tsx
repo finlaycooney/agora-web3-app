@@ -3,5 +3,9 @@ export const metadata = {
 };
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
-    return children;
+    return (
+        <div className="staff-scope min-h-screen bg-background font-sans text-sm text-foreground antialiased">
+            {children}
+        </div>
+    );
 }
