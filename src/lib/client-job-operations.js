@@ -225,6 +225,25 @@ export async function publishJobRevision(pool, verifiedIdentity, organizationId,
     );
 }
 
+export async function setJobPublicListing(pool, verifiedIdentity, organizationId, input) {
+    const record = requireRecord(
+        input, 'input',
+        ['jobId', 'listed', 'expectedVersion', 'operationId'],
+    );
+    const jobId = requireUuid(record.jobId, 'jobId');
+    if (typeof record.listed !== 'boolean') {
+        throw invalidInput('listed must be a boolean');
+    }
+    const expectedVersion = requireVersion(record.expectedVersion, 'expectedVersion');
+    const operationId = requireOperationId(record.operationId);
+    return run(
+        pool, verifiedIdentity, organizationId, JOB_WRITE_PERMISSIONS,
+        'select app.set_job_public_listing_v1($1::uuid, $2::boolean, $3::bigint,'
+            + ' $4::uuid, $5::uuid) as result',
+        [jobId, record.listed, expectedVersion, operationId, randomUUID()],
+    );
+}
+
 const requireLimit = (value) => {
     if (value === null || value === undefined) {
         return null;

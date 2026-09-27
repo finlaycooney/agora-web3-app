@@ -522,3 +522,54 @@ export function MemberRevokeButton({
         </span>
     );
 }
+
+export function JobListingToggle({
+    jobId,
+    listed,
+    expectedVersion,
+}: {
+    jobId: string;
+    listed: boolean;
+    expectedVersion: string;
+}) {
+    const router = useRouter();
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    return (
+        <span className="inline-flex items-center gap-3">
+            <button
+                type="button"
+                disabled={busy}
+                className={ghostButtonClass}
+                onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                        const response = await fetch(`/api/staff/jobs/${jobId}/listing`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                listed: !listed,
+                                expectedVersion,
+                            }),
+                        });
+                        if (response.ok) {
+                            router.refresh();
+                            return;
+                        }
+                        const payload = await response.json().catch(() => ({}));
+                        setError(payload?.code === '40001'
+                            ? 'The job changed — reload and try again.'
+                            : 'Could not update the listing');
+                    } finally {
+                        setBusy(false);
+                    }
+                }}
+            >
+                {listed ? 'Hide from public board' : 'Show on public board'}
+            </button>
+            {error && <span className="text-xs text-red-400">{error}</span>}
+        </span>
+    );
+}

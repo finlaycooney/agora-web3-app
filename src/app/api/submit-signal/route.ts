@@ -1,16 +1,44 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { JOBS } from '@/data/jobs';
+import { getIntakePool } from '@/lib/intake-db.server';
+import {
+    listPublicJobs,
+    submitPublicApplication,
+} from '@/lib/intake-operations';
 import {
     readApplicationFields,
     validateApplicationFields,
 } from '@/lib/application';
 import { validateCvFile } from '@/lib/application-file';
+import { rateLimitAllow } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
+const CV_BUCKET = 'cv-submissions';
+// Per-IP submission throttle. Best-effort across serverless instances; the
+// durable per-address cap lives in submit_public_application_v1.
+const SUBMIT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
+
 const jsonError = (code: string, message: string, status: number) => (
     NextResponse.json({ success: false, code, message }, { status })
+);
+
+const requestIp = (req: Request) => {
+    const forwarded = req.headers.get('x-forwarded-for');
+    if (forwarded) {
+        const first = forwarded.split(',')[0]?.trim();
+        if (first) {
+            return first;
+        }
+    }
+    return req.headers.get('x-real-ip') ?? 'unknown';
+};
+
+const intakeUnavailable = () => jsonError(
+    'SERVICE_UNAVAILABLE',
+    'Applications are temporarily unavailable. Please try again later.',
+    503,
 );
 
 export async function POST(req: Request) {
@@ -25,10 +53,45 @@ export async function POST(req: Request) {
             );
         }
 
+        if (!rateLimitAllow(`submit:${requestIp(req)}`, SUBMIT_RATE_LIMIT)) {
+            return jsonError(
+                'RATE_LIMITED',
+                'Too many submissions. Please try again later.',
+                429,
+            );
+        }
+
+        const pool = getIntakePool();
+        const organizationId = process.env.STAFF_ORGANIZATION_ID;
+        if (!pool || !organizationId) {
+            console.error('Application submission is missing intake configuration.');
+            return intakeUnavailable();
+        }
+
+        let listedJobs;
+        try {
+            listedJobs = (await listPublicJobs(pool, organizationId))?.jobs ?? [];
+        } catch (error) {
+            console.error('Public job listing failed during submission:', error);
+            return intakeUnavailable();
+        }
+
         const fields = readApplicationFields(formData);
-        const fieldValidation = validateApplicationFields(fields, JOBS);
+        const fieldValidation = validateApplicationFields(
+            fields,
+            listedJobs.map((job: any) => ({ id: job.slug })),
+        );
         if (!fieldValidation.ok) {
             return jsonError(fieldValidation.code, fieldValidation.message, 400);
+        }
+        const job = listedJobs.find(
+            (entry: any) => entry.slug === fieldValidation.job.id);
+        if (!job?.applicationOpen) {
+            return jsonError(
+                'INVALID_JOB',
+                'This position is no longer accepting applications.',
+                400,
+            );
         }
 
         const cvFile = formData.get('cvFile');
@@ -41,22 +104,20 @@ export async function POST(req: Request) {
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (!supabaseUrl || !serviceRoleKey) {
             console.error('Application submission is missing Supabase configuration.');
-            return jsonError(
-                'SERVICE_UNAVAILABLE',
-                'Applications are temporarily unavailable. Please try again later.',
-                503,
-            );
+            return intakeUnavailable();
         }
-
         const supabase = createClient(supabaseUrl, serviceRoleKey, {
             auth: { persistSession: false, autoRefreshToken: false },
         });
-        const refId = `AG-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+
+        const refId = `AG-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+        const bytes = Buffer.from(await fileValidation.file.arrayBuffer());
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
         const filePath = `cvs/${fieldValidation.job.id}/${refId}.${fileValidation.extension}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('cv-submissions')
-            .upload(filePath, fileValidation.file, {
+            .from(CV_BUCKET)
+            .upload(filePath, bytes, {
                 contentType: fileValidation.mimeType,
                 upsert: false,
             });
@@ -70,30 +131,54 @@ export async function POST(req: Request) {
             );
         }
 
-        const { error: dbError } = await supabase
-            .from('applicants')
-            .insert([{
-                job_id: fieldValidation.job.id,
-                job_title: fieldValidation.job.title,
-                full_name: fieldValidation.fields.fullName,
+        let result;
+        try {
+            result = await submitPublicApplication(pool, organizationId, {
+                jobSlug: fieldValidation.job.id,
+                reference: refId,
+                fullName: fieldValidation.fields.fullName,
                 email: fieldValidation.fields.email,
-                professional_url: fieldValidation.fields.professionalUrl || null,
-                technical_achievement: fieldValidation.fields.technicalAchievement || null,
-                cv_url: filePath,
-                ref_id: refId,
-                status: 'pending',
-            }]);
-
-        if (dbError) {
-            console.error('Applicant database write failed:', dbError);
+                professionalUrl: fieldValidation.fields.professionalUrl || null,
+                achievement: fieldValidation.fields.technicalAchievement || null,
+                document: {
+                    sha256,
+                    sizeBytes: bytes.length,
+                    mimeType: fileValidation.mimeType,
+                    extension: fileValidation.extension,
+                    bucket: CV_BUCKET,
+                    objectKey: filePath,
+                    filename: fileValidation.file.name || `cv.${fileValidation.extension}`,
+                },
+            });
+        } catch (error: any) {
             const { error: cleanupError } = await supabase.storage
-                .from('cv-submissions')
+                .from(CV_BUCKET)
                 .remove([filePath]);
-
             if (cleanupError) {
                 console.error('Failed to clean up orphaned CV:', cleanupError);
             }
-
+            if (error?.code === '54000') {
+                return jsonError(
+                    'RATE_LIMITED',
+                    'Too many submissions. Please try again later.',
+                    429,
+                );
+            }
+            if (error?.code === 'P0002') {
+                return jsonError(
+                    'INVALID_JOB',
+                    'This position is no longer accepting applications.',
+                    400,
+                );
+            }
+            if (error?.code === '22023') {
+                return jsonError(
+                    'INVALID_APPLICATION',
+                    'Your application could not be validated. Please check the form and try again.',
+                    400,
+                );
+            }
+            console.error('Application write failed:', error);
             return jsonError(
                 'APPLICATION_SAVE_FAILED',
                 'Your application could not be saved. Please try again.',
@@ -101,7 +186,21 @@ export async function POST(req: Request) {
             );
         }
 
-        return NextResponse.json({ success: true, refId });
+        if (result?.duplicate) {
+            // The verified chain belongs to the original application; this
+            // upload is unreferenced and would orphan.
+            const { error: cleanupError } = await supabase.storage
+                .from(CV_BUCKET)
+                .remove([filePath]);
+            if (cleanupError) {
+                console.error('Failed to clean up duplicate CV upload:', cleanupError);
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            refId: result?.publicReference ?? refId,
+        });
     } catch (error) {
         console.error('Unexpected application submission failure:', error);
         return jsonError(

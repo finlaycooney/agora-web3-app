@@ -6,7 +6,7 @@ Local edits and commits do not affect Vercel. Pushing this feature branch may cr
 
 The database migration is additive and must be applied before deploying the application code. If the code is deployed first, submissions will fail safely and uploaded CVs will be removed, but candidates will not be able to complete applications.
 
-An `APPLICATION_SAVE_FAILED` response means the CV upload succeeded but the applicant row could not be inserted. On Preview, verify that its Supabase project has the migration before debugging the file upload. The API attempts to remove the uploaded CV when this happens.
+An `APPLICATION_SAVE_FAILED` response means the CV upload succeeded but the application could not be recorded in the pipeline. On Preview, verify that its Supabase project has the intake migration before debugging the file upload. The API attempts to remove the uploaded CV when this happens.
 
 ## Canonical branch migration
 
@@ -16,7 +16,7 @@ The Next.js application currently runs from Vercel's `production-v1` branch whil
 2. Merge the tested Next.js migration PR into `main` while Vercel still treats `production-v1` as its Production Branch. The existing production deployment remains live.
 3. Let Vercel build the resulting `main` commit as a Preview and run smoke tests against that exact deployment.
 4. In Vercel Project Settings, change the Production Branch to `main` and deploy or promote the tested `main` commit.
-5. Verify `/`, `/jobs`, GitHub authentication, and one controlled candidate submission on the production domain.
+5. Verify `/`, `/jobs`, Google staff sign-in, and one controlled candidate submission on the production domain.
 6. Keep the previous Vercel production deployment available for immediate rollback. Stop using `production-v1` for new work after the cutover.
 
 Vercel deployments are immutable and the production alias changes only after a successful deployment, so the existing site continues serving during the build. Do not delete `production-v1` or the previous deployment as part of the cutover.
@@ -46,7 +46,11 @@ Useful local services:
 
 Use `npm run local:status` to inspect the stack and `npm run local:stop` when finished. Local Supabase data persists between normal stops; `npm run local:reset` intentionally deletes and recreates only the local database.
 
-GitHub OAuth is optional for direct applications. To test it locally, use a development GitHub OAuth app with callback URL `http://127.0.0.1:3000/api/auth/callback/github`.
+## Public intake architecture
+
+`/jobs` reads published, publicly listed, open jobs through `app.list_public_jobs_v1` over the `INTAKE_DATABASE_URL` connection (`app_intake` role, anonymous context — no staff actor). When intake is not configured the page falls back to the bundled static listing; a configured listing that fails renders empty rather than silently falling back. Stealth clients are projected through the reviewed publication snapshot, so private names, contacts and identifiers never reach the board. Jobs can be hidden from the board per job via the `publicly_listed` flag (staff toggle on the job workspace) without withdrawing publication, independently of client stealth.
+
+`POST /api/submit-signal` validates the form against the live public listing, uploads the CV to `cv-submissions`, hashes the bytes (SHA-256) and calls `app.submit_public_application_v1`, which re-validates the job, dedupes the candidate on normalized email, places the application on the pipeline's initial stage with an intake-audited history row and registers the verified blob/document chain — all in one transaction. A failed database write removes the uploaded CV object. Spam control is a honeypot (successful-looking `202` without processing), a per-IP sliding-window limit (5 per 10 minutes, best-effort in-memory) and a durable per-address daily cap in the procedure. Submissions no longer touch `public.applicants`.
 
 ## Verification
 
@@ -72,7 +76,7 @@ The shared Playwright configuration rejects non-allowlisted Supabase targets bef
 
 Playwright always starts its own app server. Stop any existing app on port 3000 before running the suite so it cannot reuse a server initialized with different credentials. Do not forward these allowed loopback ports to a remote database/API. Extending the suite to preview requires a reviewed environment identity guard; changing an environment variable does not authorize production testing.
 
-The integration cases submit structurally valid synthetic PDF and DOCX files, compare downloaded private bytes, deny unauthenticated file access, and remove their own rows and objects. The legacy route still uses administrative credentials; these tests do not establish the future restricted-role authorization or scanning guarantees.
+The integration cases seed a published public job, submit structurally valid synthetic PDF and DOCX files through the board UI, verify the `app.*` candidate/application/document chain over a direct database connection, compare downloaded private bytes, and remove their own rows and objects. Backend mode needs `INTAKE_DATABASE_URL` (and `STAFF_ORGANIZATION_ID`) pointing at the local stack — `postgresql://postgres:postgres@127.0.0.1:54322/postgres` by default.
 
 See [the architecture implementation documents](architecture/README.md) for the proposed schema, outstanding decisions and acceptance gates.
 
@@ -82,6 +86,6 @@ The maintainer must:
 
 1. Review and apply `supabase/migrations/20260911120000_candidate_applications.sql` to Supabase.
 2. Confirm the existing `cv-submissions` bucket is private and accepts `application/pdf` and `application/vnd.openxmlformats-officedocument.wordprocessingml.document` files up to 4 MB. The migration deliberately does not overwrite an existing bucket's settings.
-3. Confirm Preview and Production have `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` configured.
+3. Confirm Preview and Production have `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `STAFF_DATABASE_URL`, `STAFF_ORGANIZATION_ID`, and `INTAKE_DATABASE_URL` configured. `INTAKE_DATABASE_URL` must use a login role whose only membership is `app_intake`.
 4. Verify the Vercel preview before merging.
 5. Run one controlled production submission after deployment and confirm the applicant row and private CV object.

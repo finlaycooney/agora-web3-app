@@ -111,6 +111,7 @@ const JobDetailModal = ({ job, isOpen, onClose, onApply }) => {
                                 </div>
 
                                 <div className="pt-6 border-t border-white/10 mt-auto flex justify-end">
+                                    {job.applicationOpen !== false && (
                                     <button
                                         onClick={() => {
                                             onClose(); // Close details
@@ -121,6 +122,7 @@ const JobDetailModal = ({ job, isOpen, onClose, onApply }) => {
                                         <span>APPLY NOW</span>
                                         <ArrowRight size={18} />
                                     </button>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>
