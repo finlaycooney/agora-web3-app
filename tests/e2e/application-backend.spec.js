@@ -45,7 +45,7 @@ insert into app.clients (
 insert into app.jobs (
     id, organization_id, client_id, pipeline_id, slug, title, description,
     location_display, employment_type, publication_state, application_state,
-    publicly_listed, published_revision_id,
+    publicly_listed,
     publication_reviewed_by, publication_reviewed_at, published_at
 ) values (
     '${E2E_JOB}', '${ORGANIZATION_ID}', '${E2E_CLIENT}',
@@ -53,7 +53,7 @@ insert into app.jobs (
         where organization_id = '${ORGANIZATION_ID}'
             and key = 'default' and status = 'active'),
     '${E2E_SLUG}', 'E2E Synthetic Engineer', 'Build e2e systems.',
-    'Remote', 'full_time', 'published', 'open', true, '${E2E_REVISION}',
+    'Remote', 'full_time', 'published', 'open', true,
     '${E2E_MEMBERSHIP}', now(), now()
 ) on conflict (id) do nothing;
 
@@ -63,13 +63,21 @@ insert into app.job_revisions (
     status, published_at, published_by_membership_id,
     published_client_profile_version, published_company_name,
     published_company_description, published_is_stealth
-) values (
+)
+select
     '${E2E_REVISION}', '${ORGANIZATION_ID}', '${E2E_JOB}', 1,
     'E2E Synthetic Engineer', 'full_time', 'remote',
-    '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Build e2e systems."}]}]}'::jsonb,
-    'Build e2e systems.', 'published', now(), '${E2E_MEMBERSHIP}',
+    doc.doc,
+    app.job_document_text_v1(doc.doc),
+    'published', now(), '${E2E_MEMBERSHIP}',
     1, 'E2E Synthetic Agency', null, false
-) on conflict (id) do nothing;
+from (values (
+    '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Build e2e systems."}]}]}'::jsonb
+)) as doc(doc)
+on conflict (id) do nothing;
+
+update app.jobs set published_revision_id = '${E2E_REVISION}'
+    where id = '${E2E_JOB}';
 `;
 
 const CLEANUP_SQL = `
