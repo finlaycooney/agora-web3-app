@@ -68,6 +68,8 @@ const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
 const LISTING_MIGRATION = '20260925110000_staff_listing.sql';
 const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
 const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
+const PIPELINE_MIGRATION = '20260925140000_application_pipeline.sql';
+const INTAKE_MIGRATION = '20260926140000_public_intake.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1886,6 +1888,57 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             select app.set_staff_invite_domains_v1(
                 null, '${randomUUID()}', '${randomUUID()}');
         `));
+    });
+
+    await t.test('pipeline and public intake migrations apply on the provider stack', () => {
+        const applicantsBeforeIntake = supabasePsql(dumpApplicants);
+        for (const file of [PIPELINE_MIGRATION, INTAKE_MIGRATION]) {
+            copyFileSync(
+                join(migrationsDir, file),
+                join(tempMigrations, file),
+            );
+        }
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+        assert.equal(supabasePsql(dumpApplicants), applicantsBeforeIntake);
+
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('list_public_jobs_v1',
+                    'submit_public_application_v1', 'set_job_public_listing_v1')
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(), '3');
+
+        // Anonymous intake context can read the board; provider roles cannot
+        // reach the intake procedures.
+        assert.doesNotMatch(
+            supabasePsql(`
+                set role app_intake;
+                select pg_catalog.set_config('app.organization_id',
+                    '${AUTHZ_ID.ORG_A}', false);
+                select count(*) >= 0 from (select app.list_public_jobs_v1()) x`),
+            /error/i);
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            assert.match(
+                supabasePsqlError(`set role ${role}; select app.list_public_jobs_v1()`),
+                /42501/,
+                `${role} must not execute list_public_jobs_v1`,
+            );
+        }
+        assert.match(
+            supabasePsqlError(`
+                set role app_staff;
+                select app.submit_public_application_v1(
+                    '${randomUUID()}', '${randomUUID()}', '${randomUUID()}',
+                    '${randomUUID()}', '${randomUUID()}', '${randomUUID()}',
+                    '${randomUUID()}', '${randomUUID()}', '${randomUUID()}',
+                    '${randomUUID()}', '${randomUUID()}',
+                    'x', 'AG-0123456789AB', 'x', 'x@x.example', null, null,
+                    null, null, null, null, null, null, null)`),
+            /42501/,
+            'app_staff must not execute submit_public_application_v1',
+        );
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {
