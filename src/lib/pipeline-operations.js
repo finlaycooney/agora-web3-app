@@ -7,24 +7,12 @@ import { ClientJobContractError } from './client-job-contracts.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BIGINT_PATTERN = /^[0-9]{1,19}$/;
-const REFERENCE_PATTERN = /^AG-[0-9A-F]{12}$/;
-const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const CV_MIME_BY_EXTENSION = {
-    pdf: 'application/pdf',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-};
 
 const APPLICATION_READ_PERMISSIONS = ['applications.read'];
 const CANDIDATE_READ_PERMISSIONS = ['candidates.read'];
 const STAGE_PERMISSIONS = ['applications.read', 'applications.stage', 'candidates.read'];
 const NOTE_PERMISSIONS = ['collaboration.write'];
 const DOWNLOAD_PERMISSIONS = ['documents.download'];
-const IMPORT_PERMISSIONS = [
-    'candidates.write',
-    'documents.write',
-    'applications.stage',
-    'jobs.read',
-];
 
 const invalidInput = (message, fieldErrors = {}) => new ClientJobContractError({
     input: message,
@@ -171,101 +159,6 @@ export async function getDocumentDownload(pool, verifiedIdentity, organizationId
         pool, verifiedIdentity, organizationId, DOWNLOAD_PERMISSIONS,
         'select app.get_document_download_v1($1::uuid) as result',
         [documentId],
-    );
-}
-
-// Imports one public intake row. `document` is null when the CV object could
-// not be fetched — the application still lands, just without a registered CV.
-export async function importPublicApplication(
-    pool, verifiedIdentity, organizationId, input,
-) {
-    const record = requireRecord(
-        input, 'input',
-        [
-            'jobSlug', 'reference', 'fullName', 'email', 'professionalUrl',
-            'achievement', 'receivedAt', 'document', 'operationId',
-        ],
-    );
-    const operationId = requireUuid(record.operationId, 'operationId');
-    const jobSlug = typeof record.jobSlug === 'string' ? record.jobSlug.trim() : '';
-    if (!jobSlug || jobSlug.length > 200) {
-        throw invalidInput('jobSlug is required', { jobSlug: 'required' });
-    }
-    const reference = typeof record.reference === 'string' ? record.reference : '';
-    if (!REFERENCE_PATTERN.test(reference)) {
-        throw invalidInput('reference must match the AG-XXXXXXXXXXXX format');
-    }
-    const fullName = typeof record.fullName === 'string' ? record.fullName.trim() : '';
-    if (!fullName || fullName.length > 256) {
-        throw invalidInput('fullName is required', { fullName: 'required' });
-    }
-    const email = typeof record.email === 'string' ? record.email.trim().toLowerCase() : '';
-    if (!email || email.length > 320 || !EMAIL_PATTERN.test(email)) {
-        throw invalidInput('email must be a valid email address', { email: 'invalid' });
-    }
-    const professionalUrl = optionalQuery(record.professionalUrl, 'professionalUrl', 2048);
-    const achievement = optionalQuery(record.achievement, 'achievement', 4000);
-    const receivedAt = new Date(record.receivedAt);
-    if (Number.isNaN(receivedAt.getTime())) {
-        throw invalidInput('receivedAt must be an ISO timestamp');
-    }
-    let documentId = null;
-    let locationId = null;
-    let blobId = null;
-    let blob = null;
-    if (record.document !== null && record.document !== undefined) {
-        const document = requireRecord(
-            record.document, 'document',
-            ['sha256', 'sizeBytes', 'mimeType', 'extension', 'bucket', 'objectKey', 'filename'],
-        );
-        if (typeof document.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(document.sha256)) {
-            throw invalidInput('document.sha256 must be 64 hex characters');
-        }
-        const sizeBytes = Number(document.sizeBytes);
-        if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 4194304) {
-            throw invalidInput('document.sizeBytes must be between 1 and 4 MiB');
-        }
-        if (CV_MIME_BY_EXTENSION[document.extension] !== document.mimeType) {
-            throw invalidInput('document mime/extension combination is invalid');
-        }
-        for (const key of ['bucket', 'objectKey', 'filename']) {
-            if (typeof document[key] !== 'string' || !document[key].trim()) {
-                throw invalidInput(`document.${key} is required`);
-            }
-        }
-        blobId = randomUUID();
-        locationId = randomUUID();
-        documentId = randomUUID();
-        blob = {
-            sha256: `\\x${document.sha256.toLowerCase()}`,
-            sizeBytes,
-            mimeType: document.mimeType,
-            extension: document.extension,
-            bucket: document.bucket.trim(),
-            objectKey: document.objectKey.trim(),
-            filename: document.filename.trim(),
-        };
-    }
-    return run(
-        pool, verifiedIdentity, organizationId, IMPORT_PERMISSIONS,
-        `select app.import_public_application_v1(
-            $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid,
-            $7::uuid, $8::uuid, $9::uuid,
-            $10::text, $11::text, $12::text, $13::text, $14::text, $15::text,
-            $16::timestamptz,
-            $17::bytea, $18::bigint, $19::text, $20::text, $21::text, $22::text,
-            $23::text, $24::uuid, $25::uuid
-        ) as result`,
-        [
-            randomUUID(), randomUUID(), randomUUID(), randomUUID(),
-            randomUUID(), randomUUID(), blobId, locationId, documentId,
-            jobSlug, reference, fullName, email, professionalUrl, achievement,
-            receivedAt.toISOString(),
-            blob?.sha256 ?? null, blob?.sizeBytes ?? null, blob?.mimeType ?? null,
-            blob?.extension ?? null, blob?.bucket ?? null, blob?.objectKey ?? null,
-            blob?.filename ?? null,
-            operationId, randomUUID(),
-        ],
     );
 }
 

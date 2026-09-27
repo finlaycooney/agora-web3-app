@@ -73,7 +73,6 @@ const PIPELINE_FUNCTIONS = [
     'transition_application_stage_v1',
     'add_candidate_note_v1',
     'get_document_download_v1',
-    'import_public_application_v1',
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1257,7 +1256,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
         }
     });
 
-    await t.test('application pipeline: list, transition, notes and import', async () => {
+    await t.test('application pipeline: list, transition and notes', async () => {
         const {
             listApplications, listCandidates, getCandidateWorkspace,
             transitionApplicationStage, addCandidateNote,
@@ -1347,114 +1346,6 @@ test('client job workflows on PostgreSQL 17', async (t) => {
         assert.equal(
             workspaceAfter.applications[0].history.at(-1).toStageLabel,
             'Interview');
-    });
-
-    await t.test('application pipeline: import creates the full document chain', async () => {
-        const { importPublicApplication, getCandidateWorkspace, getDocumentDownload } =
-            await import('../../src/lib/pipeline-operations.js');
-        const sha256 = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
-        const imported = await admin(importPublicApplication, {
-            jobSlug: 'legacy-synthetic-job',
-            reference: 'AG-BBBB00000001',
-            fullName: 'Imported Candidate',
-            email: 'imported@example.com',
-            professionalUrl: 'https://linkedin.com/in/imported',
-            achievement: 'Shipped a thing.',
-            receivedAt: '2026-09-20T10:00:00Z',
-            document: {
-                sha256,
-                sizeBytes: 12345,
-                mimeType: 'application/pdf',
-                extension: 'pdf',
-                bucket: 'cv-submissions',
-                objectKey: 'cvs/legacy-synthetic-job/AG-BBBB00000001.pdf',
-                filename: 'cv.pdf',
-            },
-            operationId: randomUUID(),
-        });
-        assert.equal(imported.imported, true);
-        assert.equal(imported.reusedCandidate, false);
-        const candidateId = imported.candidateId;
-
-        const workspace = await admin(getCandidateWorkspace, { candidateId });
-        assert.equal(workspace.candidate.fullName, 'Imported Candidate');
-        assert.equal(workspace.applications.length, 1);
-        assert.equal(
-            workspace.applications[0].publicReference, 'AG-BBBB00000001');
-        assert.equal(workspace.applications[0].stageLabel, 'Review');
-        assert.equal(workspace.applications[0].submittedEmail, 'imported@example.com');
-        assert.equal(workspace.documents.length, 1);
-        assert.equal(workspace.documents[0].filename, 'cv.pdf');
-        assert.equal(workspace.documents[0].scanState, 'unscanned');
-
-        const download = await admin(getDocumentDownload, {
-            documentId: workspace.documents[0].documentId,
-        });
-        assert.equal(download.bucket, 'cv-submissions');
-        assert.equal(
-            download.objectKey,
-            'cvs/legacy-synthetic-job/AG-BBBB00000001.pdf');
-
-        // Idempotent: the same public reference does not double-import.
-        const again = await admin(importPublicApplication, {
-            jobSlug: 'legacy-synthetic-job',
-            reference: 'AG-BBBB00000001',
-            fullName: 'Imported Candidate',
-            email: 'imported@example.com',
-            professionalUrl: null,
-            achievement: null,
-            receivedAt: '2026-09-20T10:00:00Z',
-            document: null,
-            operationId: randomUUID(),
-        });
-        assert.equal(again.imported, false);
-        assert.equal(again.reason, 'already_imported');
-
-        // Email dedupe: a second submission on the same email attaches to the
-        // existing candidate instead of creating a duplicate.
-        const second = await admin(importPublicApplication, {
-            jobSlug: 'legacy-synthetic-job',
-            reference: 'AG-BBBB00000002',
-            fullName: 'Imported Candidate',
-            email: 'IMPORTED@example.com',
-            professionalUrl: null,
-            achievement: null,
-            receivedAt: '2026-09-21T10:00:00Z',
-            document: null,
-            operationId: randomUUID(),
-        });
-        assert.equal(second.imported, true);
-        assert.equal(second.candidateId, candidateId);
-        assert.equal(second.reusedCandidate, true);
-        assert.equal(scalar(pg17, `
-            select count(*) from app.candidates
-            where id = '${candidateId}'`), '1');
-        const deduped = await admin(getCandidateWorkspace, { candidateId });
-        assert.equal(deduped.applications.length, 2);
-
-        // Unknown job slug and permission denial.
-        await rejectCode(admin(importPublicApplication, {
-            jobSlug: 'no-such-job',
-            reference: 'AG-BBBB00000003',
-            fullName: 'Nobody',
-            email: 'nobody@example.com',
-            professionalUrl: null,
-            achievement: null,
-            receivedAt: '2026-09-21T10:00:00Z',
-            document: null,
-            operationId: randomUUID(),
-        }), 'P0002', 'an unmatched job slug is rejected');
-        await rejectCode(viewer(importPublicApplication, {
-            jobSlug: 'legacy-synthetic-job',
-            reference: 'AG-BBBB00000004',
-            fullName: 'Nobody',
-            email: 'nobody@example.com',
-            professionalUrl: null,
-            achievement: null,
-            receivedAt: '2026-09-21T10:00:00Z',
-            document: null,
-            operationId: randomUUID(),
-        }), 'FORBIDDEN', 'import requires the write permissions');
     });
 
     await t.test('application pipeline: permission boundaries hold', async () => {

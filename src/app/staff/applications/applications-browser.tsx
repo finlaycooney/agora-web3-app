@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, Upload, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/staff-ui/badge';
 import { Button } from '@/components/staff-ui/button';
@@ -50,55 +49,6 @@ const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric',
     });
-
-function ImportButton() {
-    const router = useRouter();
-    const [busy, setBusy] = useState(false);
-    const [message, setMessage] = useState('');
-
-    const runImport = async () => {
-        setBusy(true);
-        setMessage('');
-        try {
-            const response = await fetch('/api/staff/applications', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ action: 'importSubmissions' }),
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                setMessage(payload?.error ?? 'Import failed.');
-            } else {
-                const results: { outcome: string }[] = payload?.results ?? [];
-                const imported = results.filter((r) => r.outcome === 'imported').length;
-                const failed = results.filter((r) => r.outcome === 'failed').length;
-                setMessage(
-                    results.length === 0
-                        ? 'No pending submissions.'
-                        : `Imported ${imported} of ${results.length} submissions`
-                            + (failed ? ` — ${failed} failed` : ''),
-                );
-                router.refresh();
-            }
-        } catch {
-            setMessage('Import failed.');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    return (
-        <span className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={runImport} disabled={busy}>
-                <Upload aria-hidden="true" />
-                {busy ? 'Importing…' : 'Import submissions'}
-            </Button>
-            {message ? (
-                <span role="status" className="text-xs text-muted-foreground">{message}</span>
-            ) : null}
-        </span>
-    );
-}
 
 export function ApplicationsBrowser({
     applications,
@@ -155,7 +105,6 @@ export function ApplicationsBrowser({
                         Review candidates across your clients and open roles.
                     </p>
                 </div>
-                <ImportButton />
             </div>
 
             <div
@@ -254,7 +203,7 @@ export function ApplicationsBrowser({
                     <p className="text-sm font-medium text-foreground">No applications found</p>
                     <p className="max-w-sm text-sm text-muted-foreground">
                         {applications.length === 0
-                            ? 'Use “Import submissions” to pull pending applications from the public site.'
+                            ? 'Applications appear here once candidates are linked to jobs.'
                             : 'Try clearing the filters.'}
                     </p>
                 </div>

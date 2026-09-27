@@ -144,17 +144,11 @@ alter table app.audit_events
             actor_kind = 'staff'
             and target_type = 'application'
             and target_id is not null
-            and (
-                (action = 'application.stage.changed'
-                    and details - array[
-                        'previous_version', 'new_version',
-                        'from_stage_id', 'to_stage_id', 'reason'
-                    ] = '{}'::jsonb)
-                or (action = 'application.imported'
-                    and details - array[
-                        'candidate_id', 'job_id', 'source_id', 'document_id'
-                    ] = '{}'::jsonb)
-            )
+            and action = 'application.stage.changed'
+            and details - array[
+                'previous_version', 'new_version',
+                'from_stage_id', 'to_stage_id', 'reason'
+            ] = '{}'::jsonb
         ) or (
             actor_kind = 'staff'
             and target_type = 'candidate_note'
@@ -172,38 +166,21 @@ alter table app.audit_events
 
 -- Executor grants for the pipeline surface. Select policies gate reads per
 -- permission; insert/update policies gate writes the same way.
-grant select on app.candidate_sources to app_executor;
 grant select on app.candidate_identifiers to app_executor;
 grant select on app.applications to app_executor;
 grant select on app.application_stage_history to app_executor;
 grant select on app.pipeline_stages to app_executor;
 grant select on app.blob_locations to app_executor;
-grant select on app.application_documents to app_executor;
 grant select, insert on app.candidate_notes to app_executor;
-
-grant insert on app.candidates to app_executor;
-grant insert on app.candidate_sources to app_executor;
-grant insert on app.candidate_identifiers to app_executor;
-grant insert on app.applications to app_executor;
 grant insert on app.application_stage_history to app_executor;
-grant insert on app.file_blobs to app_executor;
-grant insert on app.blob_locations to app_executor;
-grant insert on app.documents to app_executor;
-grant insert on app.application_documents to app_executor;
 
 grant update (stage_id, updated_at, version) on app.applications to app_executor;
-grant update (current_document_id, updated_at, version) on app.candidates to app_executor;
 
 -- Read policies.
 create policy executor_applications_select on app.applications
     for select to app_executor
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('applications.read'));
-
-create policy executor_pipeline_applications_insert on app.applications
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'));
 
 create policy executor_applications_update on app.applications
     for update to app_executor
@@ -232,37 +209,10 @@ create policy executor_pipeline_candidates_select on app.candidates
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('candidates.read'));
 
-create policy executor_pipeline_candidates_insert on app.candidates
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'));
-
-create policy executor_pipeline_candidates_update on app.candidates
-    for update to app_executor
-    using (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'))
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'));
-
-create policy executor_candidate_sources_select on app.candidate_sources
-    for select to app_executor
-    using (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.read'));
-
-create policy executor_candidate_sources_insert on app.candidate_sources
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'));
-
 create policy executor_candidate_identifiers_select on app.candidate_identifiers
     for select to app_executor
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('candidates.read'));
-
-create policy executor_candidate_identifiers_insert on app.candidate_identifiers
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.write'));
 
 create policy executor_candidate_notes_select on app.candidate_notes
     for select to app_executor
@@ -279,74 +229,17 @@ create policy executor_pipeline_documents_select on app.documents
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('candidates.read'));
 
-create policy executor_documents_insert on app.documents
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('documents.write'));
-
 create policy executor_pipeline_file_blobs_select on app.file_blobs
     for select to app_executor
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('candidates.read'));
 
-create policy executor_file_blobs_insert on app.file_blobs
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('documents.write'));
-
-create policy executor_application_documents_select on app.application_documents
-    for select to app_executor
-    using (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('candidates.read'));
-
-create policy executor_application_documents_insert on app.application_documents
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('documents.write'));
-
 -- Blob locations carry storage coordinates; only the download permission may
--- read them, and only the import path writes them.
+-- read them.
 create policy executor_blob_locations_select on app.blob_locations
     for select to app_executor
     using (organization_id = app.context_uuid_v1('app.organization_id')
         and app.has_permission_v1('documents.download'));
-
-create policy executor_blob_locations_insert on app.blob_locations
-    for insert to app_executor
-    with check (organization_id = app.context_uuid_v1('app.organization_id')
-        and app.has_permission_v1('documents.write'));
-
--- blob_location_verify_v1 locks the blob row FOR KEY SHARE before checking the
--- location metadata. Row locks additionally require UPDATE-policy visibility,
--- but the only file_blobs update policy is privacy.manage-scoped, so the
--- import path (documents.write) could never register a location. The lock
--- protects nothing anyway: file_blob_identity_guard_v1 already makes the
--- compared fields immutable, and there is no executor delete path. Replaced
--- here with a plain select so verification holds without the lock.
-create or replace function app.blob_location_verify_v1()
-returns trigger
-language plpgsql
-security invoker
-set search_path = pg_catalog, app, pg_temp
-as $$
-declare
-    v_blob app.file_blobs%rowtype;
-begin
-    if new.state = 'available' then
-        select b.* into v_blob
-        from app.file_blobs b
-        where b.organization_id = new.organization_id
-            and b.id = new.blob_id;
-        if v_blob.id is null
-            or v_blob.sha256 is distinct from new.verified_sha256
-            or v_blob.size_bytes is distinct from new.verified_size_bytes then
-            raise exception 'blob location verification does not match blob metadata'
-                using errcode = 'check_violation';
-        end if;
-    end if;
-    return new;
-end
-$$;
 
 -- Applications directory for the workspace list. Restricted/deleted/merged
 -- candidates are excluded: privacy restriction means no routine processing.
@@ -953,267 +846,12 @@ begin
 end
 $$;
 
--- Imports one public-intake submission (public.applicants row, relayed by the
--- app layer) into the pipeline: candidate (deduped on normalized email),
--- source, identifiers, application on the job's initial stage, and the CV
--- registered through the document chain. Idempotent on public_reference.
-create function app.import_public_application_v1(
-    p_candidate_id uuid,
-    p_source_id uuid,
-    p_email_identifier_id uuid,
-    p_url_identifier_id uuid,
-    p_application_id uuid,
-    p_history_id uuid,
-    p_blob_id uuid,
-    p_location_id uuid,
-    p_document_id uuid,
-    p_job_slug text,
-    p_reference text,
-    p_full_name text,
-    p_email text,
-    p_professional_url text,
-    p_achievement text,
-    p_received_at timestamptz,
-    p_sha256 bytea,
-    p_size_bytes bigint,
-    p_mime_type text,
-    p_extension text,
-    p_bucket text,
-    p_object_key text,
-    p_filename text,
-    p_audit_id uuid,
-    p_correlation_id uuid
-)
-returns jsonb
-language plpgsql
-volatile
-security definer
-set search_path = pg_catalog, app, pg_temp
-as $$
-declare
-    v_org uuid := app.context_uuid_v1('app.organization_id');
-    v_member uuid;
-    v_job app.jobs%rowtype;
-    v_stage app.pipeline_stages%rowtype;
-    v_candidate_id uuid;
-    v_existing uuid;
-    v_email text;
-    v_url text;
-    v_name text;
-    v_now timestamptz := pg_catalog.clock_timestamp();
-begin
-    v_member := app.recruitment_actor_v1(
-        array['candidates.write', 'documents.write', 'applications.stage', 'jobs.read'],
-        p_audit_id, p_correlation_id, true);
-    if p_candidate_id is null or p_source_id is null or p_application_id is null
-        or p_history_id is null or p_audit_id is null then
-        raise exception 'import_public_application_v1 requires nonnull identifiers'
-            using errcode = '22023';
-    end if;
-    v_name := nullif(btrim(coalesce(p_full_name, '')), '');
-    if v_name is null or char_length(v_name) > 256 then
-        raise exception 'Invalid candidate name' using errcode = '22023';
-    end if;
-    v_email := nullif(lower(btrim(coalesce(p_email, ''))), '');
-    if v_email is null or char_length(v_email) > 320
-        or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-        raise exception 'Invalid candidate email' using errcode = '22023';
-    end if;
-    v_url := nullif(btrim(coalesce(p_professional_url, '')), '');
-    if v_url is not null and char_length(v_url) > 2048 then
-        raise exception 'Invalid professional URL' using errcode = '22023';
-    end if;
-    if p_reference is null or p_reference !~ '^AG-[0-9A-F]{12}$' then
-        raise exception 'Invalid public reference' using errcode = '22023';
-    end if;
-    if p_received_at is null then
-        raise exception 'Received timestamp required' using errcode = '22023';
-    end if;
-    select a.id into v_existing
-    from app.applications a
-    where a.organization_id = v_org and a.public_reference = p_reference;
-    if v_existing is not null then
-        return pg_catalog.jsonb_build_object(
-            'imported', false, 'reason', 'already_imported',
-            'applicationId', v_existing
-        );
-    end if;
-    select j.* into v_job
-    from app.jobs j
-    where j.organization_id = v_org and j.slug = p_job_slug;
-    if not found then
-        raise exception 'No job matches the submission slug' using errcode = 'P0002';
-    end if;
-    select s.* into v_stage
-    from app.pipeline_stages s
-    where s.organization_id = v_org and s.pipeline_id = v_job.pipeline_id
-        and s.is_initial and s.archived_at is null;
-    if not found then
-        raise exception 'Job pipeline has no initial stage' using errcode = 'P0002';
-    end if;
-    -- Email-dedupe: a normalized email identifier already on an active
-    -- candidate attaches this submission to that candidate instead of
-    -- creating a duplicate.
-    select i.candidate_id into v_candidate_id
-    from app.candidate_identifiers i
-    join app.candidates c
-        on c.organization_id = i.organization_id and c.id = i.candidate_id
-    where i.organization_id = v_org and i.kind = 'email'
-        and i.normalized_value = v_email and c.lifecycle = 'active'
-    order by i.received_at, i.id
-    limit 1;
-    if v_candidate_id is null then
-        v_candidate_id := p_candidate_id;
-        insert into app.candidates (
-            id, organization_id, full_name, identity_state, lifecycle
-        ) values (v_candidate_id, v_org, v_name, 'provisional', 'active');
-    end if;
-    insert into app.candidate_sources (
-        id, organization_id, candidate_id, kind, received_at,
-        created_by_membership_id, context_summary
-    ) values (
-        p_source_id, v_org, v_candidate_id, 'public_application', p_received_at,
-        v_member, 'Imported from the public application intake'
-    );
-    if p_email_identifier_id is null then
-        raise exception 'Email identifier id required' using errcode = '22023';
-    end if;
-    if not exists (
-        select 1 from app.candidate_identifiers i
-        where i.organization_id = v_org and i.candidate_id = v_candidate_id
-            and i.kind = 'email' and i.normalized_value = v_email
-    ) then
-        insert into app.candidate_identifiers (
-            id, organization_id, candidate_id, kind, raw_value,
-            normalized_value, normalization_version, verification,
-            source_id, received_at
-        ) values (
-            p_email_identifier_id, v_org, v_candidate_id, 'email', v_email,
-            v_email, 1, 'unverified', p_source_id, p_received_at
-        );
-    end if;
-    if v_url is not null
-        and not exists (
-            select 1 from app.candidate_identifiers i
-            where i.organization_id = v_org and i.candidate_id = v_candidate_id
-                and i.kind = 'professional_url' and i.raw_value = v_url
-        ) then
-        if p_url_identifier_id is null then
-            raise exception 'URL identifier id required' using errcode = '22023';
-        end if;
-        insert into app.candidate_identifiers (
-            id, organization_id, candidate_id, kind, raw_value,
-            normalized_value, normalization_version, verification,
-            source_id, received_at
-        ) values (
-            p_url_identifier_id, v_org, v_candidate_id, 'professional_url', v_url,
-            lower(v_url), 1, 'unverified', p_source_id, p_received_at
-        );
-    end if;
-    insert into app.applications (
-        id, organization_id, candidate_id, job_id, pipeline_id, stage_id,
-        public_reference, reference_version,
-        submitted_name, submitted_email, submitted_professional_url,
-        submitted_achievement, submitted_job_title,
-        source_id, received_at
-    ) values (
-        p_application_id, v_org, v_candidate_id, v_job.id, v_job.pipeline_id,
-        v_stage.id, p_reference, 1,
-        v_name, v_email, v_url, nullif(btrim(coalesce(p_achievement, '')), ''),
-        v_job.title, p_source_id, p_received_at
-    );
-    insert into app.application_stage_history (
-        id, organization_id, application_id, sequence,
-        to_pipeline_id, to_stage_id,
-        actor_membership_id, actor_kind, reason, occurred_at
-    ) values (
-        p_history_id, v_org, p_application_id, 1,
-        v_job.pipeline_id, v_stage.id,
-        v_member, 'staff', 'Imported from the public application intake', v_now
-    );
-    if p_blob_id is not null then
-        if p_location_id is null or p_document_id is null
-            or p_sha256 is null or octet_length(p_sha256) <> 32
-            or p_size_bytes is null or p_size_bytes < 1 or p_size_bytes > 4194304
-            or p_bucket is null or p_object_key is null
-            or p_filename is null or btrim(p_filename) = ''
-            or not (
-                (p_mime_type = 'application/pdf' and p_extension = 'pdf')
-                or (p_mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                    and p_extension = 'docx')
-            ) then
-            raise exception 'Invalid document registration payload' using errcode = '22023';
-        end if;
-        insert into app.file_blobs (
-            id, organization_id, candidate_id, sha256, size_bytes,
-            mime_type, extension, lifecycle, scan_state
-        ) values (
-            p_blob_id, v_org, v_candidate_id, p_sha256, p_size_bytes,
-            p_mime_type, p_extension, 'live', 'unscanned'
-        );
-        insert into app.blob_locations (
-            id, organization_id, blob_id, backend_key, bucket, object_key,
-            state, is_primary, verified_sha256, verified_size_bytes, verified_at
-        ) values (
-            p_location_id, v_org, p_blob_id, 'supabase_storage', p_bucket,
-            p_object_key, 'available', true, p_sha256, p_size_bytes, v_now
-        );
-        insert into app.documents (
-            id, organization_id, candidate_id, blob_id, purpose,
-            original_filename, source_id, received_at, lifecycle
-        ) values (
-            p_document_id, v_org, v_candidate_id, p_blob_id, 'cv',
-            btrim(p_filename), p_source_id, p_received_at, 'active'
-        );
-        insert into app.application_documents (
-            organization_id, candidate_id, application_id, document_id,
-            submitted_filename, attached_at
-        ) values (
-            v_org, v_candidate_id, p_application_id, p_document_id,
-            btrim(p_filename), p_received_at
-        );
-        -- Latest submission becomes the current CV only when the candidate has
-        -- none — a staff-managed document is never silently replaced.
-        update app.candidates
-            set current_document_id = p_document_id, updated_at = v_now,
-                version = version + 1
-            where organization_id = v_org and id = v_candidate_id
-                and current_document_id is null;
-    end if;
-    insert into app.audit_events (
-        id, organization_id, actor_kind, actor_user_id, actor_membership_id,
-        action, target_type, target_id, correlation_id, occurred_at, details
-    ) values (
-        p_audit_id, v_org, 'staff', app.context_uuid_v1('app.actor_id'), v_member,
-        'application.imported', 'application', p_application_id,
-        p_correlation_id, v_now,
-        pg_catalog.jsonb_build_object(
-            'candidate_id', v_candidate_id,
-            'job_id', v_job.id,
-            'source_id', p_source_id,
-            'document_id', p_document_id
-        )
-    );
-    return pg_catalog.jsonb_build_object(
-        'imported', true,
-        'applicationId', p_application_id,
-        'candidateId', v_candidate_id,
-        'reusedCandidate', v_candidate_id is distinct from p_candidate_id,
-        'documentId', p_document_id
-    );
-end
-$$;
-
 revoke all on function app.list_applications_v1(uuid, text, integer) from public;
 revoke all on function app.list_candidates_v1(text, integer) from public;
 revoke all on function app.get_candidate_workspace_v1(uuid) from public;
 revoke all on function app.transition_application_stage_v1(uuid, uuid, bigint, text, uuid, uuid) from public;
 revoke all on function app.add_candidate_note_v1(uuid, uuid, text, uuid, uuid) from public;
 revoke all on function app.get_document_download_v1(uuid) from public;
-revoke all on function app.import_public_application_v1(
-    uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid,
-    text, text, text, text, text, text, timestamptz,
-    bytea, bigint, text, text, text, text, text, uuid, uuid) from public;
 
 grant execute on function app.list_applications_v1(uuid, text, integer) to app_staff;
 grant execute on function app.list_candidates_v1(text, integer) to app_staff;
@@ -1221,10 +859,6 @@ grant execute on function app.get_candidate_workspace_v1(uuid) to app_staff;
 grant execute on function app.transition_application_stage_v1(uuid, uuid, bigint, text, uuid, uuid) to app_staff;
 grant execute on function app.add_candidate_note_v1(uuid, uuid, text, uuid, uuid) to app_staff;
 grant execute on function app.get_document_download_v1(uuid) to app_staff;
-grant execute on function app.import_public_application_v1(
-    uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid,
-    text, text, text, text, text, text, timestamptz,
-    bytea, bigint, text, text, text, text, text, uuid, uuid) to app_staff;
 
 -- Procedures run as app_executor: the ALTER OWNER requires schema CREATE on
 -- the target role, so grant it (as app_owner, the schema owner), transfer
@@ -1239,10 +873,6 @@ alter function app.get_candidate_workspace_v1(uuid) owner to app_executor;
 alter function app.transition_application_stage_v1(uuid, uuid, bigint, text, uuid, uuid) owner to app_executor;
 alter function app.add_candidate_note_v1(uuid, uuid, text, uuid, uuid) owner to app_executor;
 alter function app.get_document_download_v1(uuid) owner to app_executor;
-alter function app.import_public_application_v1(
-    uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid,
-    text, text, text, text, text, text, timestamptz,
-    bytea, bigint, text, text, text, text, text, uuid, uuid) owner to app_executor;
 
 set local role app_owner;
 
