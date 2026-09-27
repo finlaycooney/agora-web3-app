@@ -1906,8 +1906,6 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                     SUPABASE_SERVICE_ROLE_KEY: envValue('SERVICE_ROLE_KEY'),
                     NEXTAUTH_URL: 'http://127.0.0.1:3000',
                     NEXTAUTH_SECRET: `foundation-playwright-${RUN_ID}`,
-                    GITHUB_ID: '',
-                    GITHUB_SECRET: '',
                     RESEND_API_KEY: '',
                     SUPABASE_ACCESS_TOKEN: '',
                     DATABASE_URL: '',

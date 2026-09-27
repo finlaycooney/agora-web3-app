@@ -82,6 +82,6 @@ The maintainer must:
 
 1. Review and apply `supabase/migrations/20260911120000_candidate_applications.sql` to Supabase.
 2. Confirm the existing `cv-submissions` bucket is private and accepts `application/pdf` and `application/vnd.openxmlformats-officedocument.wordprocessingml.document` files up to 4 MB. The migration deliberately does not overwrite an existing bucket's settings.
-3. Confirm Preview and Production have `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GITHUB_ID`, and `GITHUB_SECRET` configured.
+3. Confirm Preview and Production have `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` configured.
 4. Verify the Vercel preview before merging.
 5. Run one controlled production submission after deployment and confirm the applicant row and private CV object.

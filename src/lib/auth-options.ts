@@ -1,21 +1,11 @@
 import type { NextAuthOptions } from "next-auth";
-import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 
-// GitHub OAuth exists for the public applicant flow (profile prefill on the
-// candidate site). It never grants staff access — staff sign-in is Google
-// only, and resolution is enforced server-side by app.resolve_staff_principal_v1.
+// Google is the only sign-in provider — it serves staff sign-in, and the
+// built-in NextAuth provider page therefore only ever offers Google. Staff
+// resolution is enforced server-side by app.resolve_staff_principal_v1.
 export const authOptions: NextAuthOptions = {
     providers: [
-        GithubProvider({
-            clientId: process.env.GITHUB_ID!,
-            clientSecret: process.env.GITHUB_SECRET!,
-            authorization: {
-                params: {
-                    scope: 'read:user',
-                },
-            },
-        }),
         GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,

@@ -2,13 +2,11 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import FaultyTerminal from './FaultyTerminal';
-import { useSession, signIn } from "next-auth/react";
 import { track } from '@vercel/analytics';
 
 const TheHandshake = () => {
-    const { data: session, status } = useSession();
 
     return (
         <section className="relative w-full min-h-[600px] overflow-hidden bg-transparent text-white flex flex-col items-center justify-center py-20 px-4 md:px-8">
@@ -129,13 +127,13 @@ const TheHandshake = () => {
                                 Join the index and map your proof-of-work to high-conviction protocols.
                             </p>
                         </div>
-                        <button
-                            onClick={() => !session && signIn('github')}
-                            disabled={status === 'loading' || status === 'authenticated'}
-                            className="mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10 disabled:opacity-70 disabled:cursor-not-allowed"
+                        <a
+                            href="/jobs"
+                            onClick={() => track('Jobs Browse Clicked', { platform: 'site' })}
+                            className="mt-auto self-start bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-mono text-sm tracking-widest uppercase transition-all duration-300 flex items-center gap-3 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] group-hover:px-10"
                         >
-                            [ {status === 'loading' ? 'VERIFYING...' : status === 'authenticated' ? 'IDENTITY_SYNCED' : 'SYNC_GITHUB'} ] <ArrowRight size={16} />
-                        </button>
+                            [ BROWSE_SIGNAL ] <ArrowRight size={16} />
+                        </a>
                     </div>
 
                 </div>

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Github, CheckCircle, Upload, Check } from 'lucide-react';
+import { X, CheckCircle, Upload, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { useSession, signIn } from "next-auth/react";
 import {
     CV_ACCEPT_ATTRIBUTE,
     isApplicationReference,
@@ -23,7 +22,6 @@ interface SignalSubmissionModalProps {
 }
 
 const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, onClose, job }) => {
-    const { data: session, status } = useSession();
     const [step, setStep] = useState<'initial' | 'submitting' | 'success'>('initial');
     const [errorMessage, setErrorMessage] = useState('');
     const [professionalUrlError, setProfessionalUrlError] = useState('');
@@ -48,8 +46,8 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
             setWebsite('');
             setSubmissionRefId('');
             setData({
-                fullName: session?.user?.name || '',
-                email: session?.user?.email || '',
+                fullName: '',
+                email: '',
                 professionalUrl: '',
                 technicalAchievement: '',
             });
@@ -60,7 +58,7 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
         return () => {
             document.body.style.overflow = 'unset';
         };
-    }, [isOpen, session?.user?.email, session?.user?.name]);
+    }, [isOpen]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -222,35 +220,6 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                         animate={{ opacity: 1 }}
                                         className="space-y-6"
                                     >
-                                        {/* Sync GitHub - Primary Action */}
-                                        <button
-                                            type="button"
-                                            onClick={() => !session && signIn('github')}
-                                            disabled={status === 'loading' || status === 'authenticated'}
-                                            className="w-full group relative overflow-hidden rounded-xl bg-emerald-900/20 border border-emerald-500/30 p-4 hover:bg-emerald-900/30 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
-                                        >
-                                            <div className="flex items-center justify-center space-x-3 relative z-10">
-                                                <Github className="text-emerald-400" size={20} />
-                                                <span className="font-mono font-bold text-emerald-100">
-                                                    {status === 'loading' ? 'CONNECTING_GITHUB...' :
-                                                        status === 'authenticated' ? `GITHUB_CONNECTED: ${session.user?.name || 'ACCOUNT'}` :
-                                                            'PREFILL_WITH_GITHUB'}
-                                                </span>
-                                            </div>
-                                            <div className="absolute inset-0 bg-emerald-500/10 blur-xl group-hover:bg-emerald-500/20 transition-all duration-500" />
-                                            {status !== 'authenticated' && (
-                                                <p className="text-[10px] text-emerald-400/60 font-mono mt-1 text-center uppercase tracking-wider">
-                                                    Optional: prefill your name and email
-                                                </p>
-                                            )}
-                                        </button>
-
-                                        <div className="flex items-center space-x-4">
-                                            <div className="h-px bg-white/10 flex-1" />
-                                            <span className="text-gray-500 text-xs font-mono">OR</span>
-                                            <div className="h-px bg-white/10 flex-1" />
-                                        </div>
-
                                         {/* Minimalist Form */}
                                         <form onSubmit={handleSubmit} noValidate className="space-y-4">
                                             <label hidden aria-hidden="true">

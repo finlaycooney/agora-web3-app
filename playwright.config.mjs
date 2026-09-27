@@ -26,8 +26,6 @@ export default defineConfig({
             SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
             NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://127.0.0.1:3000',
             NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'local-playwright-secret',
-            GITHUB_ID: process.env.GITHUB_ID || 'local-playwright-client',
-            GITHUB_SECRET: process.env.GITHUB_SECRET || 'local-playwright-secret',
         },
     },
     projects: [
