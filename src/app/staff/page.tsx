@@ -18,6 +18,8 @@ export default async function StaffHomePage() {
                 </div>
             </dl>
             <nav className="mt-10 flex gap-4 text-sm">
+                <Link href="/staff/applications" className="underline underline-offset-4 hover:opacity-70">Applications</Link>
+                <Link href="/staff/candidates" className="underline underline-offset-4 hover:opacity-70">Candidates</Link>
                 <Link href="/staff/clients" className="underline underline-offset-4 hover:opacity-70">Clients</Link>
                 <Link href="/staff/jobs" className="underline underline-offset-4 hover:opacity-70">Jobs</Link>
                 <Link href="/staff/members" className="underline underline-offset-4 hover:opacity-70">Members</Link>

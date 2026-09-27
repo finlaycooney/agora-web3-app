@@ -59,6 +59,7 @@ export const CJ_ID = {
     IDENTITY_B_VIEW: uid(16),
     PIPELINE_B: uid(20),
     STAGE_B_1: uid(21),
+    STAGE_B_2: uid(22),
     CLIENT_LEGACY_B: uid(30),
     JOB_LEGACY_B: uid(31),
     CANDIDATE_B: uid(32),
@@ -82,10 +83,20 @@ insert into app.role_permissions (organization_id, role_id, permission_key) valu
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'clients.write'),
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'jobs.read'),
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'jobs.write'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'applications.read'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'applications.stage'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'candidates.read'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'candidates.write'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'collaboration.read'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'collaboration.write'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'documents.download'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'documents.write'),
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'clients.read'),
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'clients.write'),
     ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'jobs.read'),
-    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'jobs.write');
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'jobs.write'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'applications.read'),
+    ('${CJ_ID.ORG_B}', '${CJ_ID.ROLE_B_RECRUITER}', 'candidates.read');
 insert into app.organization_memberships
         (id, organization_id, user_id, role_id, status, activated_at) values
     ('${CJ_ID.MEMBER_B_REC}', '${CJ_ID.ORG_B}', '${CJ_ID.USER_B_REC}',
@@ -103,7 +114,9 @@ insert into app.pipelines (id, organization_id, key, name, status) values
 insert into app.pipeline_stages
         (id, organization_id, pipeline_id, key, label, kind, position, is_initial) values
     ('${CJ_ID.STAGE_B_1}', '${CJ_ID.ORG_B}', '${CJ_ID.PIPELINE_B}',
-        'review', 'Review', 'active', 0, true);
+        'review', 'Review', 'active', 0, true),
+    ('${CJ_ID.STAGE_B_2}', '${CJ_ID.ORG_B}', '${CJ_ID.PIPELINE_B}',
+        'interview', 'Interview', 'active', 1, false);
 insert into app.clients (id, organization_id, name, status) values
     ('${CJ_ID.CLIENT_LEGACY_B}', '${CJ_ID.ORG_B}', 'Synthetic Legacy Client', 'active');
 insert into app.jobs (id, organization_id, client_id, pipeline_id, slug, title,
