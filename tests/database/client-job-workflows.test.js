@@ -74,6 +74,12 @@ const PIPELINE_FUNCTIONS = [
     'add_candidate_note_v1',
     'get_document_download_v1',
 ];
+const INTAKE_MIGRATION = '20260926140000_public_intake.sql';
+const INTAKE_FUNCTIONS = [
+    'list_public_jobs_v1',
+    'submit_public_application_v1',
+    'set_job_public_listing_v1',
+];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
@@ -209,7 +215,8 @@ test('client job workflows on PostgreSQL 17', async (t) => {
                     - 'public_profile_version'
                 from app.clients c
             union all select 2, id::text,
-                to_jsonb(j) - 'published_revision_id' from app.jobs j
+                to_jsonb(j) - 'published_revision_id' - 'publicly_listed'
+                    from app.jobs j
             union all select 3, id::text, to_jsonb(a) from app.applications a
             union all select 4, id::text, to_jsonb(cd) from app.candidates cd
             union all select 5, id::text, to_jsonb(e) from app.audit_events e
@@ -220,6 +227,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
     psql(pg17, readMigration(WORKFLOW_MIGRATION));
     psql(pg17, readMigration(LISTING_MIGRATION));
     psql(pg17, readMigration(PIPELINE_MIGRATION));
+    psql(pg17, readMigration(INTAKE_MIGRATION));
 
     pool = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 4));
     pool1 = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 1));
@@ -271,7 +279,8 @@ test('client job workflows on PostgreSQL 17', async (t) => {
                         - 'public_profile_version'
                     from app.clients c
                 union all select 2, id::text,
-                    to_jsonb(j) - 'published_revision_id' from app.jobs j
+                    to_jsonb(j) - 'published_revision_id' - 'publicly_listed'
+                        from app.jobs j
                 union all select 3, id::text, to_jsonb(a) from app.applications a
                 union all select 4, id::text, to_jsonb(cd) from app.candidates cd
                 union all select 5, id::text, to_jsonb(e) from app.audit_events e
@@ -287,6 +296,11 @@ test('client job workflows on PostgreSQL 17', async (t) => {
             select is_stealth is null and public_profile_version = 1
             from app.clients where id = '${CJ_ID.CLIENT_LEGACY_B}'`), 't',
         'legacy clients start unassessed rather than named or stealth');
+
+        assert.equal(scalar(pg17, `
+            select bool_and(publicly_listed) from app.jobs
+            where organization_id = '${ORG_B}'`), 't',
+        'existing jobs default to publicly listed');
 
         for (const table of ['job_revisions', 'recruitment_operation_receipts']) {
             assert.equal(scalar(pg17, `
@@ -1407,6 +1421,240 @@ test('client job workflows on PostgreSQL 17', async (t) => {
             false);
     });
 
+    await t.test('public intake: board lists published jobs and submissions land in the pipeline', async () => {
+        const { listPublicJobs, submitPublicApplication } =
+            await import('../../src/lib/intake-operations.js');
+        const { setJobPublicListing } =
+            await import('../../src/lib/client-job-operations.js');
+        const intake = (fn, input) => fn(pool, ORG_B, input);
+
+        // Publish a fresh job through the normal staff flow.
+        const clientId = await createClient();
+        const job = await createDraft(clientId);
+        const slug = scalar(pg17,
+            `select slug from app.jobs where id = '${job.jobId}'`);
+        const preview = await recruiter(previewJobPublic, {
+            revisionId: job.revisionId,
+        });
+        await recruiter(publishJobRevision, {
+            revisionId: job.revisionId,
+            expectedVersion: '1',
+            expectedClientVersion: '1',
+            reviewHash: preview.reviewHash,
+            operationId: randomUUID(),
+        });
+
+        const listing = await intake(listPublicJobs, {});
+        const listed = listing.jobs.find((entry) => entry.slug === slug);
+        assert.ok(listed, 'published job appears on the public board');
+        assert.equal(listed.title, JOB_FIELDS.title);
+        assert.equal(listed.applicationOpen, true);
+        assert.equal(listed.company.name, CLIENT_FIELDS.name);
+        assert.equal(
+            listing.jobs.some((entry) => entry.slug === 'job-' + CJ_ID.JOB_LEGACY_B),
+            false, 'draft jobs stay off the board');
+        assert.equal(
+            listed.jobId, undefined, 'internal ids are not exposed publicly');
+
+        // A submission lands as candidate + application + verified document.
+        const cvHash = 'ab'.repeat(32);
+        const submitted = await intake(submitPublicApplication, {
+            jobSlug: slug,
+            reference: 'AG-BBBB00000001',
+            fullName: 'Public Applicant',
+            email: 'public.applicant@example.com',
+            professionalUrl: 'https://linkedin.com/in/public-applicant',
+            achievement: 'Shipped public intake.',
+            document: {
+                sha256: cvHash,
+                sizeBytes: 2048,
+                mimeType: 'application/pdf',
+                extension: 'pdf',
+                bucket: 'cv-submissions',
+                objectKey: `cvs/${slug}/AG-BBBB00000001.pdf`,
+                filename: 'cv.pdf',
+            },
+        });
+        assert.equal(submitted.accepted, true);
+        assert.equal(submitted.duplicate, false);
+        assert.equal(submitted.reusedCandidate, false);
+        assert.equal(submitted.publicReference, 'AG-BBBB00000001');
+
+        const { getCandidateWorkspace } =
+            await import('../../src/lib/pipeline-operations.js');
+        const workspace = await admin(getCandidateWorkspace, {
+            candidateId: submitted.candidateId,
+        });
+        assert.equal(workspace.candidate.fullName, 'Public Applicant');
+        assert.equal(workspace.applications.length, 1);
+        assert.equal(
+            workspace.applications[0].publicReference, 'AG-BBBB00000001');
+        assert.equal(workspace.applications[0].stageLabel, 'Review',
+            'the application enters the pipeline initial stage');
+        assert.equal(workspace.applications[0].history.length, 1);
+        assert.equal(
+            workspace.applications[0].history[0].fromStageLabel, null,
+            'the placement row has no origin stage');
+        assert.equal(
+            workspace.applications[0].history[0].toStageLabel, 'Review');
+        assert.equal(
+            workspace.applications[0].history[0].actorName, null,
+            'intake rows carry no staff actor');
+        assert.equal(workspace.documents.length, 1);
+        assert.equal(workspace.documents[0].filename, 'cv.pdf');
+        assert.equal(workspace.documents[0].scanState, 'unscanned');
+        assert.equal(scalar(pg17, `
+            select bl.state from app.blob_locations bl
+            join app.documents d on d.blob_id = bl.blob_id
+            where d.id = '${submitted.documentId ?? workspace.documents[0].id}'`),
+            'available');
+        assert.equal(scalar(pg17, `
+            select count(*) from app.audit_events
+            where organization_id = '${ORG_B}'
+                and action = 'application.received'
+                and actor_kind = 'intake'`), '1',
+            'the submission writes an intake audit row');
+
+        // Same reference replays idempotently.
+        const replay = await intake(submitPublicApplication, {
+            jobSlug: slug,
+            reference: 'AG-BBBB00000001',
+            fullName: 'Public Applicant',
+            email: 'public.applicant@example.com',
+            professionalUrl: null,
+            achievement: null,
+            document: null,
+        });
+        assert.equal(replay.duplicate, true);
+        assert.equal(replay.applicationId, submitted.applicationId);
+
+        // Same email on a different job dedupes the candidate, not the apply.
+        const client2 = await createClient();
+        const job2 = await createDraft(client2);
+        const slug2 = scalar(pg17,
+            `select slug from app.jobs where id = '${job2.jobId}'`);
+        const preview2 = await recruiter(previewJobPublic, {
+            revisionId: job2.revisionId,
+        });
+        await recruiter(publishJobRevision, {
+            revisionId: job2.revisionId,
+            expectedVersion: '1',
+            expectedClientVersion: '1',
+            reviewHash: preview2.reviewHash,
+            operationId: randomUUID(),
+        });
+        const second = await intake(submitPublicApplication, {
+            jobSlug: slug2,
+            reference: 'AG-BBBB00000002',
+            fullName: 'Same Person Again',
+            email: 'PUBLIC.APPLICANT@example.com',
+            professionalUrl: null,
+            achievement: null,
+            document: null,
+        });
+        assert.equal(second.duplicate, false);
+        assert.equal(second.reusedCandidate, true);
+        assert.equal(second.candidateId, submitted.candidateId);
+
+        // A repeat application to the same job returns the original.
+        const repeatApply = await intake(submitPublicApplication, {
+            jobSlug: slug,
+            reference: 'AG-BBBB00000003',
+            fullName: 'Public Applicant',
+            email: 'public.applicant@example.com',
+            professionalUrl: null,
+            achievement: null,
+            document: null,
+        });
+        assert.equal(repeatApply.duplicate, true);
+        assert.equal(repeatApply.applicationId, submitted.applicationId);
+
+        // Hiding the job removes it from the board and blocks submissions.
+        await recruiter(setJobPublicListing, {
+            jobId: job.jobId,
+            listed: false,
+            expectedVersion: '2',
+            operationId: randomUUID(),
+        });
+        const hidden = await intake(listPublicJobs, {});
+        assert.equal(
+            hidden.jobs.some((entry) => entry.slug === slug), false,
+            'unlisted jobs disappear from the board');
+        await rejectCode(intake(submitPublicApplication, {
+            jobSlug: slug,
+            reference: 'AG-BBBB00000004',
+            fullName: 'Blocked Applicant',
+            email: 'blocked@example.com',
+            professionalUrl: null,
+            achievement: null,
+            document: null,
+        }), 'P0002', 'submissions to unlisted jobs are rejected');
+
+        // Unknown slugs and cross-org jobs fail the same way.
+        await rejectCode(intake(submitPublicApplication, {
+            jobSlug: 'no-such-job',
+            reference: 'AG-BBBB00000005',
+            fullName: 'Blocked Applicant',
+            email: 'blocked@example.com',
+            professionalUrl: null,
+            achievement: null,
+            document: null,
+        }), 'P0002');
+        const otherListing = await listPublicJobs(pool, ORG_A, {});
+        assert.equal(
+            otherListing.jobs.some((entry) => entry.slug === slug), false,
+            'org A cannot see org B jobs');
+    });
+
+    await t.test('public intake: roles and context stay in their lane', async () => {
+        const { setJobPublicListing } =
+            await import('../../src/lib/client-job-operations.js');
+
+        // app_intake cannot reach staff procedures; app_staff cannot reach
+        // intake procedures.
+        assertSqlstate(pg17, `
+            set role app_intake;
+            select app.list_applications_v1()
+        `, '42501');
+        assertSqlstate(pg17, `
+            set role app_staff;
+            select app.list_public_jobs_v1()
+        `, '42501');
+
+        // An intake call carrying a staff actor context is refused.
+        assertSqlstate(pg17, `
+            set role app_intake;
+            select pg_catalog.set_config('app.actor_id', '${CJ_ID.USER_B_REC}', false),
+                   pg_catalog.set_config('app.organization_id', '${ORG_B}', false);
+            select app.list_public_jobs_v1()
+        `, '42501');
+
+        // Viewer has no jobs.write, so the listing toggle is denied at the
+        // app layer before the procedure runs.
+        await rejectCode(viewer(setJobPublicListing, {
+            jobId: CJ_ID.JOB_LEGACY_B,
+            listed: true,
+            expectedVersion: '1',
+            operationId: randomUUID(),
+        }), 'FORBIDDEN');
+
+        // The toggle is version-checked at the row level.
+        const published = scalar(pg17, `
+            select id::text from app.jobs
+            where organization_id = '${ORG_B}'
+                and publication_state = 'published' limit 1`);
+        if (published) {
+            const current = scalar(pg17, `
+                select version::text from app.jobs where id = '${published}'`);
+            await rejectCode(recruiter(setJobPublicListing, {
+                jobId: published,
+                listed: false,
+                expectedVersion: String(Number(current) + 5),
+                operationId: randomUUID(),
+            }), '40001', 'a stale expected version fails closed');
+        }
+    });
+
     const { child: lockChild } = holdExclusiveLock(pg17, 'app.organizations', 8);
     try {
         await t.test('organization lock waits are bounded', async () => {
@@ -1438,6 +1686,7 @@ test('client job workflows on PostgreSQL 17', async (t) => {
         }
         psql(pgOperator, `set session authorization staff_operator;\n${readMigration(WORKFLOW_MIGRATION)}`);
         psql(pgOperator, `set session authorization staff_operator;\n${readMigration(PIPELINE_MIGRATION)}`);
+        psql(pgOperator, `set session authorization staff_operator;\n${readMigration(INTAKE_MIGRATION)}`);
         assert.equal(scalar(pgOperator, `
             select count(*) from pg_proc p
             join pg_namespace n on n.oid = p.pronamespace
@@ -1454,6 +1703,14 @@ test('client job workflows on PostgreSQL 17', async (t) => {
                 and p.proname in ('${PIPELINE_FUNCTIONS.join("','")}')
                 and p.prosecdef and r.rolname = 'app_executor'`),
             String(PIPELINE_FUNCTIONS.length));
+        assert.equal(scalar(pgOperator, `
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('${INTAKE_FUNCTIONS.join("','")}')
+                and p.prosecdef and r.rolname = 'app_executor'`),
+            String(INTAKE_FUNCTIONS.length));
         assert.equal(scalar(pgOperator, `
             select count(*) from pg_class c
             join pg_namespace n on n.oid = c.relnamespace

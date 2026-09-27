@@ -6,7 +6,7 @@ import {
     previewJobPublic,
 } from '@/lib/client-job-operations';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
-import { NewRevisionButton, PublishButton } from '../../workspace-forms';
+import { JobListingToggle, NewRevisionButton, PublishButton } from '../../workspace-forms';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +93,16 @@ export default async function StaffJobPage(
                         {row('Revision', `#${published.revisionNumber}`)}
                         {row('Published as', published.publishedCompanyName)}
                         {row('Published at', published.publishedAt)}
+                        {row('Public board', (
+                            <span className="inline-flex items-center gap-4">
+                                <span>{job.publiclyListed ? 'Listed' : 'Hidden'}</span>
+                                <JobListingToggle
+                                    jobId={job.id}
+                                    listed={job.publiclyListed}
+                                    expectedVersion={job.version}
+                                />
+                            </span>
+                        ))}
                         {publicationNeedsReview && (
                             <p className="mt-3 text-sm text-amber-400">
                                 The client public profile changed since publication — review before relying on this listing.

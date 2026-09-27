@@ -63,6 +63,7 @@ test('staff data API routes reject unauthenticated requests', async ({ request }
         `/api/staff/jobs/${id}/draft`,
         `/api/staff/jobs/${id}/revision`,
         `/api/staff/jobs/${id}/publish`,
+        `/api/staff/jobs/${id}/listing`,
         '/api/staff/applications',
         '/api/staff/candidates',
         '/api/staff/members',
