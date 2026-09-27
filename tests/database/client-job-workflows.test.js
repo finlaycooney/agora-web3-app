@@ -21,6 +21,7 @@ import {
     GOOGLE_ISSUER,
     GOOGLE_MIGRATION,
     installStaffFixture,
+    RUNTIME_ROLE,
     staffPoolOptions,
 } from '../support/staff-authorization.js';
 import {
@@ -228,6 +229,9 @@ test('client job workflows on PostgreSQL 17', async (t) => {
     psql(pg17, readMigration(LISTING_MIGRATION));
     psql(pg17, readMigration(PIPELINE_MIGRATION));
     psql(pg17, readMigration(INTAKE_MIGRATION));
+    // The intake subtests drive app_intake through the shared runtime
+    // credential; other suites assert the credential holds only app_staff.
+    psql(pg17, `grant app_intake to ${RUNTIME_ROLE}`);
 
     pool = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 4));
     pool1 = new pg.Pool(staffPoolOptions(pg17, runtimePassword, 1));

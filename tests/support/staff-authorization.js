@@ -120,7 +120,6 @@ insert into app.auth_identities (id, user_id, provider, issuer, provider_subject
 export const runtimeRoleSql = (password) => `
 create role ${RUNTIME_ROLE} login password '${password}';
 grant app_staff to ${RUNTIME_ROLE};
-grant app_intake to ${RUNTIME_ROLE};
 `;
 
 export function installStaffFixture(container) {
