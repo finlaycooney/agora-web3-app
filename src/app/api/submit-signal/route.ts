@@ -186,6 +186,17 @@ export async function POST(req: Request) {
             );
         }
 
+        if (result?.duplicate) {
+            // The verified chain belongs to the original application; this
+            // upload is unreferenced and would orphan.
+            const { error: cleanupError } = await supabase.storage
+                .from(CV_BUCKET)
+                .remove([filePath]);
+            if (cleanupError) {
+                console.error('Failed to clean up duplicate CV upload:', cleanupError);
+            }
+        }
+
         return NextResponse.json({
             success: true,
             refId: result?.publicReference ?? refId,

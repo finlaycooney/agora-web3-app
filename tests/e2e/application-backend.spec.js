@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { DOCX_MIME_TYPE } from '../../src/lib/application.js';
 import { createSyntheticDocx, createSyntheticPdf } from '../support/cv-fixtures.js';
@@ -80,15 +81,21 @@ update app.jobs set published_revision_id = '${E2E_REVISION}'
     where id = '${E2E_JOB}';
 `;
 
-const CLEANUP_SQL = `
+// Emails submitted by this process. Playwright projects run the spec in
+// parallel workers sharing one stack, so cleanup must only touch rows this
+// worker created; shared fixtures (job/client) stay seeded for the stack's
+// lifetime and re-seed idempotently via `on conflict do nothing`.
+const submittedEmails = new Set();
+
+const CLEANUP_SQL = (emails) => `
 create temp table e2e_candidates as
     select distinct i.candidate_id as id
     from app.candidate_identifiers i
     where i.organization_id = '${ORGANIZATION_ID}'
-        and i.normalized_value like '%@e2e-intake.invalid';
+        and i.normalized_value in (${emails});
 
-delete from app.blob_locations
-    where object_key like 'cvs/${E2E_SLUG}/%';
+update app.candidates set current_document_id = null
+    where id in (select id from e2e_candidates);
 delete from app.application_stage_history sh
     using app.applications a
     where a.id = sh.application_id
@@ -97,6 +104,10 @@ delete from app.application_documents ad
     using app.applications a
     where a.id = ad.application_id
         and a.candidate_id in (select id from e2e_candidates);
+delete from app.blob_locations bl
+    using app.file_blobs b
+    where bl.blob_id = b.id
+        and b.candidate_id in (select id from e2e_candidates);
 delete from app.documents
     where candidate_id in (select id from e2e_candidates);
 delete from app.file_blobs b
@@ -111,11 +122,6 @@ delete from app.candidate_sources
     where candidate_id in (select id from e2e_candidates);
 delete from app.candidates
     where id in (select id from e2e_candidates);
-delete from app.job_revisions where id = '${E2E_REVISION}';
-delete from app.jobs where id = '${E2E_JOB}';
-delete from app.clients where id = '${E2E_CLIENT}';
-delete from app.organization_memberships where id = '${E2E_MEMBERSHIP}';
-delete from app.users where id = '${E2E_USER}';
 `;
 
 const query = async (sql) => {
@@ -136,7 +142,12 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-    await query(CLEANUP_SQL).catch(() => {});
+    if (!submittedEmails.size) {
+        return;
+    }
+    const emails = [...submittedEmails].map((email) => `'${email}'`).join(', ');
+    submittedEmails.clear();
+    await query(CLEANUP_SQL(emails)).catch(() => {});
 });
 
 for (const fixture of [
@@ -150,15 +161,24 @@ for (const fixture of [
             auth: { persistSession: false, autoRefreshToken: false },
         });
         let refId;
+        // Unique per attempt: dedupe keys on email+job, and parallel projects
+        // plus retries must each own their application and object key.
+        const email = `candidate-${fixture.extension}-${randomUUID().slice(0, 8)}@e2e-intake.invalid`;
+        submittedEmails.add(email);
 
         try {
+            // A distinct client IP keeps parallel projects and retries from
+            // tripping the shared-IP submission throttle.
+            await page.setExtraHTTPHeaders({
+                'x-forwarded-for': `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+            });
             await page.route('**/api/auth/session', (route) => route.fulfill({ json: {} }));
             await page.goto('/jobs');
             const applyButton = page.getByRole('button', { name: '[ APPLY ]', exact: true }).first();
             await expect(applyButton).toBeVisible();
             await applyButton.click();
             await page.getByLabel('Full name').fill('Local Integration Test');
-            await page.getByLabel('Email address').fill(`candidate-${fixture.extension}@e2e-intake.invalid`);
+            await page.getByLabel('Email address').fill(email);
             await page.getByLabel('Professional URL').fill('https://example.invalid/profile');
             await page.getByLabel('Technical achievement').fill('Local integration test record.');
             await page.getByLabel('Upload CV as PDF or DOCX, maximum 4 MB').setInputFiles({
@@ -188,8 +208,7 @@ for (const fixture of [
                 where a.public_reference = '${refId}'`);
             expect(applications).toHaveLength(1);
             expect(applications[0].slug).toBe(E2E_SLUG);
-            expect(applications[0].email)
-                .toBe(`candidate-${fixture.extension}@e2e-intake.invalid`);
+            expect(applications[0].email).toBe(email);
             expect(applications[0].stage).toBe('Review');
 
             const documents = await query(`
