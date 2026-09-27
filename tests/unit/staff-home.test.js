@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { createElement } from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
@@ -16,9 +15,7 @@ function homePage(requireStaffVerified) {
     const exports = {};
     const imports = {
         'react/jsx-runtime': jsxRuntime,
-        'next/link': { default: ({ children, ...props }) => createElement('a', props, children) },
         '@/lib/staff-gate.server': { requireStaffVerified },
-        './staff-auth-buttons': { StaffSignOutButton: () => createElement('button', null, 'Sign out') },
     };
     runInNewContext(compiled, {
         exports,
@@ -42,8 +39,7 @@ test('staff home displays the account without exposing principal database IDs', 
     }));
     const html = renderToStaticMarkup(await Page());
     assert.match(html, /staff@example\.test/);
-    assert.match(html, /href="\/staff\/clients"/);
-    assert.match(html, /href="\/staff\/jobs"/);
+    // Section navigation lives in the workspace shell, not the page body.
     for (const id of Object.values(principal)) assert.ok(!html.includes(id));
     assert.doesNotMatch(html, />Role</);
 });

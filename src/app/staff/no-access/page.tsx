@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { staffIdentityFromSession } from '@/lib/staff-identity';
+import { staffGate } from '@/lib/staff-gate.server';
 import { StaffSignOutButton } from '../staff-auth-buttons';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,10 @@ export default async function StaffNoAccessPage() {
     const identity = staffIdentityFromSession(session);
     if (!identity) {
         redirect('/staff/sign-in');
+    }
+    // A fully-gated member landing here (e.g. a stale tab) belongs in the shell.
+    if ((await staffGate()).stage === 'verified') {
+        redirect('/staff');
     }
 
     return (
