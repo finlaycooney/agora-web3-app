@@ -2,15 +2,19 @@ import { notFound } from 'next/navigation';
 import { getCandidateWorkspace } from '@/lib/pipeline-operations';
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
+import { PageHeader } from '@/components/staff-preview/shared';
+import { Card, CardContent } from '@/components/staff-ui/card';
 import { CandidateDetail } from './candidate-detail';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Candidate · Agora staff' };
 
-export default async function StaffCandidatePage(
-    { params }: { params: Promise<{ candidateId: string }> },
-) {
+export default async function StaffCandidatePage({
+    params,
+}: {
+    params: Promise<{ candidateId: string }>;
+}) {
     const gate = await requireStaffVerified();
     const { candidateId } = await params;
     let workspace = null;
@@ -20,11 +24,19 @@ export default async function StaffCandidatePage(
     } catch (error) {
         if (error instanceof StaffAuthorizationError && error.code === 'FORBIDDEN') {
             return (
-                <section className="mx-auto max-w-4xl px-6 py-12">
-                    <h1 className="text-2xl font-semibold">Candidate</h1>
-                    <p className="mt-6 text-sm text-muted-foreground">
-                        Candidate access requires the candidates.read permission.
-                    </p>
+                <section className="mx-auto w-full max-w-5xl">
+                    <PageHeader
+                        eyebrow="Workspace"
+                        title="Candidate"
+                        description="Applications, documents and staff notes."
+                    />
+                    <Card className="mt-6">
+                        <CardContent className="py-8 text-center">
+                            <p className="text-sm text-muted-foreground">
+                                Candidate access requires the candidates.read permission.
+                            </p>
+                        </CardContent>
+                    </Card>
                 </section>
             );
         }
@@ -35,7 +47,7 @@ export default async function StaffCandidatePage(
     }
 
     return (
-        <section className="mx-auto max-w-6xl px-6 py-10">
+        <section className="mx-auto w-full max-w-7xl">
             <CandidateDetail workspace={workspace} />
         </section>
     );

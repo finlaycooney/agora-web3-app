@@ -1,108 +1,68 @@
-import Link from 'next/link';
 import { listJobs } from '@/lib/client-job-operations';
+import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
+import { loadStaffWorkspace } from '@/lib/workspace.server';
+import { PageHeader } from '@/components/staff-preview/shared';
+import { Card, CardContent } from '@/components/staff-ui/card';
+import { JobsBrowser } from './jobs-browser';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Jobs · Agora staff' };
 
-const th = 'px-3 py-2 text-left text-xs uppercase tracking-widest text-foreground/50';
-const td = 'px-3 py-2.5 text-sm border-t border-foreground/10';
+const LIST_LIMIT = 500;
 
-const STATES = ['all', 'draft', 'published', 'withdrawn', 'archived'] as const;
-
-export default async function StaffJobsPage(
-    { searchParams }: { searchParams: Promise<{ state?: string; owner?: string }> },
-) {
+export default async function StaffJobsPage() {
     const gate = await requireStaffVerified();
-    const params = await searchParams;
-    const state = params.state && params.state !== 'all'
-        && (STATES as readonly string[]).includes(params.state)
-        ? params.state
-        : null;
-    const mine = params.owner === 'me' ? gate.principal.membership_id : null;
-    const jobs = await listJobs(gate.pool, gate.identity, gate.organizationId, {
-        publicationState: state,
-        ownerMembershipId: mine,
-    });
+    const { summary } = await loadStaffWorkspace();
+
+    let jobs: any[] | null = null;
+    try {
+        jobs = await listJobs(gate.pool, gate.identity, gate.organizationId, {
+            limit: LIST_LIMIT,
+        });
+    } catch (error) {
+        if (!(error instanceof StaffAuthorizationError && error.code === 'FORBIDDEN')) {
+            throw error;
+        }
+    }
+
+    if (jobs === null) {
+        return (
+            <section className="mx-auto w-full max-w-7xl">
+                <PageHeader
+                    eyebrow="Workspace"
+                    title="Jobs"
+                    description="Drafts and published roles across your clients."
+                />
+                <Card className="mt-6">
+                    <CardContent className="py-8 text-center">
+                        <p className="text-sm text-muted-foreground">
+                            Job access requires the jobs.read and clients.read permissions.
+                        </p>
+                    </CardContent>
+                </Card>
+            </section>
+        );
+    }
+
+    const clients = Array.from(
+        new Map(
+            (jobs as any[]).map((job) => [job.clientId, job.clientName] as const),
+        ).entries(),
+    )
+        .map(([id, name]) => ({ id, name }))
+        .sort((left, right) => left.name.localeCompare(right.name));
 
     return (
-        <section className="mx-auto max-w-4xl px-6 py-12">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Jobs</h1>
-                <Link
-                    href="/staff/jobs/new"
-                    className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80"
-                >
-                    New job
-                </Link>
-            </div>
-            <div className="mt-6 flex gap-3 text-sm">
-                {STATES.map((value) => (
-                    <Link
-                        key={value}
-                        href={`/staff/jobs?state=${value}${mine ? '&owner=me' : ''}`}
-                        className={`rounded-full border px-3 py-1 ${
-                            (state ?? 'all') === value
-                                ? 'border-foreground bg-foreground text-background'
-                                : 'border-foreground/20 text-foreground/60 hover:opacity-70'
-                        }`}
-                    >
-                        {value}
-                    </Link>
-                ))}
-                <Link
-                    href={mine
-                        ? `/staff/jobs${state ? `?state=${state}` : ''}`
-                        : `/staff/jobs?owner=me${state ? `&state=${state}` : ''}`}
-                    className={`rounded-full border px-3 py-1 ${
-                        mine
-                            ? 'border-foreground bg-foreground text-background'
-                            : 'border-foreground/20 text-foreground/60 hover:opacity-70'
-                    }`}
-                >
-                    Owned by me
-                </Link>
-            </div>
-            {jobs.length === 0 ? (
-                <p className="mt-10 text-sm text-foreground/60">No jobs match.</p>
-            ) : (
-                <table className="mt-8 w-full border-collapse">
-                    <thead>
-                        <tr>
-                            <th className={th}>Title</th>
-                            <th className={th}>Client</th>
-                            <th className={th}>Publication</th>
-                            <th className={th}>Applications</th>
-                            <th className={th}>Draft</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {jobs.map((job: any) => (
-                            <tr key={job.id} className={job.publicationState === 'draft' ? 'opacity-60' : ''}>
-                                <td className={td}>
-                                    <Link href={`/staff/jobs/${job.id}`} className="underline underline-offset-4 hover:opacity-70">
-                                        {job.title}
-                                    </Link>
-                                </td>
-                                <td className={td}>
-                                    {job.clientName}
-                                    {job.clientIsStealth && (
-                                        <span className="ml-2 rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                            stealth
-                                        </span>
-                                    )}
-                                </td>
-                                <td className={td}>{job.publicationState}</td>
-                                <td className={td}>{job.applicationState}</td>
-                                <td className={`${td} font-mono text-xs`}>
-                                    {job.draftRevisionId ? 'yes' : '—'}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+        <section className="mx-auto w-full max-w-7xl">
+            <JobsBrowser
+                jobs={jobs}
+                clients={clients}
+                currentMembershipId={gate.principal.membership_id}
+                canCreate={summary?.capabilities.writeJobs === true}
+                capped={jobs.length >= LIST_LIMIT}
+            />
         </section>
     );
 }
