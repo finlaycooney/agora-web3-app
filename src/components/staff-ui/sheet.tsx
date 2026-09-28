@@ -19,7 +19,7 @@ const SheetOverlay = React.forwardRef<
     <SheetPrimitive.Overlay
         ref={ref}
         className={cn(
-            'fixed inset-0 z-50 bg-foreground/30 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+            'staff-scope fixed inset-0 z-50 bg-foreground/30 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
             className,
         )}
         {...props}
@@ -56,7 +56,7 @@ const SheetContent = React.forwardRef<
         <SheetOverlay />
         <SheetPrimitive.Content
             ref={ref}
-            className={cn(sheetVariants({ side }), className)}
+            className={cn(sheetVariants({ side }), 'staff-scope', className)}
             {...props}
         >
             {children}

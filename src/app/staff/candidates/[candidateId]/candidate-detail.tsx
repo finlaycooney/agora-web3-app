@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FileText, Lock } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, FileText, Lock } from 'lucide-react';
 
 import { Badge } from '@/components/staff-ui/badge';
 import { Button } from '@/components/staff-ui/button';
@@ -259,9 +260,32 @@ function NoteComposer({ candidateId }: { candidateId: string }) {
     );
 }
 
-export function CandidateDetail({ workspace }: { workspace: Workspace }) {
+const DETAIL_TABS = ['applications', 'documents', 'notes'] as const;
+
+export function CandidateDetail({
+    workspace,
+}: {
+    workspace: Workspace;
+}) {
     const { candidate, identifiers, applications, stages, documents, notes, capabilities } =
         workspace;
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const requestedTab = searchParams.get('tab') ?? '';
+    const tab = (DETAIL_TABS as readonly string[]).includes(requestedTab)
+        ? requestedTab
+        : 'applications';
+    const setTab = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value === 'applications') {
+            params.delete('tab');
+        } else {
+            params.set('tab', value);
+        }
+        const queryString = params.toString();
+        window.history.replaceState(
+            null, '', `${pathname}${queryString ? `?${queryString}` : ''}`);
+    };
     const name = candidate.fullName ?? 'Unnamed candidate';
     const email = identifiers.find((entry) => entry.kind === 'email')?.value;
     const professionalUrl = identifiers.find(
@@ -270,6 +294,13 @@ export function CandidateDetail({ workspace }: { workspace: Workspace }) {
 
     return (
         <div className="flex flex-col gap-6">
+            <Link
+                href="/staff/candidates"
+                className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground"
+            >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to candidates
+            </Link>
             <div className="flex items-center gap-4">
                 <span
                     aria-hidden="true"
@@ -301,7 +332,7 @@ export function CandidateDetail({ workspace }: { workspace: Workspace }) {
                 </div>
             </div>
 
-            <Tabs defaultValue="applications">
+            <Tabs value={tab} onValueChange={setTab}>
                 <TabsList>
                     <TabsTrigger value="applications">
                         Applications

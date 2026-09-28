@@ -7,8 +7,8 @@ const MONEY_PATTERN = /^[0-9]{1,12}(\.[0-9]{1,2})?$/;
 const URL_PATTERN = /^https?:\/\/[^/?#@\s]+(?:[/?#][^\s]*)?$/;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f]/;
 
-const SOCIAL_PLATFORMS = new Set(['linkedin', 'x', 'github', 'other']);
-const SOCIAL_PLATFORM_NAMES = {
+export const SOCIAL_PLATFORMS = new Set(['linkedin', 'x', 'github', 'other']);
+export const SOCIAL_PLATFORM_NAMES = {
     linkedin: 'LinkedIn',
     x: 'X/Twitter',
     github: 'GitHub',
@@ -17,7 +17,7 @@ const SOCIAL_PLATFORM_NAMES = {
 const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'internship']);
 const WORKPLACE_MODES = new Set(['onsite', 'hybrid', 'remote']);
 const PAY_PERIODS = new Set(['year', 'month', 'day', 'hour']);
-const BONUS_TYPES = new Set(['cash', 'equity', 'options', 'stock', 'token', 'other']);
+export const BONUS_TYPES = new Set(['cash', 'equity', 'options', 'stock', 'token', 'other']);
 const PLAIN_MARK_TYPES = new Set(['bold', 'italic', 'underline', 'strike']);
 const BLOCK_TYPES = new Set(['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote']);
 

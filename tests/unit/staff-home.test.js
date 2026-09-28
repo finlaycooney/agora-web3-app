@@ -6,18 +6,51 @@ import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../../src/app/staff/page.tsx', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-}).outputText;
+const { jsx, jsxs, Fragment } = jsxRuntime;
 
-function homePage(requireStaffVerified) {
+const compile = (path) => ts.transpileModule(
+    readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } },
+).outputText;
+
+const div = (props) => jsxs('div', { ...props, children: props?.children });
+
+function overviewPage({ requireStaffVerified, loadStaffWorkspace }) {
     const exports = {};
     const imports = {
         'react/jsx-runtime': jsxRuntime,
+        '@/components/staff-ui/card': { Card: div, CardContent: div },
+        '@/components/staff-preview/shared': {
+            PageHeader: (props) => jsxs(Fragment, {
+                children: [
+                    jsx('h1', { children: props.title }, 'h'),
+                    props.description ? jsx('p', { children: props.description }, 'd') : null,
+                ],
+            }),
+        },
         '@/lib/staff-gate.server': { requireStaffVerified },
+        '@/lib/workspace.server': { loadStaffWorkspace },
+        './overview-sections': {
+            OverviewMetrics: ({ summary }) =>
+                jsx('div', { children: `metrics:${JSON.stringify(summary.metrics)}` }),
+            ReviewQueue: ({ summary }) =>
+                jsx('div', {
+                    children: `review:${summary.recentApplications.length}`,
+                }),
+            ClientsHiring: ({ summary }) =>
+                jsx('div', {
+                    children: `hiring:${summary.clientsHiring.length}`,
+                }),
+        },
+        './staff-todo-list': {
+            StaffTodoList: ({ writeEnabled }) =>
+                jsx('div', { children: `todo:${String(writeEnabled)}` }),
+        },
+        './summary-retry': {
+            SummaryRetry: () => jsx('button', { children: 'retry-stub' }),
+        },
     };
-    runInNewContext(compiled, {
+    runInNewContext(compile('src/app/staff/page.tsx'), {
         exports,
         require: (name) => {
             assert.ok(Object.hasOwn(imports, name), `Unexpected dependency: ${name}`);
@@ -27,25 +60,91 @@ function homePage(requireStaffVerified) {
     return exports.default;
 }
 
-test('staff home displays the account without exposing principal database IDs', async () => {
-    const principal = {
-        role_id: 'f0000000-0000-4000-8000-000000000001',
-        user_id: 'f0000000-0000-4000-8000-000000000002',
-        membership_id: 'f0000000-0000-4000-8000-000000000003',
-    };
-    const Page = homePage(async () => ({
-        session: { user: { email: 'staff@example.test' } },
-        principal,
-    }));
-    const html = renderToStaticMarkup(await Page());
-    assert.match(html, /staff@example\.test/);
-    // Section navigation lives in the workspace shell, not the page body.
-    for (const id of Object.values(principal)) assert.ok(!html.includes(id));
-    assert.doesNotMatch(html, />Role</);
+const verified = async () => ({ stage: 'verified' });
+
+const fullSummary = (overrides = {}) => ({
+    capabilities: {
+        candidates: true,
+        applications: true,
+        clients: true,
+        jobs: true,
+        members: true,
+        tasks: true,
+        writeTasks: true,
+        writeClients: true,
+        writeJobs: true,
+        ...overrides.capabilities,
+    },
+    metrics: { candidates: 4, applications: 9, openRoles: 2, ...overrides.metrics },
+    attention: {
+        reviewApplications: 3,
+        pendingInvites: 1,
+        openTasks: 2,
+        ...overrides.attention,
+    },
+    clientsHiring: [],
+    clientsHiringTotal: 0,
+    recentApplications: [],
+    ...overrides,
 });
 
-test('staff home still requires the full staff and MFA gate before rendering', async () => {
+test('staff overview renders real workspace content for a verified member', async () => {
+    const Page = overviewPage({
+        requireStaffVerified: verified,
+        loadStaffWorkspace: async () => ({
+            gate: { stage: 'verified' },
+            summary: fullSummary(),
+        }),
+    });
+    const html = renderToStaticMarkup(await Page());
+    assert.match(html, /Overview/);
+    assert.match(html, /snapshot of your recruiting pipeline/i);
+    assert.match(html, /metrics:\{&quot;candidates&quot;:4,&quot;applications&quot;:9,&quot;openRoles&quot;:2\}/);
+    assert.match(html, /todo:true/);
+    assert.match(html, /review:0/);
+    assert.match(html, /hiring:0/);
+    // Section navigation lives in the workspace shell, not the page body.
+    assert.doesNotMatch(html, /<nav/);
+    assert.doesNotMatch(html, /temporarily unavailable/);
+});
+
+test('staff overview shows the unavailable state when the summary fails', async () => {
+    const Page = overviewPage({
+        requireStaffVerified: verified,
+        loadStaffWorkspace: async () => ({
+            gate: { stage: 'verified' },
+            summary: null,
+        }),
+    });
+    const html = renderToStaticMarkup(await Page());
+    assert.match(html, /Workspace summary is temporarily unavailable/);
+    assert.match(html, /retry-stub/);
+    assert.doesNotMatch(html, /metrics:/);
+});
+
+test('staff overview explains missing task permission instead of a blank panel', async () => {
+    const Page = overviewPage({
+        requireStaffVerified: verified,
+        loadStaffWorkspace: async () => ({
+            gate: { stage: 'verified' },
+            summary: fullSummary({
+                capabilities: { tasks: false, writeTasks: false },
+            }),
+        }),
+    });
+    const html = renderToStaticMarkup(await Page());
+    assert.match(html, /collaboration\.read permission/);
+    assert.doesNotMatch(html, /todo:true/);
+    assert.match(html, /review:0/);
+});
+
+test('staff overview still requires the full staff and MFA gate', async () => {
     const denied = new Error('MFA required');
-    const Page = homePage(async () => { throw denied; });
+    const Page = overviewPage({
+        requireStaffVerified: async () => { throw denied; },
+        loadStaffWorkspace: async () => {
+            throw new Error('loadStaffWorkspace must not run when the gate fails');
+        },
+    });
     await assert.rejects(Page(), (error) => error === denied);
 });

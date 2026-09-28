@@ -1,31 +1,80 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 
-const inputClass = 'w-full rounded-md border border-foreground/20 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/50';
-const labelClass = 'block text-xs uppercase tracking-widest text-foreground/50 mb-1.5';
-const buttonClass = 'rounded-md bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-40';
-const ghostButtonClass = 'rounded-md border border-foreground/20 px-4 py-2 text-sm transition-opacity hover:opacity-70 disabled:opacity-40';
+import { Button } from '@/components/staff-ui/button';
+import { Checkbox } from '@/components/staff-ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/staff-ui/dialog';
+import { Input } from '@/components/staff-ui/input';
+import { Label } from '@/components/staff-ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/staff-ui/select';
+import { Textarea } from '@/components/staff-ui/textarea';
+import { RichTextEditor } from '@/components/staff-preview/rich-text-editor';
+import { RequiredMark } from '@/components/staff-preview/shared';
+import {
+    BONUS_TYPES,
+    EMPTY_JOB_DOCUMENT,
+    SOCIAL_PLATFORM_NAMES,
+    SOCIAL_PLATFORMS,
+} from '@/lib/client-job-contracts.js';
+import { staffMutation } from '@/lib/staff-mutation';
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+const nativeSelectClass =
+    'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+function Field({
+    label,
+    htmlFor,
+    required,
+    children,
+}: {
+    label: string;
+    htmlFor?: string;
+    required?: boolean;
+    children: ReactNode;
+}) {
     return (
-        <label className="block">
-            <span className={labelClass}>{label}</span>
+        <div className="flex flex-col gap-1.5">
+            <Label htmlFor={htmlFor}>
+                {label}
+                {required ? (
+                    <>
+                        {' '}
+                        <RequiredMark />
+                    </>
+                ) : null}
+            </Label>
             {children}
-        </label>
+        </div>
     );
 }
 
 const parseList = (value: string) =>
     value.split(',').map((entry) => entry.trim()).filter(Boolean);
 
-const descriptionDocument = (text: string) => ({
-    type: 'doc',
-    content: text.trim()
-        ? [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-        : [{ type: 'paragraph' }],
-});
+interface SocialLink {
+    platform: string;
+    url: string;
+}
+
+interface JobBonus {
+    type: string;
+    details: string;
+}
 
 export function ClientForm({
     clientId,
@@ -38,6 +87,7 @@ export function ClientForm({
         contactEmail: string | null;
         telegramUsername: string | null;
         website: string | null;
+        socialLinks: SocialLink[] | null;
         isStealth: boolean | null;
         anonymousDescription: string | null;
         version: string;
@@ -45,7 +95,14 @@ export function ClientForm({
 }) {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
+    const [saved, setSaved] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [links, setLinks] = useState<SocialLink[]>(
+        (initial?.socialLinks ?? []).map((link) => ({
+            platform: link.platform,
+            url: link.url,
+        })),
+    );
 
     const submit = async (form: HTMLFormElement) => {
         const data = new FormData(form);
@@ -56,66 +113,209 @@ export function ClientForm({
             contactEmail: String(data.get('contactEmail') ?? '') || null,
             telegramUsername: String(data.get('telegramUsername') ?? '') || null,
             website: String(data.get('website') ?? '') || null,
-            socialLinks: [],
+            socialLinks: links
+                .map((link) => ({ platform: link.platform, url: link.url.trim() }))
+                .filter((link) => link.url !== ''),
             isStealth: stealth,
             anonymousDescription: stealth
                 ? (String(data.get('anonymousDescription') ?? '') || null)
                 : null,
         };
         const url = clientId ? `/api/staff/clients/${clientId}` : '/api/staff/clients';
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                fields,
-                ...(clientId ? { expectedVersion: initial?.version } : {}),
-            }),
+        const payload = await staffMutation(url, {
+            fields,
+            ...(clientId ? { expectedVersion: initial?.version } : {}),
         });
-        if (response.ok) {
-            const payload = await response.json();
-            router.push(`/staff/clients/${payload?.result?.id ?? clientId ?? ''}`);
+        if (clientId) {
+            setSaved(true);
             router.refresh();
             return;
         }
-        const payload = await response.json().catch(() => ({}));
-        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Save failed');
+        const targetId = payload?.result?.id ?? payload?.result?.clientId;
+        if (!targetId) {
+            throw new Error('Could not save. Please try again.');
+        }
+        router.push(`/staff/clients/${targetId}`);
+        router.refresh();
+    };
+
+    const updateLink = (index: number, patch: Partial<SocialLink>) => {
+        setLinks((current) =>
+            current.map((link, position) =>
+                position === index ? { ...link, ...patch } : link,
+            ),
+        );
     };
 
     return (
         <form
-            className="mt-8 max-w-xl space-y-5"
+            className="flex max-w-xl flex-col gap-5"
             onSubmit={(event) => {
                 event.preventDefault();
+                setError(null);
+                setSaved(false);
                 setBusy(true);
-                void submit(event.currentTarget).finally(() => setBusy(false));
+                void submit(event.currentTarget)
+                    .catch((caught) =>
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.',
+                        ),
+                    )
+                    .finally(() => setBusy(false));
             }}
         >
-            <Field label="Client name">
-                <input name="name" required maxLength={256} defaultValue={initial?.name ?? ''} className={inputClass} />
+            <Field label="Client name" htmlFor="client-name" required>
+                <Input
+                    id="client-name"
+                    name="name"
+                    required
+                    maxLength={256}
+                    defaultValue={initial?.name ?? ''}
+                />
             </Field>
-            <Field label="Contact name">
-                <input name="contactName" maxLength={256} defaultValue={initial?.contactName ?? ''} className={inputClass} />
+            <Field label="Contact name" htmlFor="client-contact-name">
+                <Input
+                    id="client-contact-name"
+                    name="contactName"
+                    maxLength={256}
+                    defaultValue={initial?.contactName ?? ''}
+                />
             </Field>
-            <Field label="Contact email">
-                <input name="contactEmail" type="email" maxLength={254} defaultValue={initial?.contactEmail ?? ''} className={inputClass} />
+            <Field label="Contact email" htmlFor="client-contact-email">
+                <Input
+                    id="client-contact-email"
+                    name="contactEmail"
+                    type="email"
+                    maxLength={254}
+                    defaultValue={initial?.contactEmail ?? ''}
+                />
             </Field>
-            <Field label="Telegram username">
-                <input name="telegramUsername" maxLength={32} defaultValue={initial?.telegramUsername ?? ''} className={inputClass} />
+            <Field label="Telegram username" htmlFor="client-telegram">
+                <Input
+                    id="client-telegram"
+                    name="telegramUsername"
+                    maxLength={32}
+                    defaultValue={initial?.telegramUsername ?? ''}
+                />
             </Field>
-            <Field label="Website">
-                <input name="website" type="url" defaultValue={initial?.website ?? ''} className={inputClass} />
+            <Field label="Website" htmlFor="client-website">
+                <Input
+                    id="client-website"
+                    name="website"
+                    type="url"
+                    defaultValue={initial?.website ?? ''}
+                />
             </Field>
-            <label className="flex items-center gap-2 text-sm">
-                <input name="isStealth" type="checkbox" defaultChecked={initial?.isStealth ?? false} />
+
+            <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-foreground">Social links</span>
+                {links.map((link, index) => (
+                    <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-40">
+                            <Label htmlFor={`social-platform-${index}`}>Platform</Label>
+                            <Select
+                                value={link.platform}
+                                onValueChange={(value) =>
+                                    updateLink(index, { platform: value })
+                                }
+                            >
+                                <SelectTrigger
+                                    id={`social-platform-${index}`}
+                                    aria-label={`Social link ${index + 1} platform`}
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from(SOCIAL_PLATFORMS).map((platform) => (
+                                        <SelectItem key={platform} value={platform}>
+                                            {SOCIAL_PLATFORM_NAMES[
+                                                platform as keyof typeof SOCIAL_PLATFORM_NAMES
+                                            ] ?? platform}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <Label htmlFor={`social-url-${index}`}>URL</Label>
+                            <Input
+                                id={`social-url-${index}`}
+                                type="url"
+                                placeholder="https://…"
+                                value={link.url}
+                                onChange={(event) =>
+                                    updateLink(index, { url: event.target.value })
+                                }
+                            />
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="self-end"
+                            aria-label={`Remove social link ${index + 1}`}
+                            onClick={() =>
+                                setLinks((current) =>
+                                    current.filter((_, position) => position !== index),
+                                )
+                            }
+                        >
+                            <Trash2 aria-hidden="true" />
+                        </Button>
+                    </div>
+                ))}
+                {links.length < 8 ? (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="self-start"
+                        onClick={() =>
+                            setLinks((current) => [
+                                ...current,
+                                { platform: 'linkedin', url: '' },
+                            ])
+                        }
+                    >
+                        <Plus aria-hidden="true" />
+                        Add social link
+                    </Button>
+                ) : null}
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-foreground">
+                <Checkbox
+                    name="isStealth"
+                    value="on"
+                    defaultChecked={initial?.isStealth ?? false}
+                />
                 Stealth client (hidden identity in public listings)
             </label>
-            <Field label="Anonymous description">
-                <textarea name="anonymousDescription" rows={2} defaultValue={initial?.anonymousDescription ?? ''} className={inputClass} />
+            <Field label="Anonymous description" htmlFor="client-anon-description">
+                <Textarea
+                    id="client-anon-description"
+                    name="anonymousDescription"
+                    rows={2}
+                    defaultValue={initial?.anonymousDescription ?? ''}
+                />
             </Field>
-            {error && <p className="text-sm text-red-400">{error}</p>}
-            <button type="submit" disabled={busy} className={buttonClass}>
-                {clientId ? 'Save changes' : 'Create client'}
-            </button>
+            {error && (
+                <p role="alert" className="text-sm text-destructive">
+                    {error}
+                </p>
+            )}
+            {saved ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    Changes saved.
+                </p>
+            ) : null}
+            <Button type="submit" disabled={busy} className="self-start">
+                {busy
+                    ? 'Saving…'
+                    : clientId
+                      ? 'Save changes'
+                      : 'Create client'}
+            </Button>
         </form>
     );
 }
@@ -142,12 +342,23 @@ export function JobForm({
         compensationMax: string | null;
         currency: string | null;
         payPeriod: string | null;
+        bonuses?: JobBonus[] | null;
+        descriptionDocument?: unknown;
         descriptionText: string;
     };
 }) {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const documentRef = useRef<unknown>(
+        initial?.descriptionDocument ?? EMPTY_JOB_DOCUMENT,
+    );
+    const [bonuses, setBonuses] = useState<JobBonus[]>(
+        (initial?.bonuses ?? []).map((bonus) => ({
+            type: bonus.type,
+            details: bonus.details,
+        })),
+    );
 
     const submit = async (form: HTMLFormElement) => {
         const data = new FormData(form);
@@ -162,55 +373,86 @@ export function JobForm({
             compensationMax: nullable('compensationMax'),
             currency: nullable('currency'),
             payPeriod: nullable('payPeriod'),
-            bonuses: [],
-            descriptionDocument: descriptionDocument(String(data.get('description') ?? '')),
+            bonuses: bonuses
+                .map((bonus) => ({ type: bonus.type, details: bonus.details.trim() }))
+                .filter((bonus) => bonus.details !== ''),
+            descriptionDocument: documentRef.current,
         };
         const url = jobId ? `/api/staff/jobs/${jobId}/draft` : '/api/staff/jobs';
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                fields,
-                ...(jobId
-                    ? { revisionId, expectedVersion }
-                    : { clientId: String(data.get('clientId') ?? '') }),
-            }),
+        const payload = await staffMutation(url, {
+            fields,
+            ...(jobId
+                ? { revisionId, expectedVersion }
+                : { clientId: String(data.get('clientId') ?? '') }),
         });
-        const payload = await response.json().catch(() => ({}));
-        if (response.ok) {
-            const targetId = jobId ?? payload?.result?.jobId;
-            router.push(targetId ? `/staff/jobs/${targetId}` : '/staff/jobs');
-            router.refresh();
-            return;
-        }
-        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Save failed');
+        const targetId = jobId ?? payload?.result?.jobId;
+        router.push(targetId ? `/staff/jobs/${targetId}` : '/staff/jobs');
+        router.refresh();
+    };
+
+    const updateBonus = (index: number, patch: Partial<JobBonus>) => {
+        setBonuses((current) =>
+            current.map((bonus, position) =>
+                position === index ? { ...bonus, ...patch } : bonus,
+            ),
+        );
     };
 
     return (
         <form
-            className="mt-8 max-w-xl space-y-5"
+            className="flex max-w-2xl flex-col gap-5"
             onSubmit={(event) => {
                 event.preventDefault();
+                setError(null);
                 setBusy(true);
-                void submit(event.currentTarget).finally(() => setBusy(false));
+                void submit(event.currentTarget)
+                    .catch((caught) =>
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.',
+                        ),
+                    )
+                    .finally(() => setBusy(false));
             }}
         >
             {!jobId && (
-                <Field label="Client">
-                    <select name="clientId" required className={inputClass} defaultValue="">
-                        <option value="" disabled>Select a client</option>
+                <Field label="Client" htmlFor="job-client" required>
+                    <select
+                        id="job-client"
+                        name="clientId"
+                        required
+                        className={nativeSelectClass}
+                        defaultValue=""
+                    >
+                        <option value="" disabled>
+                            Select a client
+                        </option>
                         {clients.map((client) => (
-                            <option key={client.id} value={client.id}>{client.name}</option>
+                            <option key={client.id} value={client.id}>
+                                {client.name}
+                            </option>
                         ))}
                     </select>
                 </Field>
             )}
-            <Field label="Job title">
-                <input name="title" required maxLength={200} defaultValue={initial?.title ?? ''} className={inputClass} />
+            <Field label="Job title" htmlFor="job-title" required>
+                <Input
+                    id="job-title"
+                    name="title"
+                    required
+                    maxLength={200}
+                    defaultValue={initial?.title ?? ''}
+                />
             </Field>
-            <div className="grid grid-cols-2 gap-4">
-                <Field label="Employment type">
-                    <select name="employmentType" className={inputClass} defaultValue={initial?.employmentType ?? ''}>
+            <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Employment type" htmlFor="job-employment-type">
+                    <select
+                        id="job-employment-type"
+                        name="employmentType"
+                        className={nativeSelectClass}
+                        defaultValue={initial?.employmentType ?? ''}
+                    >
                         <option value="">—</option>
                         <option value="full_time">Full time</option>
                         <option value="part_time">Part time</option>
@@ -218,8 +460,13 @@ export function JobForm({
                         <option value="internship">Internship</option>
                     </select>
                 </Field>
-                <Field label="Workplace mode">
-                    <select name="workplaceMode" className={inputClass} defaultValue={initial?.workplaceMode ?? ''}>
+                <Field label="Workplace mode" htmlFor="job-workplace-mode">
+                    <select
+                        id="job-workplace-mode"
+                        name="workplaceMode"
+                        className={nativeSelectClass}
+                        defaultValue={initial?.workplaceMode ?? ''}
+                    >
                         <option value="">—</option>
                         <option value="onsite">Onsite</option>
                         <option value="hybrid">Hybrid</option>
@@ -227,24 +474,53 @@ export function JobForm({
                     </select>
                 </Field>
             </div>
-            <Field label="Locations (comma-separated)">
-                <input name="locations" defaultValue={initial?.locations?.join(', ') ?? ''} className={inputClass} />
+            <Field label="Locations (comma-separated)" htmlFor="job-locations">
+                <Input
+                    id="job-locations"
+                    name="locations"
+                    defaultValue={initial?.locations?.join(', ') ?? ''}
+                />
             </Field>
-            <Field label="Remote regions (comma-separated)">
-                <input name="remoteRegions" defaultValue={initial?.remoteRegions?.join(', ') ?? ''} className={inputClass} />
+            <Field label="Remote regions (comma-separated)" htmlFor="job-remote-regions">
+                <Input
+                    id="job-remote-regions"
+                    name="remoteRegions"
+                    defaultValue={initial?.remoteRegions?.join(', ') ?? ''}
+                />
             </Field>
-            <div className="grid grid-cols-2 gap-4">
-                <Field label="Compensation min">
-                    <input name="compensationMin" inputMode="decimal" defaultValue={initial?.compensationMin ?? ''} className={inputClass} />
+            <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Compensation min" htmlFor="job-comp-min">
+                    <Input
+                        id="job-comp-min"
+                        name="compensationMin"
+                        inputMode="decimal"
+                        defaultValue={initial?.compensationMin ?? ''}
+                    />
                 </Field>
-                <Field label="Compensation max">
-                    <input name="compensationMax" inputMode="decimal" defaultValue={initial?.compensationMax ?? ''} className={inputClass} />
+                <Field label="Compensation max" htmlFor="job-comp-max">
+                    <Input
+                        id="job-comp-max"
+                        name="compensationMax"
+                        inputMode="decimal"
+                        defaultValue={initial?.compensationMax ?? ''}
+                    />
                 </Field>
-                <Field label="Currency">
-                    <input name="currency" maxLength={3} placeholder="EUR" defaultValue={initial?.currency ?? ''} className={inputClass} />
+                <Field label="Currency" htmlFor="job-currency">
+                    <Input
+                        id="job-currency"
+                        name="currency"
+                        maxLength={3}
+                        placeholder="EUR"
+                        defaultValue={initial?.currency ?? ''}
+                    />
                 </Field>
-                <Field label="Pay period">
-                    <select name="payPeriod" className={inputClass} defaultValue={initial?.payPeriod ?? ''}>
+                <Field label="Pay period" htmlFor="job-pay-period">
+                    <select
+                        id="job-pay-period"
+                        name="payPeriod"
+                        className={nativeSelectClass}
+                        defaultValue={initial?.payPeriod ?? ''}
+                    >
                         <option value="">—</option>
                         <option value="year">Year</option>
                         <option value="month">Month</option>
@@ -253,13 +529,98 @@ export function JobForm({
                     </select>
                 </Field>
             </div>
-            <Field label="Description">
-                <textarea name="description" rows={8} defaultValue={initial?.descriptionText ?? ''} className={inputClass} />
-            </Field>
-            {error && <p className="text-sm text-red-400">{error}</p>}
-            <button type="submit" disabled={busy} className={buttonClass}>
-                {jobId ? 'Save draft' : 'Create job draft'}
-            </button>
+
+            <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-foreground">Bonuses</span>
+                {bonuses.map((bonus, index) => (
+                    <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-36">
+                            <Label htmlFor={`bonus-type-${index}`}>Type</Label>
+                            <Select
+                                value={bonus.type}
+                                onValueChange={(value) =>
+                                    updateBonus(index, { type: value })
+                                }
+                            >
+                                <SelectTrigger
+                                    id={`bonus-type-${index}`}
+                                    aria-label={`Bonus ${index + 1} type`}
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from(BONUS_TYPES).map((type) => (
+                                        <SelectItem key={type} value={type}>
+                                            {type}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <Label htmlFor={`bonus-details-${index}`}>Details</Label>
+                            <Input
+                                id={`bonus-details-${index}`}
+                                maxLength={2000}
+                                placeholder="e.g. 10% signing bonus"
+                                value={bonus.details}
+                                onChange={(event) =>
+                                    updateBonus(index, { details: event.target.value })
+                                }
+                            />
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="self-end"
+                            aria-label={`Remove bonus ${index + 1}`}
+                            onClick={() =>
+                                setBonuses((current) =>
+                                    current.filter((_, position) => position !== index),
+                                )
+                            }
+                        >
+                            <Trash2 aria-hidden="true" />
+                        </Button>
+                    </div>
+                ))}
+                {bonuses.length < 5 ? (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="self-start"
+                        onClick={() =>
+                            setBonuses((current) => [
+                                ...current,
+                                { type: 'cash', details: '' },
+                            ])
+                        }
+                    >
+                        <Plus aria-hidden="true" />
+                        Add bonus
+                    </Button>
+                ) : null}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+                <span id="job-description-label" className="text-sm font-medium text-foreground">
+                    Description <RequiredMark />
+                </span>
+                <RichTextEditor
+                    initialDocument={initial?.descriptionDocument ?? EMPTY_JOB_DOCUMENT}
+                    onDocumentChange={(document) => {
+                        documentRef.current = document;
+                    }}
+                />
+            </div>
+            {error && (
+                <p role="alert" className="text-sm text-destructive">
+                    {error}
+                </p>
+            )}
+            <Button type="submit" disabled={busy} className="self-start">
+                {busy ? 'Saving…' : jobId ? 'Save draft' : 'Create job draft'}
+            </Button>
         </form>
     );
 }
@@ -283,37 +644,31 @@ export function PublishButton({
 
     return (
         <div>
-            <button
-                type="button"
+            <Button
                 disabled={busy}
-                className={buttonClass}
                 onClick={async () => {
                     setBusy(true);
                     setError(null);
                     try {
-                        const response = await fetch(`/api/staff/jobs/${jobId}/publish`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({
-                                revisionId, expectedVersion, expectedClientVersion, reviewHash,
-                            }),
+                        await staffMutation(`/api/staff/jobs/${jobId}/publish`, {
+                            revisionId, expectedVersion, expectedClientVersion, reviewHash,
                         });
-                        if (response.ok) {
-                            router.refresh();
-                            return;
-                        }
-                        const payload = await response.json().catch(() => ({}));
-                        setError(payload?.code === '40001'
-                            ? 'Something changed since this preview — reload and review again.'
-                            : 'Publish failed');
+                        router.refresh();
+                    } catch (caught) {
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.');
                     } finally {
                         setBusy(false);
                     }
                 }}
             >
-                Publish this revision
-            </button>
-            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+                {busy ? 'Publishing…' : 'Publish this revision'}
+            </Button>
+            {error && (
+                <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>
+            )}
         </div>
     );
 }
@@ -324,33 +679,31 @@ export function NewRevisionButton({ jobId, expectedJobVersion }: { jobId: string
     const [error, setError] = useState<string | null>(null);
     return (
         <span className="inline-flex items-center gap-3">
-            <button
-                type="button"
+            <Button
+                variant="outline"
                 disabled={busy}
-                className={ghostButtonClass}
                 onClick={async () => {
                     setBusy(true);
                     setError(null);
                     try {
-                        const response = await fetch(`/api/staff/jobs/${jobId}/revision`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ expectedJobVersion }),
+                        await staffMutation(`/api/staff/jobs/${jobId}/revision`, {
+                            expectedJobVersion,
                         });
-                        if (response.ok) {
-                            router.push(`/staff/jobs/${jobId}/edit`);
-                            router.refresh();
-                            return;
-                        }
-                        setError('Could not start a revision');
+                        router.push(`/staff/jobs/${jobId}/edit`);
+                        router.refresh();
+                    } catch (caught) {
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.');
                     } finally {
                         setBusy(false);
                     }
                 }}
             >
                 Start new revision
-            </button>
-            {error && <span className="text-sm text-red-400">{error}</span>}
+            </Button>
+            {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
         </span>
     );
 }
@@ -364,61 +717,79 @@ export function MemberInviteForm({
 }) {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
+    const [status, setStatus] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
     const submit = async (form: HTMLFormElement) => {
         const data = new FormData(form);
-        const response = await fetch('/api/staff/members', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                displayName: String(data.get('displayName') ?? ''),
-                email: String(data.get('email') ?? ''),
-                roleId: String(data.get('roleId') ?? ''),
-            }),
+        await staffMutation('/api/staff/members', {
+            action: 'invite',
+            displayName: String(data.get('displayName') ?? ''),
+            email: String(data.get('email') ?? ''),
+            roleId: String(data.get('roleId') ?? ''),
         });
-        if (response.ok) {
-            form.reset();
-            router.refresh();
-            return;
-        }
-        const payload = await response.json().catch(() => ({}));
-        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Invite failed');
+        form.reset();
+        setStatus('Invitation recorded — the person signs in with that Google account.');
+        router.refresh();
     };
 
     return (
         <form
-            className="mt-6 max-w-xl space-y-5"
+            className="flex max-w-xl flex-col gap-5"
             onSubmit={(event) => {
                 event.preventDefault();
                 setError(null);
+                setStatus(null);
                 setBusy(true);
-                void submit(event.currentTarget).finally(() => setBusy(false));
+                void submit(event.currentTarget)
+                    .catch((caught) =>
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.',
+                        ),
+                    )
+                    .finally(() => setBusy(false));
             }}
         >
-            <Field label="Name">
-                <input name="displayName" required maxLength={256} className={inputClass} />
+            <Field label="Name" htmlFor="invite-name" required>
+                <Input id="invite-name" name="displayName" required maxLength={256} />
             </Field>
-            <Field label="Email">
-                <input name="email" type="email" required maxLength={320} className={inputClass} />
+            <Field label="Email" htmlFor="invite-email" required>
+                <Input id="invite-email" name="email" type="email" required maxLength={320} />
                 {inviteDomains.length > 0 && (
-                    <span className="mt-1.5 block text-xs text-foreground/50">
+                    <span className="text-xs text-muted-foreground">
                         Restricted to: {inviteDomains.map((d) => `@${d}`).join(', ')}
                     </span>
                 )}
             </Field>
-            <Field label="Role">
-                <select name="roleId" required className={inputClass} defaultValue="">
-                    <option value="" disabled>Select a role</option>
+            <Field label="Role" htmlFor="invite-role" required>
+                <select
+                    id="invite-role"
+                    name="roleId"
+                    required
+                    className={nativeSelectClass}
+                    defaultValue=""
+                >
+                    <option value="" disabled>
+                        Select a role
+                    </option>
                     {roles.map((role) => (
-                        <option key={role.id} value={role.id}>{role.name}</option>
+                        <option key={role.id} value={role.id}>
+                            {role.name}
+                        </option>
                     ))}
                 </select>
             </Field>
-            {error && <p className="text-sm text-red-400">{error}</p>}
-            <button type="submit" disabled={busy} className={buttonClass}>
-                Send invite
-            </button>
+            {error && (
+                <p role="alert" className="text-sm text-destructive">{error}</p>
+            )}
+            {status && (
+                <p role="status" className="text-sm text-muted-foreground">{status}</p>
+            )}
+            <Button type="submit" disabled={busy} className="self-start">
+                {busy ? 'Recording…' : 'Record invitation'}
+            </Button>
         </form>
     );
 }
@@ -427,47 +798,59 @@ export function InviteDomainsForm({ domains }: { domains: string[] }) {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [saved, setSaved] = useState(false);
 
     const submit = async (form: HTMLFormElement) => {
         const data = new FormData(form);
-        const response = await fetch('/api/staff/members', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                action: 'setInviteDomains',
-                domains: parseList(String(data.get('domains') ?? '')),
-            }),
+        await staffMutation('/api/staff/members', {
+            action: 'setInviteDomains',
+            domains: parseList(String(data.get('domains') ?? '')),
         });
-        if (response.ok) {
-            router.refresh();
-            return;
-        }
-        const payload = await response.json().catch(() => ({}));
-        setError(payload?.fields ? `Invalid: ${Object.keys(payload.fields).join(', ')}` : 'Save failed');
+        setSaved(true);
+        router.refresh();
     };
 
     return (
         <form
-            className="mt-4 max-w-xl"
+            className="flex max-w-xl flex-col gap-3"
             onSubmit={(event) => {
                 event.preventDefault();
                 setError(null);
+                setSaved(false);
                 setBusy(true);
-                void submit(event.currentTarget).finally(() => setBusy(false));
+                void submit(event.currentTarget)
+                    .catch((caught) =>
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.',
+                        ),
+                    )
+                    .finally(() => setBusy(false));
             }}
         >
-            <Field label="Allowed invite domains (comma-separated, empty = any)">
-                <input
+            <Field
+                label="Allowed invite domains (comma-separated, empty = any)"
+                htmlFor="invite-domains"
+            >
+                <Input
+                    id="invite-domains"
                     name="domains"
                     defaultValue={domains.join(', ')}
                     placeholder="agora4.xyz"
-                    className={inputClass}
                 />
             </Field>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-            <button type="submit" disabled={busy} className={`${buttonClass} mt-3`}>
-                Save domains
-            </button>
+            {error && (
+                <p role="alert" className="text-sm text-destructive">{error}</p>
+            )}
+            {saved ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    Invite domains saved.
+                </p>
+            ) : null}
+            <Button type="submit" disabled={busy} className="self-start">
+                {busy ? 'Saving…' : 'Save domains'}
+            </Button>
         </form>
     );
 }
@@ -482,44 +865,70 @@ export function MemberRevokeButton({
     version: string;
 }) {
     const router = useRouter();
+    const [open, setOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
     const revoke = async () => {
-        const response = await fetch('/api/staff/members', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                action: 'changeMembership',
-                membershipId,
-                roleId,
-                status: 'revoked',
-                version: Number(version),
-            }),
+        await staffMutation('/api/staff/members', {
+            action: 'changeMembership',
+            membershipId,
+            roleId,
+            status: 'revoked',
+            version: Number(version),
         });
-        if (response.ok) {
-            router.refresh();
-            return;
-        }
-        setError('Revoke failed');
+        setOpen(false);
+        router.refresh();
     };
 
     return (
-        <span className="inline-flex items-center gap-2">
-            <button
-                type="button"
-                disabled={busy}
-                className={ghostButtonClass}
-                onClick={() => {
-                    setBusy(true);
-                    setError(null);
-                    void revoke().finally(() => setBusy(false));
-                }}
-            >
+        <>
+            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
                 Revoke
-            </button>
-            {error && <span className="text-xs text-red-400">{error}</span>}
-        </span>
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Revoke membership</DialogTitle>
+                        <DialogDescription>
+                            The member loses staff workspace access immediately. This
+                            cannot be undone from here.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {error && (
+                        <p role="alert" className="text-sm text-destructive">{error}</p>
+                    )}
+                    <div className="flex justify-end gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setOpen(false)}
+                            disabled={busy}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={busy}
+                            onClick={() => {
+                                setBusy(true);
+                                setError(null);
+                                void revoke()
+                                    .catch((caught) =>
+                                        setError(
+                                            caught instanceof Error
+                                                ? caught.message
+                                                : 'Could not save. Please try again.',
+                                        ),
+                                    )
+                                    .finally(() => setBusy(false));
+                            }}
+                        >
+                            {busy ? 'Revoking…' : 'Revoke membership'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
 
@@ -538,38 +947,32 @@ export function JobListingToggle({
 
     return (
         <span className="inline-flex items-center gap-3">
-            <button
-                type="button"
+            <Button
+                variant="outline"
+                size="sm"
                 disabled={busy}
-                className={ghostButtonClass}
                 onClick={async () => {
                     setBusy(true);
                     setError(null);
                     try {
-                        const response = await fetch(`/api/staff/jobs/${jobId}/listing`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({
-                                listed: !listed,
-                                expectedVersion,
-                            }),
+                        await staffMutation(`/api/staff/jobs/${jobId}/listing`, {
+                            listed: !listed,
+                            expectedVersion,
                         });
-                        if (response.ok) {
-                            router.refresh();
-                            return;
-                        }
-                        const payload = await response.json().catch(() => ({}));
-                        setError(payload?.code === '40001'
-                            ? 'The job changed — reload and try again.'
-                            : 'Could not update the listing');
+                        router.refresh();
+                    } catch (caught) {
+                        setError(
+                            caught instanceof Error
+                                ? caught.message
+                                : 'Could not save. Please try again.');
                     } finally {
                         setBusy(false);
                     }
                 }}
             >
                 {listed ? 'Hide from public board' : 'Show on public board'}
-            </button>
-            {error && <span className="text-xs text-red-400">{error}</span>}
+            </Button>
+            {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
         </span>
     );
 }

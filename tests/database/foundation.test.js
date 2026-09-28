@@ -70,6 +70,7 @@ const INVITES_MIGRATION = '20260925120000_staff_invites.sql';
 const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
 const PIPELINE_MIGRATION = '20260925140000_application_pipeline.sql';
 const INTAKE_MIGRATION = '20260926140000_public_intake.sql';
+const WORKSPACE_MIGRATION = '20260928100000_staff_workspace.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1939,6 +1940,48 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             /42501/,
             'app_staff must not execute submit_public_application_v1',
         );
+    });
+
+    await t.test('staff workspace migration applies on the provider stack', () => {
+        copyFileSync(
+            join(migrationsDir, WORKSPACE_MIGRATION),
+            join(tempMigrations, WORKSPACE_MIGRATION),
+        );
+        runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
+
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app'
+                and p.proname in ('get_staff_workspace_v1', 'list_staff_tasks_v1',
+                    'create_staff_task_v1', 'set_staff_task_completed_v1')
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(), '4');
+        assert.equal(supabasePsql(`
+            select count(*) from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            join pg_roles r on r.oid = c.relowner
+            where n.nspname = 'app' and c.relname = 'staff_tasks'
+                and c.relkind = 'r' and r.rolname = 'app_owner'
+                and c.relrowsecurity and c.relforcerowsecurity`).trim(), '1');
+        for (const role of ['anon', 'authenticated', 'service_role']) {
+            for (const fn of [
+                'app.get_staff_workspace_v1()',
+                'app.list_staff_tasks_v1(false, null, 20, 0)',
+            ]) {
+                assert.match(
+                    supabasePsqlError(`set role ${role}; select ${fn}`),
+                    /42501/,
+                    `${role} must not execute ${fn}`,
+                );
+            }
+            assert.match(
+                supabasePsqlError(
+                    `set role ${role}; select count(*) from app.staff_tasks`),
+                /42501/,
+                `${role} must not read app.staff_tasks`,
+            );
+        }
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {

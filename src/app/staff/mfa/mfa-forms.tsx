@@ -69,7 +69,7 @@ function CodeForm({ onSubmit, label }: { onSubmit: (code: string) => Promise<Mfa
                 className="w-40 rounded-md border border-foreground/20 bg-transparent px-3 py-2 text-center font-mono text-lg tracking-[0.4em] outline-none focus:border-foreground/50"
             />
             {error && (
-                <div role="alert" className="text-sm text-red-400">
+                <div role="alert" className="text-sm text-destructive">
                     <p>{error.message}</p>
                     {error.returnToStaff && (
                         <a href="/staff" className="mt-2 inline-block text-foreground underline">

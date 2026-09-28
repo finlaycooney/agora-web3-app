@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FileText, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/staff-ui/button';
@@ -30,8 +31,24 @@ const formatDate = (iso: string) =>
         day: 'numeric', month: 'short', year: 'numeric',
     });
 
-export function CandidatesBrowser({ candidates }: { candidates: CandidateRow[] }) {
-    const [query, setQuery] = useState('');
+export function CandidatesBrowser({
+    candidates,
+    capped = false,
+}: {
+    candidates: CandidateRow[];
+    capped?: boolean;
+}) {
+    const searchParams = useSearchParams();
+    const query = searchParams.get('q') ?? '';
+
+    const updateQuery = (value: string) => {
+        const params = new URLSearchParams();
+        if (value.trim()) params.set('q', value);
+        const queryString = params.toString();
+        window.history.replaceState(
+            null, '',
+            `/staff/candidates${queryString ? `?${queryString}` : ''}`);
+    };
 
     const visible = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -65,12 +82,12 @@ export function CandidatesBrowser({ candidates }: { candidates: CandidateRow[] }
                             className="pl-9"
                             placeholder="Search name or email…"
                             value={query}
-                            onChange={(event) => setQuery(event.target.value)}
+                            onChange={(event) => updateQuery(event.target.value)}
                         />
                     </div>
                 </div>
                 {query ? (
-                    <Button variant="ghost" size="sm" onClick={() => setQuery('')}>
+                    <Button variant="ghost" size="sm" onClick={() => updateQuery('')}>
                         <X aria-hidden="true" />
                         Clear
                     </Button>
@@ -79,6 +96,9 @@ export function CandidatesBrowser({ candidates }: { candidates: CandidateRow[] }
 
             <span role="status" className="text-xs text-muted-foreground">
                 {visible.length} candidate{visible.length === 1 ? '' : 's'}
+                {capped
+                    ? ' · Showing the latest 500 candidates; filters apply to loaded records'
+                    : ''}
             </span>
 
             {visible.length === 0 ? (
@@ -91,7 +111,8 @@ export function CandidatesBrowser({ candidates }: { candidates: CandidateRow[] }
                     </p>
                 </div>
             ) : (
-                <Table>
+                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Name</TableHead>
@@ -135,7 +156,8 @@ export function CandidatesBrowser({ candidates }: { candidates: CandidateRow[] }
                             </TableRow>
                         ))}
                     </TableBody>
-                </Table>
+                    </Table>
+                </div>
             )}
         </div>
     );

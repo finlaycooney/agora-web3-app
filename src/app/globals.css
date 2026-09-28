@@ -259,4 +259,14 @@ body {
     --sidebar: #fdfbf6;
     --attention: #fada5e;
     --attention-foreground: #493814;
+
+    color: hsl(var(--heroui-foreground));
+    color-scheme: light;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.staff-scope select,
+.staff-scope option {
+    color: var(--card-foreground);
+    background-color: var(--card);
 }
