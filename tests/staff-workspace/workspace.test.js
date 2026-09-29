@@ -877,6 +877,21 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
         await listing;
     };
+    const withStaleBoard = async (action) => {
+        await boardPage.evaluate(() => {
+            Object.defineProperty(document, 'visibilityState', {
+                configurable: true,
+                value: 'hidden',
+            });
+        });
+        try {
+            await action();
+        } finally {
+            await boardPage.evaluate(() => {
+                delete document.visibilityState;
+            });
+        }
+    };
 
     await t.test('the public board revalidates and gates stale actions', async () => {
         const anonymous = await browser.newContext();
@@ -901,26 +916,30 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await dialog.getByRole('button', { name: 'Close' }).click();
         await dialog.waitFor({ state: 'hidden' });
 
-        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-        let listing = page.waitForResponse(
-            (response) => response.url()
-                .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                && response.request().method() === 'POST' && response.ok());
-        await page.getByRole('button', { name: 'Unlist job' }).click();
-        await listing;
+        await withStaleBoard(async () => {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const listing = page.waitForResponse(
+                (response) => response.url()
+                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                    && response.request().method() === 'POST' && response.ok());
+            await page.getByRole('button', { name: 'Unlist job' }).click();
+            await listing;
 
-        const staleDetailFetch = boardListingResponse();
-        await card.getByRole('button', { name: 'Learn more' }).click();
-        await staleDetailFetch;
-        await boardPage
-            .getByText('This position is no longer available.').waitFor();
-        assert.equal(await boardPage.getByRole('dialog').count(), 0,
-            'a stale card must not open the detail modal');
-        assert.equal(await card.count(), 0,
-            'the vanished card is removed without a reload');
+            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+            await expect(card).toBeVisible();
+
+            const staleDetailFetch = boardListingResponse();
+            await card.getByRole('button', { name: 'Learn more' }).dispatchEvent('click');
+            await staleDetailFetch;
+            await boardPage
+                .getByText('This position is no longer available.').waitFor();
+            assert.equal(await boardPage.getByRole('dialog').count(), 0,
+                'a stale card must not open the detail modal');
+            await expect(card).toHaveCount(0);
+        });
 
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-        listing = page.waitForResponse(
+        const listing = page.waitForResponse(
             (response) => response.url()
                 .includes(`/api/staff/jobs/${createdJobId}/listing`)
                 && response.request().method() === 'POST' && response.ok());
@@ -930,21 +949,30 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         const restored = boardCard('Synthetic Browser Job Edited');
         await restored.waitFor();
 
-        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-        listing = page.waitForResponse(
-            (response) => response.url()
-                .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                && response.request().method() === 'POST' && response.ok());
-        await page.getByRole('button', { name: 'Unlist job' }).click();
-        await listing;
+        await withStaleBoard(async () => {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const relisting = page.waitForResponse(
+                (response) => response.url()
+                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                    && response.request().method() === 'POST' && response.ok());
+            await page.getByRole('button', { name: 'Unlist job' }).click();
+            await relisting;
 
-        const staleApplyFetch = boardListingResponse();
-        await restored.getByRole('button', { name: /APPLY/ }).click();
-        await staleApplyFetch;
-        await boardPage
-            .getByText('This position is no longer available.').waitFor();
-        assert.equal(await boardPage.getByRole('dialog').count(), 0,
-            'a stale card must not open the application form');
+            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+            await expect(restored).toBeVisible();
+
+            const staleApplyFetch = boardListingResponse();
+            await restored.getByRole('button', { name: /APPLY/ }).dispatchEvent('click');
+            await staleApplyFetch;
+            await boardPage
+                .getByText('This position is no longer available.').waitFor();
+            assert.equal(await boardPage.getByRole('dialog').count(), 0,
+                'a stale card must not open the application form');
+            await expect(restored).toHaveCount(0);
+        });
+        assert.equal(await boardPage.evaluate(
+            () => Object.prototype.hasOwnProperty.call(document, 'visibilityState'),
+        ), false);
     });
 
     await t.test('an open application keeps entered data when the job vanishes', async () => {
