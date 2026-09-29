@@ -62,7 +62,7 @@ function useSection(pathname: string) {
     return { section, detail };
 }
 
-function NavLinks({
+export function NavLinks({
     pathname,
     capabilities,
     onNavigate,
@@ -76,9 +76,8 @@ function NavLinks({
             {NAV_ITEMS.filter(
                 (item) =>
                     !('capability' in item)
-                    || (capabilities !== null
-                        && capabilities !== 'denied'
-                        && capabilities[item.capability]),
+                    || capabilities === null
+                    || (capabilities !== 'denied' && capabilities[item.capability]),
             ).map((item) => {
                 const Icon = item.icon;
                 const active = 'exact' in item && item.exact

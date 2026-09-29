@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Search, X } from 'lucide-react';
 
-import { Badge } from '@/components/staff-ui/badge';
 import { Button } from '@/components/staff-ui/button';
 import { Input } from '@/components/staff-ui/input';
 import { Label } from '@/components/staff-ui/label';
@@ -25,6 +24,7 @@ import {
     TableRow,
 } from '@/components/staff-ui/table';
 import { EmptyState, PageHeader, StatusBadge, TagPill } from '@/components/staff-preview/shared';
+import { jobStatusLabel } from '@/lib/job-display';
 import { cn } from '@/lib/utils';
 import { flagParam, optionParam, textParam, uuidParam } from '../filter-params';
 
@@ -36,6 +36,7 @@ export interface JobRow {
     title: string;
     publicationState: string;
     applicationState: string;
+    publiclyListed?: boolean | null;
     ownerMembershipId: string | null;
     draftRevisionId: string | null;
     createdAt: string;
@@ -55,21 +56,34 @@ export interface JobFiltersState {
 }
 
 const STATE_OPTIONS = [
-    { value: 'all', label: 'All publications' },
+    { value: 'all', label: 'All statuses' },
     { value: 'draft', label: 'Draft' },
-    { value: 'published', label: 'Published' },
+    { value: 'listed', label: 'Listed' },
+    { value: 'unlisted', label: 'Unlisted' },
     { value: 'withdrawn', label: 'Withdrawn' },
     { value: 'archived', label: 'Archived' },
+    { value: 'published', label: 'Listed or unlisted' },
 ];
 
-const INTAKE_OPTIONS = [
-    { value: 'all', label: 'All intake' },
-    { value: 'open', label: 'Open' },
-    { value: 'closed', label: 'Closed' },
-];
+const INTAKE_VALUES = ['all', 'open', 'closed'];
 
-const publicationTone = (state: string) =>
-    state === 'published' ? 'success' : state === 'draft' ? 'secondary' : 'outline';
+const statusMatches = (job: JobRow, state: string) => {
+    if (state === 'all') return true;
+    if (state === 'listed') {
+        return job.publicationState === 'published' && job.publiclyListed === true;
+    }
+    if (state === 'unlisted') {
+        return job.publicationState === 'published' && job.publiclyListed === false;
+    }
+    return job.publicationState === state;
+};
+
+const statusTone = (label: string) =>
+    label === 'Listed'
+        ? 'success'
+        : label === 'Draft'
+          ? 'secondary'
+          : 'outline';
 
 function syncUrl(filters: JobFiltersState) {
     const params = new URLSearchParams();
@@ -86,7 +100,6 @@ function syncUrl(filters: JobFiltersState) {
 }
 
 const STATE_VALUES = STATE_OPTIONS.map((option) => option.value);
-const INTAKE_VALUES = INTAKE_OPTIONS.map((option) => option.value);
 const SORT_VALUES: SortKey[] = ['title', 'client', 'publication'];
 
 const parseFilters = (params: { get(name: string): string | null }): JobFiltersState => ({
@@ -123,7 +136,7 @@ export function JobsBrowser({
         const needle = filters.query.trim().toLowerCase();
         return jobs.filter((job) => {
             if (filters.clientId !== 'all' && job.clientId !== filters.clientId) return false;
-            if (filters.state !== 'all' && job.publicationState !== filters.state) return false;
+            if (!statusMatches(job, filters.state)) return false;
             if (filters.intake !== 'all' && job.applicationState !== filters.intake) return false;
             if (filters.mine && job.ownerMembershipId !== currentMembershipId) return false;
             if (needle) {
@@ -140,7 +153,7 @@ export function JobsBrowser({
             filters.sortBy === 'client'
                 ? left.clientName.localeCompare(right.clientName)
                 : filters.sortBy === 'publication'
-                  ? left.publicationState.localeCompare(right.publicationState)
+                  ? jobStatusLabel(left).localeCompare(jobStatusLabel(right))
                   : left.title.localeCompare(right.title);
         return comparison * direction || left.title.localeCompare(right.title);
     });
@@ -255,34 +268,16 @@ export function JobsBrowser({
                     </Select>
                 </div>
                 <div className="flex flex-col gap-1.5 md:w-44">
-                    <Label htmlFor="job-state-filter">Publication</Label>
+                    <Label htmlFor="job-state-filter">Status</Label>
                     <Select
                         value={filters.state}
                         onValueChange={(value) => update({ ...filters, state: value })}
                     >
-                        <SelectTrigger id="job-state-filter" aria-label="Filter by publication state">
+                        <SelectTrigger id="job-state-filter" aria-label="Filter by status">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             {STATE_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="flex flex-col gap-1.5 md:w-36">
-                    <Label htmlFor="job-intake-filter">Intake</Label>
-                    <Select
-                        value={filters.intake}
-                        onValueChange={(value) => update({ ...filters, intake: value })}
-                    >
-                        <SelectTrigger id="job-intake-filter" aria-label="Filter by intake state">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {INTAKE_OPTIONS.map((option) => (
                                 <SelectItem key={option.value} value={option.value}>
                                     {option.label}
                                 </SelectItem>
@@ -298,6 +293,19 @@ export function JobsBrowser({
                 >
                     Owned by me
                 </Button>
+                {filters.intake !== 'all' ? (
+                    <span className="inline-flex items-center gap-1.5 self-end rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium text-secondary-foreground">
+                        {filters.intake === 'open' ? 'Open roles' : 'Applications closed'}
+                        <button
+                            type="button"
+                            aria-label="Clear intake filter"
+                            className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            onClick={() => update({ ...filters, intake: 'all' })}
+                        >
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                    </span>
+                ) : null}
                 {filtersActive ? (
                     <Button variant="ghost" size="sm" onClick={clearFilters}>
                         <X aria-hidden="true" />
@@ -333,12 +341,17 @@ export function JobsBrowser({
                             <TableRow>
                                 {sortableHead('title', 'Title')}
                                 {sortableHead('client', 'Client')}
-                                {sortableHead('publication', 'Publication')}
-                                <TableHead>Intake</TableHead>
+                                {sortableHead('publication', 'Status')}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {sortedJobs.map((job) => (
+                            {sortedJobs.map((job) => {
+                                const status = jobStatusLabel(job);
+                                const closedIntake =
+                                    job.publicationState === 'published'
+                                    && job.publiclyListed === true
+                                    && job.applicationState === 'closed';
+                                return (
                                 <TableRow
                                     key={job.id}
                                     className={cn(
@@ -365,21 +378,21 @@ export function JobsBrowser({
                                     </TableCell>
                                     <TableCell>
                                         <span className="flex flex-wrap items-center gap-1.5">
-                                            <StatusBadge tone={publicationTone(job.publicationState)}>
-                                                {job.publicationState}
+                                            <StatusBadge tone={statusTone(status)}>
+                                                {status}
                                             </StatusBadge>
-                                            {job.draftRevisionId ? (
-                                                <TagPill>Draft changes</TagPill>
+                                            {job.publicationState !== 'draft'
+                                                && job.draftRevisionId ? (
+                                                    <TagPill>Unpublished draft</TagPill>
+                                                ) : null}
+                                            {closedIntake ? (
+                                                <TagPill>Applications closed</TagPill>
                                             ) : null}
                                         </span>
                                     </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary">
-                                            {job.applicationState}
-                                        </Badge>
-                                    </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>

@@ -10,8 +10,9 @@ import {
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
 import { loadStaffWorkspace } from '@/lib/workspace.server';
-import { FieldLabel, PageHeader, StatusBadge } from '@/components/staff-preview/shared';
+import { FieldLabel, PageHeader, StatusBadge, TagPill } from '@/components/staff-preview/shared';
 import { JobDocumentView } from '@/components/staff-preview/job-document';
+import { jobStatusLabel } from '@/lib/job-display';
 import { Button } from '@/components/staff-ui/button';
 import {
     Card,
@@ -132,15 +133,24 @@ export default async function StaffJobPage(
                 actions={
                     <>
                         <StatusBadge
-                            tone={job.publicationState === 'published' ? 'success' : 'secondary'}
+                            tone={
+                                jobStatusLabel(job) === 'Listed'
+                                    ? 'success'
+                                    : jobStatusLabel(job) === 'Draft'
+                                      ? 'secondary'
+                                      : 'outline'
+                            }
                         >
-                            {job.publicationState}
+                            {jobStatusLabel(job)}
                         </StatusBadge>
-                        <StatusBadge
-                            tone={job.applicationState === 'open' ? 'accent' : 'secondary'}
-                        >
-                            Intake {job.applicationState}
-                        </StatusBadge>
+                        {job.publicationState !== 'draft' && draft ? (
+                            <TagPill>Unpublished draft</TagPill>
+                        ) : null}
+                        {job.publicationState === 'published'
+                            && job.publiclyListed === true
+                            && job.applicationState === 'closed' ? (
+                                <TagPill>Applications closed</TagPill>
+                            ) : null}
                     </>
                 }
             />
@@ -205,10 +215,44 @@ export default async function StaffJobPage(
                 </CardContent>
             </Card>
 
+            <Card>
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-col gap-1">
+                        <CardTitle className="text-base">Public board</CardTitle>
+                        <CardDescription>
+                            {job.publicationState === 'draft'
+                                ? 'Used when this draft is published.'
+                                : 'Unlisted jobs do not accept public applications.'}
+                        </CardDescription>
+                    </div>
+                    {canWrite ? (
+                        <JobListingToggle
+                            jobId={job.id}
+                            listed={job.publiclyListed}
+                            expectedVersion={job.version}
+                        />
+                    ) : (
+                        <p className="text-xs text-muted-foreground">
+                            Changing visibility requires the jobs.write permission.
+                        </p>
+                    )}
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                        {job.publicationState === 'draft'
+                            ? 'Visibility after publishing: '
+                            : 'Current visibility: '}
+                        <span className="font-medium text-foreground">
+                            {job.publiclyListed ? 'Listed' : 'Unlisted'}
+                        </span>
+                    </p>
+                </CardContent>
+            </Card>
+
             {published ? (
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Published revision</CardTitle>
+                        <CardTitle className="text-base">Current version</CardTitle>
                         <CardDescription>
                             Revision #{published.revisionNumber}
                             {published.publishedAt
@@ -219,21 +263,6 @@ export default async function StaffJobPage(
                     <CardContent className="flex flex-col gap-5">
                         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {field('Published as', published.publishedCompanyName)}
-                            {field(
-                                'Public board',
-                                <span className="inline-flex items-center gap-3">
-                                    <span>
-                                        {job.publiclyListed ? 'Listed' : 'Hidden'}
-                                    </span>
-                                    {canWrite ? (
-                                        <JobListingToggle
-                                            jobId={job.id}
-                                            listed={job.publiclyListed}
-                                            expectedVersion={job.version}
-                                        />
-                                    ) : null}
-                                </span>,
-                            )}
                         </dl>
                         {publicationNeedsReview ? (
                             <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
@@ -251,7 +280,7 @@ export default async function StaffJobPage(
             {draft && previewError ? (
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Publish preview</CardTitle>
+                        <CardTitle className="text-base">Review before publishing</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
@@ -265,9 +294,11 @@ export default async function StaffJobPage(
             {preview && draft ? (
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Publish preview</CardTitle>
+                        <CardTitle className="text-base">Review before publishing</CardTitle>
                         <CardDescription>
-                            Exactly what goes public if you publish the current draft.
+                            {job.publiclyListed
+                                ? 'This version will appear on the public board when published.'
+                                : 'This version will stay unlisted when published.'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-5">

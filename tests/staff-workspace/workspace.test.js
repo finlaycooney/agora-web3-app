@@ -36,6 +36,7 @@ import {
     STAFF_MFA_COOKIE,
     createStaffMfaProof,
 } from '../../src/lib/staff-mfa-cookie.js';
+import { createSyntheticPdf } from '../support/cv-fixtures.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -59,6 +60,7 @@ const MIGRATIONS = [
     '20260925140000_application_pipeline.sql',
     '20260926140000_public_intake.sql',
     '20260928100000_staff_workspace.sql',
+    '20260928220000_job_visibility.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -187,7 +189,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         GOOGLE_CLIENT_ID,
         GOOGLE_CLIENT_SECRET: 'synthetic-workspace-client-secret',
         DATABASE_URL: '',
-        INTAKE_DATABASE_URL: '',
+        INTAKE_DATABASE_URL: `postgresql://agora_intake_test:${intakePassword}@127.0.0.1:${publishedPort(container, 5432)}/postgres`,
         E2E_DATABASE_URL: '',
         E2E_REAL_BACKEND: '',
         RESEND_API_KEY: '',
@@ -615,6 +617,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     await t.test('job creation persists rich description and survives reload', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/new`);
         await page.locator('#job-client').selectOption(createdClientId);
+        await expect(page.locator('#job-public-visibility')).toHaveValue('false');
+        await page.locator('#job-public-visibility').selectOption('true');
         await page.locator('#job-title').fill('Synthetic Browser Job');
         await page.locator('#job-employment-type').selectOption('full_time');
         await page.locator('#job-workplace-mode').selectOption('remote');
@@ -702,7 +706,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.waitForURL(new RegExp(`/staff/jobs/${createdJobId}$`));
 
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-        await page.getByRole('heading', { name: 'Publish preview' }).waitFor();
+        await page.getByRole('heading', { name: 'Review before publishing' }).waitFor();
         await page.getByRole('button', { name: 'Publish this revision' }).waitFor();
         const published = page.waitForResponse(
             (response) => response.url()
@@ -710,8 +714,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 && response.request().method() === 'POST' && response.ok());
         await page.getByRole('button', { name: 'Publish this revision' }).click();
         await published;
-        await page.getByText('Published revision').waitFor();
-        await page.getByText('Listed').waitFor();
+        await page.getByText('Current version').waitFor();
+        await page.getByText('Listed', { exact: true }).first().waitFor();
         assert.ok(
             (await publicJobTitles()).includes('Synthetic Browser Job Edited'),
             'published and listed job must appear on the public board',
@@ -725,9 +729,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             (response) => response.url()
                 .includes(`/api/staff/jobs/${createdJobId}/listing`)
                 && response.request().method() === 'POST' && response.ok());
-        await page.getByRole('button', { name: 'Hide from public board' }).click();
+        await page.getByRole('button', { name: 'Unlist job' }).click();
         await listing;
-        await page.getByText('Hidden').waitFor();
+        await page.getByText('Unlisted', { exact: true }).first().waitFor();
         assert.ok(
             !(await publicJobTitles()).includes('Synthetic Browser Job Edited'),
             'a hidden job must leave the public board',
@@ -741,9 +745,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             (response) => response.url()
                 .includes(`/api/staff/jobs/${createdJobId}/listing`)
                 && response.request().method() === 'POST' && response.ok());
-        await page.getByRole('button', { name: 'Show on public board' }).click();
+        await page.getByRole('button', { name: 'List job' }).click();
         await listing;
-        await page.getByText('Listed').waitFor();
+        await page.getByText('Listed', { exact: true }).first().waitFor();
         assert.ok(
             (await publicJobTitles()).includes('Synthetic Browser Job Edited'),
             're-listed job must return to the public board',
@@ -764,12 +768,334 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 && response.request().method() === 'POST' && response.ok());
         await page.getByRole('button', { name: 'Save draft' }).click();
         await draftSaved;
+        await page.waitForURL(new RegExp(`/staff/jobs/${createdJobId}$`));
+        await page.getByText('Unpublished draft', { exact: true }).first().waitFor();
+        await page.getByText('Listed', { exact: true }).first().waitFor();
         const titles = await publicJobTitles();
         assert.ok(
             titles.includes('Synthetic Browser Job Edited')
                 && !titles.includes('Synthetic Browser Job v2'),
             'an unpublished draft must not change the public projection',
         );
+    });
+
+    let unlistedJobId;
+    await t.test('a job created unlisted publishes off the board until listed', async () => {
+        await gotoStaff(page, `${baseURL}/staff/jobs/new`);
+        await page.locator('#job-client').selectOption(createdClientId);
+        await expect(page.locator('#job-public-visibility')).toHaveValue('false');
+        await page.screenshot({
+            path: join(resultsDir, 'staff-job-create-visibility.png'),
+            fullPage: true,
+        });
+        await page.locator('#job-title').fill('Synthetic Private Role');
+        await page.locator('#job-employment-type').selectOption('full_time');
+        await page.locator('#job-workplace-mode').selectOption('remote');
+        await page.locator('#job-remote-regions').fill('Worldwide');
+        await page.locator('#job-comp-min').fill('80000.00');
+        await page.locator('#job-comp-max').fill('120000.00');
+        await page.locator('#job-currency').fill('USD');
+        await page.locator('#job-pay-period').selectOption('year');
+        const editor = page.locator('[aria-label="Job description"]');
+        await editor.click();
+        await expect(async () => {
+            if (!(await editor.innerText()).includes('Private role description')) {
+                await editor.pressSequentially('Private role description');
+            }
+            await expect(editor)
+                .toContainText('Private role description', { timeout: 1500 });
+        }).toPass({ timeout: 30_000 });
+        const jobPosted = page.waitForResponse(
+            (response) => response.url().includes('/api/staff/jobs')
+                && !response.url().includes('/draft')
+                && !response.url().includes('/publish')
+                && response.request().method() === 'POST' && response.ok(),
+        );
+        await page.getByRole('button', { name: 'Create job draft' }).click();
+        await jobPosted;
+        await page.waitForURL(/\/staff\/jobs\/[0-9a-f-]{36}$/);
+        unlistedJobId = page.url().split('/').pop();
+        await page.getByText('Draft').first().waitFor();
+        assert.equal(
+            await page.getByText('Unpublished draft').count(), 0,
+            'a brand-new draft is not an unpublished draft',
+        );
+        assert.ok(!(await publicJobTitles()).includes('Synthetic Private Role'));
+
+        await page.getByRole('heading', { name: 'Review before publishing' })
+            .waitFor();
+        const published = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${unlistedJobId}/publish`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'Publish this revision' }).click();
+        await published;
+        await page.getByText('Current version').waitFor();
+        await page.getByText('Unlisted', { exact: true }).first().waitFor();
+        await page.screenshot({
+            path: join(resultsDir, 'staff-job-unlisted.png'),
+            fullPage: true,
+        });
+        assert.ok(
+            !(await publicJobTitles()).includes('Synthetic Private Role'),
+            'a published unlisted job stays off the public board',
+        );
+
+        const listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${unlistedJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'List job' }).click();
+        await listing;
+        await page.getByText('Listed', { exact: true }).first().waitFor();
+        await page.screenshot({
+            path: join(resultsDir, 'staff-job-listed.png'),
+            fullPage: true,
+        });
+        assert.ok(
+            (await publicJobTitles()).includes('Synthetic Private Role'),
+            'listing an already-published job puts it on the board',
+        );
+    });
+
+    let boardPage;
+    const boardCard = (title) => boardPage.locator('div.group').filter({
+        has: boardPage.getByRole('heading', { name: title, exact: true }),
+    });
+    const boardListingResponse = () => boardPage.waitForResponse(
+        (response) => response.url().includes('/api/public/jobs')
+            && response.request().method() === 'GET',
+        { timeout: 90_000 },
+    );
+    const openBoard = async () => {
+        const listing = boardListingResponse();
+        await boardPage.goto(`${baseURL}/jobs`, { waitUntil: 'domcontentloaded' });
+        await listing;
+    };
+    const focusBoard = async () => {
+        const listing = boardListingResponse();
+        await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await listing;
+    };
+    const withStaleBoard = async (action) => {
+        await boardPage.evaluate(() => {
+            Object.defineProperty(document, 'visibilityState', {
+                configurable: true,
+                value: 'hidden',
+            });
+        });
+        try {
+            await action();
+        } finally {
+            await boardPage.evaluate(() => {
+                delete document.visibilityState;
+            });
+        }
+    };
+
+    await t.test('the public board revalidates and gates stale actions', async () => {
+        const anonymous = await browser.newContext();
+        boardPage = await anonymous.newPage();
+        boardPage.setDefaultTimeout(90_000);
+        await openBoard();
+        const card = boardCard('Synthetic Browser Job Edited');
+        await card.waitFor();
+
+        const detailFetch = boardListingResponse();
+        await card.getByRole('button', { name: 'Learn more' }).click();
+        await detailFetch;
+        const dialog = boardPage.getByRole('dialog');
+        await dialog.waitFor();
+        const dialogText = await dialog.innerText();
+        assert.match(dialogText, /Role Overview/);
+        assert.match(dialogText, /Synthetic job description/);
+        assert.match(dialogText, /Posted on \w+ \d{1,2}, \d{4}/);
+        assert.ok(!dialogText.includes('Posted 2 days ago'));
+        assert.ok(!dialogText.includes('Key Responsibilities'));
+        assert.ok(!dialogText.includes('Architect'));
+        await dialog.getByRole('button', { name: 'Close' }).click();
+        await dialog.waitFor({ state: 'hidden' });
+
+        await withStaleBoard(async () => {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const listing = page.waitForResponse(
+                (response) => response.url()
+                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                    && response.request().method() === 'POST' && response.ok());
+            await page.getByRole('button', { name: 'Unlist job' }).click();
+            await listing;
+
+            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+            await expect(card).toBeVisible();
+
+            const staleDetailFetch = boardListingResponse();
+            await card.getByRole('button', { name: 'Learn more' }).dispatchEvent('click');
+            await staleDetailFetch;
+            await boardPage
+                .getByText('This position is no longer available.').waitFor();
+            assert.equal(await boardPage.getByRole('dialog').count(), 0,
+                'a stale card must not open the detail modal');
+            await expect(card).toHaveCount(0);
+        });
+
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        const listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'List job' }).click();
+        await listing;
+        await focusBoard();
+        const restored = boardCard('Synthetic Browser Job Edited');
+        await restored.waitFor();
+
+        await withStaleBoard(async () => {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const relisting = page.waitForResponse(
+                (response) => response.url()
+                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                    && response.request().method() === 'POST' && response.ok());
+            await page.getByRole('button', { name: 'Unlist job' }).click();
+            await relisting;
+
+            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+            await expect(restored).toBeVisible();
+
+            const staleApplyFetch = boardListingResponse();
+            await restored.getByRole('button', { name: /APPLY/ }).dispatchEvent('click');
+            await staleApplyFetch;
+            await boardPage
+                .getByText('This position is no longer available.').waitFor();
+            assert.equal(await boardPage.getByRole('dialog').count(), 0,
+                'a stale card must not open the application form');
+            await expect(restored).toHaveCount(0);
+        });
+        assert.equal(await boardPage.evaluate(
+            () => Object.prototype.hasOwnProperty.call(document, 'visibilityState'),
+        ), false);
+    });
+
+    await t.test('an open application keeps entered data when the job vanishes', async () => {
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        let listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'List job' }).click();
+        await listing;
+
+        await focusBoard();
+        const card = boardCard('Synthetic Browser Job Edited');
+        await card.waitFor();
+        const applyFetch = boardListingResponse();
+        await card.getByRole('button', { name: /APPLY/ }).click();
+        await applyFetch;
+        const dialog = boardPage.getByRole('dialog');
+        await dialog.waitFor();
+        await boardPage.getByLabel('Full name').fill('Ada Lovelace');
+        await boardPage.getByLabel('Email address').fill('ada@example.com');
+        await boardPage.getByLabel('Upload CV as PDF or DOCX, maximum 4 MB')
+            .setInputFiles({
+                name: 'ada-cv.pdf',
+                mimeType: 'application/pdf',
+                buffer: createSyntheticPdf(),
+            });
+        const submit = dialog.getByRole('button', { name: 'SUBMIT_SIGNAL' });
+        await expect(submit).toBeEnabled();
+
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'Unlist job' }).click();
+        await listing;
+        await focusBoard();
+        await boardPage
+            .getByText('This position is no longer accepting applications.')
+            .waitFor();
+        await boardPage.screenshot({
+            path: join(resultsDir, 'public-job-unavailable-form.png'),
+            fullPage: true,
+        });
+        await expect(boardPage.getByLabel('Full name'))
+            .toHaveValue('Ada Lovelace');
+        await expect(submit).toBeDisabled();
+        await card.waitFor({ state: 'detached' });
+
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'List job' }).click();
+        await listing;
+        await focusBoard();
+        await expect(submit).toBeEnabled();
+        await expect(boardPage.getByLabel('Full name'))
+            .toHaveValue('Ada Lovelace');
+
+        await boardPage.route('**/api/public/jobs', (route) => route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                code: 'JOBS_UNAVAILABLE',
+                message: 'Job listings are temporarily unavailable.',
+            }),
+        }));
+        try {
+            await focusBoard();
+            await boardPage
+                .getByText('We could not confirm this position is still open.')
+                .waitFor();
+            await boardPage
+                .getByText('Job listings are temporarily unavailable.').waitFor();
+            await expect(submit).toBeDisabled();
+            await expect(boardPage.getByLabel('Full name'))
+                .toHaveValue('Ada Lovelace');
+        } finally {
+            await boardPage.unroute('**/api/public/jobs');
+        }
+        await focusBoard();
+        await expect(submit).toBeEnabled();
+        await dialog.getByRole('button', { name: 'Close application form' }).click();
+    });
+
+    await t.test('a hidden job refuses direct submissions with a truthful message', async () => {
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        let listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'Unlist job' }).click();
+        await listing;
+
+        const slug = psql(container, `
+            select slug from app.jobs where id = '${createdJobId}'`).trim();
+        const result = await boardPage.evaluate(async (jobId) => {
+            const form = new FormData();
+            form.append('jobId', jobId);
+            form.append('fullName', 'Ada Lovelace');
+            form.append('email', 'ada@example.com');
+            const response = await fetch(
+                '/api/submit-signal', { method: 'POST', body: form });
+            return { status: response.status, body: await response.json() };
+        }, slug);
+        assert.equal(result.status, 400);
+        assert.equal(result.body.code, 'INVALID_JOB');
+        assert.equal(
+            result.body.message,
+            'This position is no longer accepting applications.',
+        );
+
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        listing = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'List job' }).click();
+        await listing;
+        await page.getByText('Listed', { exact: true }).first().waitFor();
     });
 
     await t.test('jobs search filters and reset restores the list', async () => {
@@ -1179,6 +1505,70 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         } finally {
             await context.close();
         }
+    });
+
+    await t.test('a summary outage keeps navigation and protected pages reachable', async () => {
+        psql(container, `
+            alter function app.get_staff_workspace_v1()
+                rename to get_staff_workspace_outage_test;
+        `);
+        try {
+            const summaryOutage = page.waitForResponse(
+                (response) => response.url().includes('/api/staff/workspace')
+                    && response.request().method() === 'GET',
+                { timeout: 90_000 },
+            );
+            await page.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
+            await summaryOutage;
+            await page.getByText('Workspace summary is temporarily unavailable.')
+                .waitFor();
+            const nav = page.getByRole('navigation', { name: 'Main navigation' });
+            for (const name of [
+                'Overview', 'Applications', 'Candidates', 'Jobs', 'Clients', 'Members',
+            ]) {
+                await nav.getByRole('link', { name, exact: true }).waitFor();
+            }
+            await nav.getByRole('link', { name: 'Jobs', exact: true }).click();
+            await page.getByRole('heading', { name: 'Jobs', level: 1 }).waitFor();
+            await page.getByRole('link', { name: 'Legacy Synthetic Job' })
+                .first().waitFor();
+
+            const context = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+            });
+            try {
+                await context.addCookies(staffCookies);
+                const mobile = await context.newPage();
+                mobile.setDefaultTimeout(90_000);
+                await mobile.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
+                await mobile.getByText('Workspace summary is temporarily unavailable.')
+                    .waitFor();
+                const sheet = mobile.getByRole('dialog');
+                await clickUntil(
+                    () => mobile.getByRole('button', { name: 'Open navigation' }).click(),
+                    sheet,
+                );
+                for (const name of [
+                    'Overview', 'Applications', 'Candidates', 'Jobs', 'Clients',
+                    'Members',
+                ]) {
+                    await sheet.getByRole('link', { name, exact: true }).waitFor();
+                }
+                await sheet.getByRole('link', { name: 'Jobs', exact: true }).click();
+                await mobile.waitForURL(/\/staff\/jobs/);
+                await mobile.getByRole('heading', { name: 'Jobs', level: 1 })
+                    .waitFor();
+            } finally {
+                await context.close();
+            }
+        } finally {
+            psql(container, `
+                alter function app.get_staff_workspace_outage_test()
+                    rename to get_staff_workspace_v1;
+            `);
+        }
+        await gotoStaff(page, `${baseURL}/staff`);
+        await page.getByRole('link', { name: /^Candidates \d+$/ }).waitFor();
     });
 
     await t.test('revoked membership loses staff access', async () => {

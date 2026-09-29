@@ -1,20 +1,152 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import DecryptedText from '../../components/magicui/DecryptedText';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Briefcase, MapPin, DollarSign, ArrowRight, Zap } from 'lucide-react';
+import { Briefcase, MapPin, DollarSign, ArrowRight, Zap, X } from 'lucide-react';
 import SignalSubmissionModal from '@/components/common/SignalSubmissionModal';
 import JobDetailModal from '@/components/common/JobDetailModal';
 
-const JobsBoard = ({ jobs }) => {
+const JobsBoard = ({ jobs, unavailable = false }) => {
     const [mounted, setMounted] = useState(false);
+    const [liveJobs, setLiveJobs] = useState(jobs);
+    const [loadFailed, setLoadFailed] = useState(unavailable);
+    const [notice, setNotice] = useState(null);
     const [selectedJob, setSelectedJob] = useState(null);
     const [expandedJob, setExpandedJob] = useState(null);
+    const promiseRef = useRef(null);
+    const abortRef = useRef(null);
+    const aliveRef = useRef(false);
+    const actionRef = useRef(0);
+
+    const refreshJobs = useCallback(() => {
+        if (promiseRef.current) return promiseRef.current;
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const timeout = window.setTimeout(() => controller.abort(), 10_000);
+        const current = () => aliveRef.current && abortRef.current === controller;
+        const request = fetch('/api/public/jobs', {
+            cache: 'no-store',
+            signal: controller.signal,
+        }).then(async (response) => {
+            if (!response.ok) {
+                throw new Error(`public listing returned ${response.status}`);
+            }
+            const payload = await response.json().catch(() => null);
+            if (!payload || !Array.isArray(payload.jobs)) {
+                throw new Error('malformed public listing response');
+            }
+            return payload.jobs;
+        }).then((fresh) => {
+            if (current()) {
+                setLiveJobs(fresh);
+                setLoadFailed(false);
+            }
+            return fresh;
+        }).catch((error) => {
+            if (current()) setLoadFailed(true);
+            throw error;
+        }).finally(() => {
+            window.clearTimeout(timeout);
+            if (promiseRef.current === request) {
+                promiseRef.current = null;
+                abortRef.current = null;
+            }
+        });
+        promiseRef.current = request;
+        return request;
+    }, []);
 
     useEffect(() => {
+        aliveRef.current = true;
         setMounted(true);
-    }, []);
+        void refreshJobs().catch(() => {});
+        const visibleRefresh = () => {
+            if (document.visibilityState === 'visible') {
+                void refreshJobs().catch(() => {});
+            }
+        };
+        const interval = window.setInterval(visibleRefresh, 30_000);
+        window.addEventListener('focus', visibleRefresh);
+        document.addEventListener('visibilitychange', visibleRefresh);
+        return () => {
+            aliveRef.current = false;
+            abortRef.current?.abort();
+            promiseRef.current = null;
+            abortRef.current = null;
+            window.clearInterval(interval);
+            window.removeEventListener('focus', visibleRefresh);
+            document.removeEventListener('visibilitychange', visibleRefresh);
+        };
+    }, [refreshJobs]);
+
+    const freshJob = async (jobId) => {
+        const fresh = await refreshJobs();
+        return fresh.find((entry) => entry.id === jobId) ?? null;
+    };
+
+    const availabilityFor = (jobId) => {
+        if (loadFailed) return 'unknown';
+        const fresh = liveJobs.find((entry) => entry.id === jobId);
+        if (!fresh || fresh.applicationOpen === false) return 'unavailable';
+        return 'open';
+    };
+
+    const requestDetail = async (job) => {
+        const action = ++actionRef.current;
+        try {
+            const fresh = await freshJob(job.id);
+            if (!aliveRef.current || action !== actionRef.current) return;
+            if (!fresh) {
+                setNotice('gone');
+                return;
+            }
+            setNotice(null);
+            setExpandedJob(fresh);
+        } catch {
+            if (!aliveRef.current || action !== actionRef.current) return;
+            setNotice(null);
+        }
+    };
+
+    const requestApply = async (job) => {
+        const action = ++actionRef.current;
+        try {
+            const fresh = await freshJob(job.id);
+            if (!aliveRef.current || action !== actionRef.current) return;
+            if (!fresh) {
+                setNotice('gone');
+                return;
+            }
+            if (fresh.applicationOpen === false) {
+                setNotice('closed');
+                return;
+            }
+            setNotice(null);
+            setSelectedJob(fresh);
+        } catch {
+            if (!aliveRef.current || action !== actionRef.current) return;
+            setNotice(null);
+        }
+    };
+
+    const closeApply = () => {
+        actionRef.current += 1;
+        setSelectedJob(null);
+    };
+
+    const closeDetail = () => {
+        actionRef.current += 1;
+        setExpandedJob(null);
+    };
+
+    const detailApplyNote = expandedJob
+        ? availabilityFor(expandedJob.id) === 'unavailable'
+            ? 'This position is no longer accepting applications.'
+            : availabilityFor(expandedJob.id) === 'unknown'
+              ? 'We could not confirm this position is still open. Try again in a moment.'
+              : null
+        : null;
 
     return (
         <main className="min-h-screen text-white p-8 pt-24 font-outfit relative overflow-hidden bg-[#00244b]">
@@ -51,15 +183,51 @@ const JobsBoard = ({ jobs }) => {
                 />
             </div>
 
+            {loadFailed ? (
+                <div
+                    role="alert"
+                    className="max-w-6xl mx-auto mb-8 flex items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 relative z-10"
+                >
+                    <span>Job listings are temporarily unavailable.</span>
+                    <button
+                        type="button"
+                        onClick={() => void refreshJobs().catch(() => {})}
+                        className="font-mono text-xs uppercase tracking-wider underline-offset-4 hover:underline"
+                    >
+                        Retry
+                    </button>
+                </div>
+            ) : null}
+            {notice ? (
+                <div
+                    role="alert"
+                    className="max-w-6xl mx-auto mb-8 flex items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 relative z-10"
+                >
+                    <span>
+                        {notice === 'gone'
+                            ? 'This position is no longer available.'
+                            : 'This position is no longer accepting applications.'}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setNotice(null)}
+                        aria-label="Dismiss notice"
+                        className="text-amber-200/70 hover:text-white"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            ) : null}
+
             {/* The Bento Grid */}
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
                 <AnimatePresence>
-                    {mounted && jobs.map((job, index) => (
+                    {mounted && liveJobs.map((job, index) => (
                         <motion.div
                             key={job.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, delay: index * 0.1 }}
+                            transition={{ duration: 0.5, delay: index * 0.1 }} // Small delay for smooth transition
                             className={`
                                 ${job.className} 
                                 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-3xl p-8 
@@ -120,7 +288,7 @@ const JobsBoard = ({ jobs }) => {
                                         </span>
                                     ) : (
                                         <button
-                                            onClick={() => setSelectedJob(job)}
+                                            onClick={() => void requestApply(job)}
                                             className="font-mono text-xs text-white px-6 py-2.5 bg-white/[0.05] border border-white/10 rounded backdrop-blur-md hover:bg-white/10 hover:border-cyan-500/50 transition-all duration-300 group/btn flex items-center gap-2 cursor-pointer"
                                         >
                                             <span>[ <span className="text-cyan-400 group-hover/btn:text-cyan-300">APPLY</span> ]</span>
@@ -128,7 +296,7 @@ const JobsBoard = ({ jobs }) => {
                                     )}
 
                                     <button
-                                        onClick={() => setExpandedJob(job)}
+                                        onClick={() => void requestDetail(job)}
                                         className="group/link flex items-center text-white font-semibold hover:text-cyan-300 transition-colors text-sm"
                                     >
                                         Learn more
@@ -140,21 +308,33 @@ const JobsBoard = ({ jobs }) => {
                     ))}
                 </AnimatePresence>
             </div>
-            {/* Modal */}
-            <SignalSubmissionModal
-                isOpen={!!selectedJob}
-                onClose={() => setSelectedJob(null)}
-                job={selectedJob}
-            />
+            {mounted && !loadFailed && liveJobs.length === 0 ? (
+                <p className="max-w-6xl mx-auto text-center text-sm text-gray-400 font-mono relative z-10">
+                    No open positions right now.
+                </p>
+            ) : null}
             {/* Job Details Modal */}
             <JobDetailModal
                 job={expandedJob}
                 isOpen={!!expandedJob}
-                onClose={() => setExpandedJob(null)}
+                onClose={closeDetail}
+                applyNote={detailApplyNote}
                 onApply={(job) => {
-                    setExpandedJob(null);
-                    setTimeout(() => setSelectedJob(job), 200); // Small delay for smooth transition
+                    closeDetail();
+                    void requestApply(job);
                 }}
+            />
+            {/* Modal */}
+            <SignalSubmissionModal
+                isOpen={!!selectedJob}
+                onClose={closeApply}
+                job={selectedJob}
+                availability={selectedJob ? availabilityFor(selectedJob.id) : 'open'}
+                onCheckAvailability={selectedJob
+                    ? () => freshJob(selectedJob.id)
+                        .then((fresh) => Boolean(fresh) && fresh.applicationOpen !== false)
+                    : undefined}
+                onJobUnavailable={() => void refreshJobs().catch(() => {})}
             />
         </main >
     );

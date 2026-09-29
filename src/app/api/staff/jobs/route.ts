@@ -23,6 +23,8 @@ export async function POST(request: Request) {
                 revisionId: randomUUID(),
                 clientId: body?.clientId,
                 fields: body?.fields,
+                publiclyListed:
+                    body?.publiclyListed === undefined ? false : body.publiclyListed,
                 operationId: randomUUID(),
             },
         );
