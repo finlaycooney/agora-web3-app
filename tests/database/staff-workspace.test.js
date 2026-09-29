@@ -37,6 +37,7 @@ import {
 } from '../../src/lib/workspace-operations.js';
 import {
     createJobDraft,
+    listJobs,
     previewJobPublic,
     publishJobRevision,
     saveClient,
@@ -69,6 +70,7 @@ const MIGRATIONS = [
     '20260925140000_application_pipeline.sql',
     '20260926140000_public_intake.sql',
     WORKSPACE_MIGRATION,
+    '20260928220000_job_visibility.sql',
 ];
 
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
@@ -635,6 +637,188 @@ test('staff workspace on PostgreSQL 17', async (t) => {
             where n.nspname = 'app' and c.relname = 'staff_tasks' and c.relkind = 'r'
                 and r.rolname = 'app_owner'
                 and c.relrowsecurity and c.relforcerowsecurity`), '1');
+        assert.equal(scalar(pgOperator, `
+            select pg_catalog.has_schema_privilege('app_executor', 'app', 'create')`), 'f');
+    });
+
+    await t.test('create_job_draft_v2 stores listing choice and replays safely', async () => {
+        const readyFields = (title) => ({
+            title,
+            employmentType: 'full_time',
+            workplaceMode: 'remote',
+            locations: [],
+            remoteRegions: ['Worldwide'],
+            compensationMin: '100000.00',
+            compensationMax: '140000.00',
+            currency: 'USD',
+            payPeriod: 'year',
+            bonuses: [],
+            descriptionDocument: {
+                type: 'doc',
+                content: [{
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: `${title} description` }],
+                }],
+            },
+        });
+        const publicTitles = () => JSON.parse(
+            psql(pg17, `
+                set role app_intake;
+                select pg_catalog.set_config('app.organization_id', '${ORG_B}', false);
+                select app.list_public_jobs_v1()::text`).trim().split('\n').pop(),
+        ).jobs.map((job) => job.title);
+        const publish = async (revisionId) => {
+            const preview = await admin(previewJobPublic, { revisionId });
+            const result = await admin(publishJobRevision, {
+                revisionId,
+                expectedVersion: '1',
+                expectedClientVersion: preview.clientVersion,
+                reviewHash: preview.reviewHash,
+                operationId: randomUUID(),
+            });
+            assert.equal(result.status, 'published');
+        };
+
+        const unlisted = await admin(createJobDraft, {
+            jobId: randomUUID(),
+            revisionId: randomUUID(),
+            clientId: CJ_ID.CLIENT_LEGACY_B,
+            fields: readyFields('V2 Unlisted Draft'),
+            publiclyListed: false,
+            operationId: randomUUID(),
+        });
+        const listed = await admin(createJobDraft, {
+            jobId: randomUUID(),
+            revisionId: randomUUID(),
+            clientId: CJ_ID.CLIENT_LEGACY_B,
+            fields: readyFields('V2 Listed Draft'),
+            publiclyListed: true,
+            operationId: randomUUID(),
+        });
+        assert.equal(scalar(pg17, `
+            select publicly_listed from app.jobs where id = '${unlisted.jobId}'`), 'f');
+        assert.equal(scalar(pg17, `
+            select publicly_listed from app.jobs where id = '${listed.jobId}'`), 't');
+        assert.deepEqual(
+            publicTitles().filter(
+                (title) => title === 'V2 Unlisted Draft' || title === 'V2 Listed Draft'),
+            [],
+            'drafts never appear on the public board regardless of the flag',
+        );
+
+        await publish(unlisted.revisionId);
+        assert.equal(scalar(pg17, `
+            select publicly_listed from app.jobs where id = '${unlisted.jobId}'`), 'f',
+            'publishing must not flip the stored listing flag');
+        assert.equal(scalar(pg17, `
+            select version from app.jobs where id = '${unlisted.jobId}'`), '2',
+            'publishing bumps the version as usual');
+        assert.ok(!publicTitles().includes('V2 Unlisted Draft'),
+            'a published unlisted job stays off the public board');
+
+        await publish(listed.revisionId);
+        assert.ok(publicTitles().includes('V2 Listed Draft'),
+            'a published listed job appears on the public board');
+        const boardRows = JSON.parse(
+            psql(pg17, `
+                set role app_intake;
+                select pg_catalog.set_config('app.organization_id', '${ORG_B}', false);
+                select app.list_public_jobs_v1()::text`).trim().split('\n').pop(),
+        ).jobs;
+        const boardRow = boardRows.find((job) => job.title === 'V2 Listed Draft');
+        assert.ok(boardRow?.publishedAt, 'the public DTO carries the real publish time');
+
+        const workspaceRows = await admin(listJobs, {});
+        const boardFlag = (jobId) => workspaceRows.find(
+            (job) => job.id === jobId)?.publiclyListed;
+        assert.equal(boardFlag(unlisted.jobId), false);
+        assert.equal(boardFlag(listed.jobId), true);
+
+        await admin(setJobPublicListing, {
+            jobId: unlisted.jobId,
+            listed: true,
+            expectedVersion: '2',
+            operationId: randomUUID(),
+        });
+        assert.ok(publicTitles().includes('V2 Unlisted Draft'),
+            'an unlisted published job can be listed through the existing procedure');
+
+        const replayInput = {
+            jobId: randomUUID(),
+            revisionId: randomUUID(),
+            clientId: CJ_ID.CLIENT_LEGACY_B,
+            fields: readyFields('V2 Replay Draft'),
+            publiclyListed: true,
+            operationId: randomUUID(),
+        };
+        const first = await admin(createJobDraft, replayInput);
+        const replay = await admin(createJobDraft, replayInput);
+        assert.equal(replay.replayed, true);
+        assert.equal(replay.jobId, first.jobId,
+            'replaying the same operation with the same flag returns the same job');
+        await rejectCode(admin(createJobDraft, {
+            ...replayInput,
+            publiclyListed: false,
+        }), '23505', 'the same operation id with a changed flag is rejected');
+
+        await assert.rejects(
+            admin(createJobDraft, {
+                jobId: randomUUID(),
+                revisionId: randomUUID(),
+                clientId: CJ_ID.CLIENT_LEGACY_B,
+                fields: readyFields('V2 Malformed Draft'),
+                publiclyListed: 'yes',
+                operationId: randomUUID(),
+            }),
+            (error) => error.code === 'INVALID_INPUT',
+            'a non-boolean flag is rejected by the wrapper before any query',
+        );
+        staffBad(pg17, AUTHZ_ID.USER_ADMIN2, ORG_B, `
+            select app.create_job_draft_v2('${randomUUID()}'::uuid,
+                '${randomUUID()}'::uuid, '${CJ_ID.CLIENT_LEGACY_B}'::uuid,
+                '${JSON.stringify(readyFields('V2 Null Draft'))}'::jsonb,
+                null, '${randomUUID()}'::uuid, '${randomUUID()}'::uuid)`,
+            '22023');
+
+        await rejectCode(orgA(createJobDraft, {
+            jobId: randomUUID(),
+            revisionId: randomUUID(),
+            clientId: CJ_ID.CLIENT_LEGACY_B,
+            fields: readyFields('V2 Cross Org Draft'),
+            publiclyListed: true,
+            operationId: randomUUID(),
+        }), 'P0002', 'an org A actor cannot draft against an org B client');
+        for (const role of ['app_intake', 'app_worker']) {
+            assertSqlstate(pg17, `
+                set role ${role};
+                select app.create_job_draft_v2('${randomUUID()}'::uuid,
+                    '${randomUUID()}'::uuid, '${CJ_ID.CLIENT_LEGACY_B}'::uuid,
+                    '{}'::jsonb, true, '${randomUUID()}'::uuid,
+                    '${randomUUID()}'::uuid)`, '42501',
+            );
+        }
+        assert.equal(scalar(pg17, `
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app' and p.proname = 'create_job_draft_v2'
+                and p.prosecdef and r.rolname = 'app_executor'
+                and coalesce(p.proconfig::text, '')
+                    like '%search_path=pg_catalog, app, pg_temp%'`), '1');
+        assert.equal(scalar(pg17, `
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            cross join lateral aclexplode(p.proacl) acl
+            where n.nspname = 'app' and p.proname = 'create_job_draft_v2'
+                and acl.grantee <> p.proowner
+                and acl.grantee <> 'app_staff'::regrole`), '0');
+        assert.equal(scalar(pgOperator, `
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app' and p.proname = 'create_job_draft_v2'
+                and p.prosecdef and r.rolname = 'app_executor'`), '1',
+            'the operator-applied migration owns the function correctly');
         assert.equal(scalar(pgOperator, `
             select pg_catalog.has_schema_privilege('app_executor', 'app', 'create')`), 'f');
     });

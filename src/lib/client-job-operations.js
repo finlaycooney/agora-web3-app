@@ -120,13 +120,27 @@ export async function saveClient(pool, verifiedIdentity, organizationId, input) 
 export async function createJobDraft(pool, verifiedIdentity, organizationId, input) {
     const record = requireRecord(
         input, 'input',
-        ['jobId', 'revisionId', 'clientId', 'fields', 'operationId'],
+        ['jobId', 'revisionId', 'clientId', 'fields', 'operationId', 'publiclyListed'],
     );
     const jobId = requireUuid(record.jobId, 'jobId');
     const revisionId = requireUuid(record.revisionId, 'revisionId');
     const clientId = requireUuid(record.clientId, 'clientId');
     const operationId = requireOperationId(record.operationId);
     const fields = validateJobDraftInput(record.fields);
+    if (record.publiclyListed !== undefined) {
+        if (typeof record.publiclyListed !== 'boolean') {
+            throw invalidInput('publiclyListed must be a boolean');
+        }
+        return run(
+            pool, verifiedIdentity, organizationId, JOB_WRITE_PERMISSIONS,
+            'select app.create_job_draft_v2($1::uuid,$2::uuid,$3::uuid,$4::jsonb,'
+                + '$5::boolean,$6::uuid,$7::uuid) as result',
+            [
+                jobId, revisionId, clientId, JSON.stringify(fields),
+                record.publiclyListed, operationId, randomUUID(),
+            ],
+        );
+    }
     return run(
         pool, verifiedIdentity, organizationId, JOB_WRITE_PERMISSIONS,
         'select app.create_job_draft_v1($1::uuid, $2::uuid, $3::uuid, $4::jsonb,'

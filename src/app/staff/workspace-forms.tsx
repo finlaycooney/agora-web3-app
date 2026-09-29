@@ -383,7 +383,10 @@ export function JobForm({
             fields,
             ...(jobId
                 ? { revisionId, expectedVersion }
-                : { clientId: String(data.get('clientId') ?? '') }),
+                : {
+                      clientId: String(data.get('clientId') ?? ''),
+                      publiclyListed: data.get('publiclyListed') === 'true',
+                  }),
         });
         const targetId = jobId ?? payload?.result?.jobId;
         router.push(targetId ? `/staff/jobs/${targetId}` : '/staff/jobs');
@@ -434,6 +437,23 @@ export function JobForm({
                             </option>
                         ))}
                     </select>
+                </Field>
+            )}
+            {!jobId && (
+                <Field label="Public board visibility" htmlFor="job-public-visibility">
+                    <select
+                        id="job-public-visibility"
+                        name="publiclyListed"
+                        className={nativeSelectClass}
+                        defaultValue="false"
+                    >
+                        <option value="false">Unlisted</option>
+                        <option value="true">Listed</option>
+                    </select>
+                    <span className="text-xs text-muted-foreground">
+                        Unlisted jobs stay internal. Listed jobs appear publicly only
+                        after you publish them.
+                    </span>
                 </Field>
             )}
             <Field label="Job title" htmlFor="job-title" required>
@@ -970,7 +990,7 @@ export function JobListingToggle({
                     }
                 }}
             >
-                {listed ? 'Hide from public board' : 'Show on public board'}
+                {listed ? 'Unlist job' : 'List job'}
             </Button>
             {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
         </span>

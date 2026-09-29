@@ -82,6 +82,13 @@ export async function POST(req: Request) {
             listedJobs.map((job: any) => ({ id: job.slug })),
         );
         if (!fieldValidation.ok) {
+            if (fieldValidation.code === 'INVALID_JOB') {
+                return jsonError(
+                    'INVALID_JOB',
+                    'This position is no longer accepting applications.',
+                    400,
+                );
+            }
             return jsonError(fieldValidation.code, fieldValidation.message, 400);
         }
         const job = listedJobs.find(

@@ -71,6 +71,7 @@ const INVITE_DOMAINS_MIGRATION = '20260925130000_staff_invite_domains.sql';
 const PIPELINE_MIGRATION = '20260925140000_application_pipeline.sql';
 const INTAKE_MIGRATION = '20260926140000_public_intake.sql';
 const WORKSPACE_MIGRATION = '20260928100000_staff_workspace.sql';
+const VISIBILITY_MIGRATION = '20260928220000_job_visibility.sql';
 const FOUNDATION_MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -1947,6 +1948,10 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
             join(migrationsDir, WORKSPACE_MIGRATION),
             join(tempMigrations, WORKSPACE_MIGRATION),
         );
+        copyFileSync(
+            join(migrationsDir, VISIBILITY_MIGRATION),
+            join(tempMigrations, VISIBILITY_MIGRATION),
+        );
         runCli(['migration', 'up', '--local'], { timeout: 120_000, verifyDb: true });
 
         assert.equal(supabasePsql(`
@@ -1957,6 +1962,19 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 and p.proname in ('get_staff_workspace_v1', 'list_staff_tasks_v1',
                     'create_staff_task_v1', 'set_staff_task_completed_v1')
                 and p.prosecdef and r.rolname = 'app_executor'`).trim(), '4');
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            join pg_roles r on r.oid = p.proowner
+            where n.nspname = 'app' and p.proname = 'create_job_draft_v2'
+                and p.prosecdef and r.rolname = 'app_executor'`).trim(), '1');
+        assert.equal(supabasePsql(`
+            select count(*) from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            cross join lateral aclexplode(p.proacl) acl
+            where n.nspname = 'app' and p.proname = 'create_job_draft_v2'
+                and acl.grantee <> p.proowner
+                and acl.grantee <> 'app_staff'::regrole`).trim(), '0');
         assert.equal(supabasePsql(`
             select count(*) from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
@@ -1981,7 +1999,25 @@ test('supabase legacy upgrade without reset', { skip: mode !== 'supabase' }, asy
                 /42501/,
                 `${role} must not read app.staff_tasks`,
             );
+            assert.match(
+                supabasePsqlError(
+                    `set role ${role}; select app.create_job_draft_v2(`
+                        + `'${randomUUID()}'::uuid, '${randomUUID()}'::uuid, `
+                        + `'${randomUUID()}'::uuid, '{}'::jsonb, true, `
+                        + `'${randomUUID()}'::uuid, '${randomUUID()}'::uuid)`),
+                /42501/,
+                `${role} must not execute create_job_draft_v2`,
+            );
         }
+        assert.match(
+            supabasePsqlError(
+                `set role app_intake; select app.create_job_draft_v2(`
+                    + `'${randomUUID()}'::uuid, '${randomUUID()}'::uuid, `
+                    + `'${randomUUID()}'::uuid, '{}'::jsonb, true, `
+                    + `'${randomUUID()}'::uuid, '${randomUUID()}'::uuid)`),
+            /42501/,
+            'app_intake must not execute create_job_draft_v2',
+        );
     });
 
     await t.test('existing backend browser suite still passes on the upgraded stack', () => {

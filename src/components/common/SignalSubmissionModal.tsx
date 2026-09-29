@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Upload, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -15,16 +15,38 @@ interface JobSummary {
     title: string;
 }
 
+type JobAvailability = 'open' | 'unavailable' | 'unknown';
+
 interface SignalSubmissionModalProps {
     isOpen: boolean;
     onClose: () => void;
     job?: JobSummary | null;
+    availability?: JobAvailability;
+    onCheckAvailability?: () => Promise<boolean>;
+    onJobUnavailable?: () => void;
 }
 
-const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, onClose, job }) => {
+const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({
+    isOpen,
+    onClose,
+    job,
+    availability = 'open',
+    onCheckAvailability,
+    onJobUnavailable,
+}) => {
     const [step, setStep] = useState<'initial' | 'submitting' | 'success'>('initial');
     const [errorMessage, setErrorMessage] = useState('');
     const [professionalUrlError, setProfessionalUrlError] = useState('');
+    const [checking, setChecking] = useState(false);
+    const generationRef = useRef(0);
+    const busyRef = useRef(false);
+    const [availabilityOverride, setAvailabilityOverride] = useState<JobAvailability | null>(null);
+    const [seenAvailability, setSeenAvailability] = useState(availability);
+    if (seenAvailability !== availability) {
+        setSeenAvailability(availability);
+        setAvailabilityOverride(null);
+    }
+    const effectiveAvailability = availabilityOverride ?? availability;
     const [data, setData] = useState({
         fullName: '',
         email: '',
@@ -37,28 +59,37 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
     const [submissionRefId, setSubmissionRefId] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
-            setStep('initial');
-            setErrorMessage('');
-            setProfessionalUrlError('');
-            setTerminalLines([]);
-            setSelectedFile(null);
-            setWebsite('');
-            setSubmissionRefId('');
-            setData({
-                fullName: '',
-                email: '',
-                professionalUrl: '',
-                technicalAchievement: '',
-            });
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
+        generationRef.current += 1;
+        busyRef.current = false;
+        if (!isOpen) {
+            return () => {
+                generationRef.current += 1;
+                busyRef.current = false;
+            };
         }
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        setStep('initial');
+        setErrorMessage('');
+        setProfessionalUrlError('');
+        setChecking(false);
+        setAvailabilityOverride(null);
+        setTerminalLines([]);
+        setSelectedFile(null);
+        setWebsite('');
+        setSubmissionRefId('');
+        setData({
+            fullName: '',
+            email: '',
+            professionalUrl: '',
+            technicalAchievement: '',
+        });
         return () => {
-            document.body.style.overflow = 'unset';
+            generationRef.current += 1;
+            busyRef.current = false;
+            document.body.style.overflow = previousOverflow;
         };
-    }, [isOpen]);
+    }, [isOpen, job?.id]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -97,8 +128,31 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
         }
     };
 
+    const recheckAvailability = async () => {
+        if (!onCheckAvailability || busyRef.current) return;
+        const generation = generationRef.current;
+        busyRef.current = true;
+        setChecking(true);
+        try {
+            const available = await onCheckAvailability();
+            if (generationRef.current !== generation) return;
+            setAvailabilityOverride(available ? 'open' : 'unavailable');
+            setErrorMessage('');
+        } catch {
+            if (generationRef.current !== generation) return;
+            setAvailabilityOverride('unknown');
+        } finally {
+            if (generationRef.current === generation) {
+                busyRef.current = false;
+                setChecking(false);
+            }
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!isOpen || busyRef.current || effectiveAvailability !== 'open') return;
+        const generation = generationRef.current;
 
         const fieldValidation = validateApplicationFields({
             jobId: job?.id || '',
@@ -120,29 +174,50 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
             return;
         }
 
-        const formData = new FormData();
-        formData.append('jobId', fieldValidation.job.id);
-        formData.append('fullName', fieldValidation.fields.fullName);
-        formData.append('email', fieldValidation.fields.email);
-        formData.append('professionalUrl', fieldValidation.fields.professionalUrl);
-        formData.append('technicalAchievement', fieldValidation.fields.technicalAchievement);
-        formData.append('website', website);
-        formData.append('cvFile', selectedFile);
-
-        setErrorMessage('');
-        setStep('submitting');
-        setTerminalLines([
-            '> VALIDATING_APPLICATION...',
-            '> UPLOADING_CV...',
-        ]);
-
+        busyRef.current = true;
+        setChecking(true);
         try {
+            if (onCheckAvailability) {
+                try {
+                    const stillOpen = await onCheckAvailability();
+                    if (generationRef.current !== generation) return;
+                    if (!stillOpen) {
+                        setAvailabilityOverride('unavailable');
+                        setErrorMessage('');
+                        return;
+                    }
+                    setAvailabilityOverride(null);
+                } catch {
+                    if (generationRef.current !== generation) return;
+                    setAvailabilityOverride('unknown');
+                    setErrorMessage('');
+                    return;
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('jobId', fieldValidation.job.id);
+            formData.append('fullName', fieldValidation.fields.fullName);
+            formData.append('email', fieldValidation.fields.email);
+            formData.append('professionalUrl', fieldValidation.fields.professionalUrl);
+            formData.append('technicalAchievement', fieldValidation.fields.technicalAchievement);
+            formData.append('website', website);
+            formData.append('cvFile', selectedFile);
+
+            setErrorMessage('');
+            setStep('submitting');
+            setTerminalLines([
+                '> VALIDATING_APPLICATION...',
+                '> UPLOADING_CV...',
+            ]);
+
             const response = await fetch('/api/submit-signal', {
                 method: 'POST',
                 body: formData,
             });
 
             const result = await response.json().catch(() => null);
+            if (generationRef.current !== generation) return;
 
             if (response.ok && result?.success && isApplicationReference(result.refId)) {
                 setSubmissionRefId(result.refId);
@@ -154,6 +229,11 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                     origin: { y: 0.6 },
                     colors: ['#22d3ee', '#34d399', '#ffffff']
                 });
+            } else if (result?.code === 'INVALID_JOB') {
+                setAvailabilityOverride('unavailable');
+                onJobUnavailable?.();
+                setWebsite('');
+                setStep('initial');
             } else {
                 const unconfirmedMessage = response.ok && result?.success
                     ? 'We could not confirm that your application was saved. Please try again.'
@@ -163,8 +243,14 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                 setStep('initial');
             }
         } catch {
+            if (generationRef.current !== generation) return;
             setErrorMessage('The connection was interrupted. Please try again.');
             setStep('initial');
+        } finally {
+            if (generationRef.current === generation) {
+                busyRef.current = false;
+                setChecking(false);
+            }
         }
     };
 
@@ -236,6 +322,33 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                 />
                                             </label>
 
+                                            {effectiveAvailability === 'unavailable' && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+                                                >
+                                                    This position is no longer accepting applications.
+                                                </div>
+                                            )}
+                                            {effectiveAvailability === 'unknown' && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+                                                >
+                                                    <span>
+                                                        We could not confirm this position is
+                                                        still open.
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={checking}
+                                                        onClick={() => void recheckAvailability()}
+                                                        className="ml-2 font-mono text-xs uppercase tracking-wider underline-offset-4 hover:underline disabled:opacity-60"
+                                                    >
+                                                        Retry
+                                                    </button>
+                                                </div>
+                                            )}
                                             {errorMessage && (
                                                 <div
                                                     role="alert"
@@ -331,9 +444,10 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                             {/* Submit Button */}
                                             <button
                                                 type="submit"
-                                                className="w-full bg-teal-500 hover:bg-teal-400 text-[#020b1a] font-mono font-bold py-3 rounded-xl transition-all duration-300 mt-4 flex items-center justify-center space-x-2"
+                                                disabled={effectiveAvailability !== 'open' || checking}
+                                                className="w-full bg-teal-500 hover:bg-teal-400 text-[#020b1a] font-mono font-bold py-3 rounded-xl transition-all duration-300 mt-4 flex items-center justify-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
-                                                <span>SUBMIT_SIGNAL</span>
+                                                <span>{checking ? 'CHECKING_AVAILABILITY...' : 'SUBMIT_SIGNAL'}</span>
                                             </button>
                                         </form>
                                     </motion.div>
