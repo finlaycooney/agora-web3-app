@@ -182,7 +182,7 @@ export async function beginJobRevision(pool, verifiedIdentity, organizationId, i
     );
 }
 
-export async function duplicateJob(pool, verifiedIdentity, organizationId, input) {
+async function duplicateJobWithSql(pool, verifiedIdentity, organizationId, input, sql) {
     const record = requireRecord(
         input, 'input',
         ['sourceRevisionId', 'expectedSourceVersion', 'clientId',
@@ -197,12 +197,26 @@ export async function duplicateJob(pool, verifiedIdentity, organizationId, input
     const operationId = requireOperationId(record.operationId);
     return run(
         pool, verifiedIdentity, organizationId, JOB_WRITE_PERMISSIONS,
-        'select app.duplicate_job_v1($1::uuid, $2::bigint, $3::uuid, $4::uuid, $5::uuid,'
-            + ' $6::uuid, $7::uuid) as result',
+        sql,
         [
             sourceRevisionId, expectedSourceVersion, clientId, jobId, revisionId,
             operationId, randomUUID(),
         ],
+    );
+}
+
+export async function duplicateJob(pool, verifiedIdentity, organizationId, input) {
+    return duplicateJobWithSql(
+        pool, verifiedIdentity, organizationId, input,
+        'select app.duplicate_job_v1($1::uuid, $2::bigint, $3::uuid, $4::uuid, $5::uuid,'
+            + ' $6::uuid, $7::uuid) as result',
+    );
+}
+
+export async function duplicateJobUnlisted(pool, verifiedIdentity, organizationId, input) {
+    return duplicateJobWithSql(
+        pool, verifiedIdentity, organizationId, input,
+        'select app.duplicate_job_v2($1::uuid,$2::bigint,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::uuid) as result',
     );
 }
 

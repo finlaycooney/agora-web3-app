@@ -22,6 +22,7 @@ import {
     CardTitle,
 } from '@/components/staff-ui/card';
 import { JobListingToggle, NewRevisionButton, PublishButton } from '../../workspace-forms';
+import { DuplicateJobButton } from '../duplicate-job-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +87,7 @@ export default async function StaffJobPage(
     const { job, draft, published, publicationNeedsReview } = workspace;
     const { summary } = await loadStaffWorkspace();
     const canWrite = summary?.capabilities.writeJobs === true;
+    const source = draft ?? published;
     let client = null;
     let clientError = false;
     try {
@@ -154,6 +156,24 @@ export default async function StaffJobPage(
                     </>
                 }
             />
+
+            <div className="flex flex-wrap items-center gap-3">
+                {canWrite && source ? (
+                    <DuplicateJobButton
+                        sourceJobId={job.id}
+                        clientId={job.clientId}
+                        sourceRevisionId={source.id}
+                        expectedSourceVersion={source.version}
+                    />
+                ) : null}
+                {summary?.capabilities.applications === true ? (
+                    <Button variant="outline" asChild>
+                        <Link href={`/staff/applications?client=${job.clientId}&job=${job.id}`}>
+                            View applications
+                        </Link>
+                    </Button>
+                ) : null}
+            </div>
 
             {clientError ? (
                 <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
