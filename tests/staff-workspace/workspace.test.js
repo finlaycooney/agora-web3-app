@@ -585,7 +585,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         const body = await page.getByRole('main').last().innerText();
         assert.match(body, /Synthetic Browser Client/);
         assert.match(body, /Casey Example/);
-        assert.match(body, /1 configured/);
+        await expect(page.getByRole('list', { name: 'Client social links' }).getByRole('link'))
+            .toHaveAttribute('href', 'https://linkedin.com/company/synthetic');
         await expect(page.getByRole('combobox', { name: 'Social link 1 platform' }))
             .toContainText('LinkedIn');
         await expect(page.locator('#social-url-0'))
@@ -1569,6 +1570,89 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
         await gotoStaff(page, `${baseURL}/staff`);
         await page.getByRole('link', { name: /^Candidates \d+$/ }).waitFor();
+    });
+
+    await t.test('client navigation opens saved links, filtered applications and a preselected job form on mobile', async () => {
+        const jobsBefore = psql(container, `select count(*) from app.jobs where organization_id = '${ORG_ID}'`);
+        await page.setViewportSize({ width: 390, height: 1000 });
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients/${createdClientId}`);
+            const social = page.getByRole('list', { name: 'Client social links' }).getByRole('link');
+            await expect(social).toHaveAttribute('href', 'https://linkedin.com/company/synthetic');
+            await expect(social).toHaveAttribute('target', '_blank');
+            await expect(social).toHaveAttribute('rel', 'noreferrer');
+            await expect(social).toContainText('LinkedIn');
+            await expect(social).toBeVisible();
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+            await page.screenshot({ path: join(resultsDir, 'staff-client-navigation-mobile.png') });
+
+            const applications = page.getByRole('link', { name: 'View applications', exact: true });
+            await expect(applications).toHaveAttribute('href', `/staff/applications?client=${createdClientId}`);
+            await applications.click();
+            await page.waitForURL(`${baseURL}/staff/applications?client=${createdClientId}`);
+            await expect(page.getByRole('heading', { name: 'Applications', exact: true })).toBeVisible();
+            await gotoStaff(page, `${baseURL}/staff/clients/${createdClientId}`);
+            const addJob = page.getByRole('link', { name: 'Add job', exact: true });
+            await expect(addJob).toHaveAttribute('href', `/staff/jobs/new?client=${createdClientId}`);
+            await addJob.click();
+            await page.waitForURL(`${baseURL}/staff/jobs/new?client=${createdClientId}`);
+            await expect(page.locator('#job-client')).toHaveValue(createdClientId);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+            assert.equal(psql(container, `select count(*) from app.jobs where organization_id = '${ORG_ID}'`), jobsBefore);
+        } finally {
+            await page.setViewportSize({ width: 1440, height: 1000 });
+        }
+    });
+
+    await t.test('client navigation ignores invalid and foreign preselection without revealing other clients', async () => {
+        const foreignClientId = randomUUID();
+        const foreignName = 'Synthetic Foreign Navigation Client';
+        psql(container, `insert into app.clients (id, organization_id, name, status)
+            values ('${foreignClientId}', '${AUTHZ_ID.ORG_A}', '${foreignName}', 'active')`);
+        try {
+            for (const query of ['not-a-uuid', randomUUID(), foreignClientId]) {
+                await gotoStaff(page, `${baseURL}/staff/jobs/new?client=${query}`);
+                await expect(page.locator('#job-client')).toHaveValue('');
+                await expect(page.locator('#job-client')).not.toContainText(foreignName);
+                assert.equal(await page.getByText(foreignName, { exact: true }).count(), 0);
+            }
+        } finally {
+            psql(container, `delete from app.clients where id = '${foreignClientId}'`);
+        }
+    });
+
+    await t.test('client navigation cannot bypass job-write or application-read permissions', async () => {
+        psql(container, `delete from app.role_permissions
+            where organization_id = '${ORG_ID}' and role_id = '${AUTHZ_ID.ROLE_B_ADMIN}'
+                and permission_key in ('jobs.write', 'applications.read')`);
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients/${createdClientId}`);
+            await expect(page.getByRole('heading', { name: 'Synthetic Browser Client Renamed', exact: true })).toBeVisible();
+            assert.equal(await page.getByRole('link', { name: 'Add job', exact: true }).count(), 0);
+            assert.equal(await page.getByRole('link', { name: 'View applications', exact: true }).count(), 0);
+            await expect(page.getByRole('link', { name: 'View jobs', exact: true })).toBeVisible();
+            await gotoStaff(page, `${baseURL}/staff/jobs/new?client=${createdClientId}`);
+            await expect(page.getByText('Creating jobs requires the jobs.write permission.')).toBeVisible();
+            assert.equal(await page.locator('#job-client').count(), 0);
+            const response = await fetch(`${baseURL}/api/staff/jobs`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie: cookieHeader(staffCookies) },
+                body: JSON.stringify({
+                    clientId: createdClientId,
+                    fields: {
+                        title: 'Denied navigation job', employmentType: null, workplaceMode: null,
+                        locations: [], remoteRegions: [], compensationMin: null, compensationMax: null,
+                        currency: null, payPeriod: null, bonuses: [],
+                        descriptionDocument: { type: 'doc', content: [{ type: 'paragraph' }] },
+                    },
+                }),
+            });
+            assert.equal(response.status, 403);
+        } finally {
+            psql(container, `insert into app.role_permissions (organization_id, role_id, permission_key)
+                values ('${ORG_ID}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'jobs.write'),
+                       ('${ORG_ID}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'applications.read')`);
+        }
     });
 
     await t.test('revoked membership loses staff access', async () => {

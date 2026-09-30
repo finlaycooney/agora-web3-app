@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getClient } from '@/lib/client-job-operations';
+import { SOCIAL_PLATFORM_NAMES } from '@/lib/client-job-contracts';
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
 import { loadStaffWorkspace } from '@/lib/workspace.server';
@@ -66,6 +67,8 @@ export default async function StaffClientPage(
     const { summary } = await loadStaffWorkspace();
     const canWrite = summary?.capabilities.writeClients === true;
     const canReadJobs = summary?.capabilities.jobs === true;
+    const canWriteJobs = summary?.capabilities.writeJobs === true;
+    const canReadApplications = summary?.capabilities.applications === true;
 
     return (
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -94,6 +97,20 @@ export default async function StaffClientPage(
                             <Button variant="outline" size="sm" asChild>
                                 <Link href={`/staff/jobs?client=${client.id}`}>
                                     View jobs
+                                </Link>
+                            </Button>
+                        ) : null}
+                        {client.status === 'active' && canWriteJobs ? (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/staff/jobs/new?client=${client.id}`}>
+                                    Add job
+                                </Link>
+                            </Button>
+                        ) : null}
+                        {canReadApplications ? (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/staff/applications?client=${client.id}`}>
+                                    View applications
                                 </Link>
                             </Button>
                         ) : null}
@@ -139,9 +156,26 @@ export default async function StaffClientPage(
                             {client.isStealth ? 'Stealth (identity hidden)' : 'Named'}
                         </FieldLabel>
                         <FieldLabel label="Social links">
-                            {client.socialLinks?.length
-                                ? `${client.socialLinks.length} configured`
-                                : '—'}
+                            {client.socialLinks?.length ? (
+                                <ul aria-label="Client social links" className="flex flex-col gap-1">
+                                    {client.socialLinks.map((link: { platform: string; url: string }) => (
+                                        <li key={`${link.platform}:${link.url}`}>
+                                            <a
+                                                href={link.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="break-all underline underline-offset-4 hover:opacity-70"
+                                            >
+                                                {SOCIAL_PLATFORM_NAMES[
+                                                    link.platform as keyof typeof SOCIAL_PLATFORM_NAMES
+                                                ] ?? link.platform}
+                                                {' · '}
+                                                {link.url}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : '—'}
                         </FieldLabel>
                     </dl>
                 </CardContent>

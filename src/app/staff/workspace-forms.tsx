@@ -322,12 +322,14 @@ export function ClientForm({
 
 export function JobForm({
     clients,
+    preselectedClientId,
     jobId,
     revisionId,
     expectedVersion,
     initial,
 }: {
     clients: { id: string; name: string }[];
+    preselectedClientId?: string;
     jobId?: string;
     revisionId?: string;
     expectedVersion?: string;
@@ -426,7 +428,7 @@ export function JobForm({
                         name="clientId"
                         required
                         className={nativeSelectClass}
-                        defaultValue=""
+                        defaultValue={preselectedClientId ?? ''}
                     >
                         <option value="" disabled>
                             Select a client
