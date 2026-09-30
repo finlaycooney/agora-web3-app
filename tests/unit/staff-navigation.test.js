@@ -42,6 +42,7 @@ function loadShell() {
         '@/components/staff-ui/popover': inertProxy,
         '@/components/staff-ui/separator': inertProxy,
         '@/components/staff-ui/sheet': inertProxy,
+        './record-preview': inertProxy,
         '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
     };
     runInNewContext(compiled, {

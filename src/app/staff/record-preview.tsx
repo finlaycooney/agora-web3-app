@@ -1,0 +1,263 @@
+'use client';
+
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import Link from 'next/link';
+
+import { JobDocumentView } from '@/components/staff-preview/job-document';
+import {
+    RealCandidateDocuments,
+    type CandidateDocumentRecord,
+} from '@/components/staff-preview/real-candidate-documents';
+import { Badge } from '@/components/staff-ui/badge';
+import { Button } from '@/components/staff-ui/button';
+import {
+    Sheet, SheetContent, SheetDescription, SheetTitle,
+} from '@/components/staff-ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/staff-ui/tabs';
+
+type Selection = { kind: 'candidate' | 'job'; id: string };
+
+interface CandidateRecord {
+    candidate: {
+        fullName: string | null;
+        email?: string | null;
+        headline?: string | null;
+        location?: string | null;
+        professionalSummary: string | null;
+        professionalUrl?: string | null;
+        ownerName: string | null;
+    };
+    identifiers: { kind: string; value: string }[];
+    applications: {
+        applicationId: string;
+        jobTitle: string;
+        clientName: string;
+        stageLabel: string;
+        receivedAt: string;
+        submittedAchievement: string | null;
+    }[];
+    documents: CandidateDocumentRecord[];
+    notes: { noteId: string; body: string; authorName: string | null; createdAt: string }[];
+    capabilities: {
+        readApplications: boolean;
+        readNotes: boolean;
+        downloadDocuments: boolean;
+    };
+}
+
+interface JobRecord {
+    job: { title: string; publicationState: string; applicationState: string };
+    client: { name?: string } | null;
+    draft: {
+        title: string;
+        revisionNumber: number;
+        employmentType?: string | null;
+        workplaceMode?: string | null;
+        locations?: string[] | null;
+        descriptionDocument?: unknown;
+    } | null;
+    published: {
+        title: string;
+        revisionNumber: number;
+        employmentType?: string | null;
+        workplaceMode?: string | null;
+        locations?: string[] | null;
+        descriptionDocument?: unknown;
+    } | null;
+}
+
+const date = (value: string) => new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+});
+
+function CandidatePreview({ record }: { record: CandidateRecord }) {
+    const { candidate, applications, documents, notes, capabilities } = record;
+    const email = candidate.email ?? record.identifiers.find((item) => item.kind === 'email')?.value;
+    const professionalUrl = candidate.professionalUrl
+        ?? record.identifiers.find((item) => item.kind === 'professional_url')?.value;
+    const otherEmails = record.identifiers.filter((item) => item.kind === 'email'
+        && item.value.toLowerCase() !== email?.toLowerCase());
+    return <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList aria-label="Candidate preview sections" className="flex flex-wrap">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="applications">Applications <Badge variant="secondary">{applications.length}</Badge></TabsTrigger>
+            <TabsTrigger value="documents">Documents <Badge variant="secondary">{documents.length}</Badge></TabsTrigger>
+            <TabsTrigger value="notes">Notes <Badge variant="secondary">{notes.length}</Badge></TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview" className="space-y-4 text-sm">
+            {candidate.headline ? <p className="font-medium">{candidate.headline}</p> : null}
+            <dl className="grid gap-3 sm:grid-cols-2">
+                {email ? <div><dt className="text-xs text-muted-foreground">Email</dt>
+                    <dd className="break-all">{email}</dd></div> : null}
+                {candidate.location ? <div><dt className="text-xs text-muted-foreground">Location</dt>
+                    <dd>{candidate.location}</dd></div> : null}
+                {candidate.ownerName ? <div><dt className="text-xs text-muted-foreground">Owner</dt>
+                    <dd>{candidate.ownerName}</dd></div> : null}
+                {professionalUrl ? <div><dt className="text-xs text-muted-foreground">Profile</dt>
+                    <dd><a href={professionalUrl} target="_blank" rel="noreferrer"
+                        className="break-all underline underline-offset-4">{professionalUrl}</a></dd></div> : null}
+            </dl>
+            {otherEmails.length ? <p className="text-muted-foreground">
+                Other emails: {otherEmails.map((item) => item.value).join(', ')}
+            </p> : null}
+            {candidate.professionalSummary ? <section className="space-y-1 border-t border-border pt-4">
+                <h3 className="font-medium">Summary</h3>
+                <p className="whitespace-pre-wrap leading-6 text-muted-foreground">
+                    {candidate.professionalSummary}</p>
+            </section> : null}
+        </TabsContent>
+        <TabsContent value="applications" className="space-y-3">
+            {!capabilities.readApplications ? <p className="text-sm text-muted-foreground">
+                You do not have permission to view applications.</p>
+                : applications.length ? applications.map((application) => <div
+                    key={application.applicationId} className="space-y-2 border-b border-border pb-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong>{application.jobTitle}</strong>
+                        <Badge variant="secondary">{application.stageLabel}</Badge>
+                    </div>
+                    <p className="text-muted-foreground">{application.clientName} · {date(application.receivedAt)}</p>
+                    {application.submittedAchievement ? <p className="whitespace-pre-wrap">
+                        {application.submittedAchievement}</p> : null}
+                </div>) : <p className="text-sm text-muted-foreground">No applications yet.</p>}
+        </TabsContent>
+        <TabsContent value="documents">
+            <RealCandidateDocuments documents={documents}
+                canView={capabilities.downloadDocuments} />
+        </TabsContent>
+        <TabsContent value="notes" className="space-y-3">
+            {!capabilities.readNotes ? <p className="text-sm text-muted-foreground">
+                You do not have permission to view notes.</p>
+                : notes.length ? notes.map((note) => <div key={note.noteId}
+                    className="border-b border-border pb-3 text-sm">
+                    <p className="whitespace-pre-wrap">{note.body}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {note.authorName ?? 'Staff'} · {date(note.createdAt)}</p>
+                </div>) : <p className="text-sm text-muted-foreground">No notes yet.</p>}
+        </TabsContent>
+    </Tabs>;
+}
+
+function JobPreview({ record }: { record: JobRecord }) {
+    const { job, draft, published } = record;
+    const initial = draft ? 'draft' : 'published';
+    return <Tabs defaultValue={initial} className="space-y-4">
+        <TabsList aria-label="Job preview sections">
+            {draft ? <TabsTrigger value="draft">Draft</TabsTrigger> : null}
+            {published ? <TabsTrigger value="published">Published</TabsTrigger> : null}
+        </TabsList>
+        {!draft && !published ? <p className="text-sm text-muted-foreground">
+            No revision is available for this job.</p> : null}
+        {(['draft', 'published'] as const).map((kind) => {
+            const revision = kind === 'draft' ? draft : published;
+            if (!revision) return null;
+            return <TabsContent key={kind} value={kind} className="space-y-5">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="secondary">{job.publicationState}</Badge>
+                    <Badge variant="secondary">Applications {job.applicationState}</Badge>
+                    <span>Revision #{revision.revisionNumber}</span>
+                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                    {[
+                        ['Employment', revision.employmentType],
+                        ['Workplace', revision.workplaceMode],
+                        ['Locations', revision.locations?.join(', ')],
+                    ].filter((entry) => entry[1]).map(([label, value]) =>
+                        <div key={label as string}><dt className="text-xs text-muted-foreground">{label}</dt>
+                            <dd>{value}</dd></div>)}
+                </dl>
+                <div className="border-t border-border pt-4">
+                    <JobDocumentView document={revision.descriptionDocument} />
+                </div>
+            </TabsContent>;
+        })}
+    </Tabs>;
+}
+
+const recordPath = /^\/staff\/(candidates|jobs)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
+
+export function RecordPreview({ children }: { children: ReactNode }) {
+    const [selection, setSelection] = useState<Selection | null>(null);
+    const [record, setRecord] = useState<CandidateRecord | JobRecord | null>(null);
+    const [error, setError] = useState('');
+    const triggerRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        if (!selection) return;
+        const controller = new AbortController();
+        fetch(`/api/staff/${selection.kind === 'candidate' ? 'candidates' : 'jobs'}/${selection.id}`,
+            { signal: controller.signal, cache: 'no-store' })
+            .then(async (response) => {
+                if (!response.ok) throw new Error(response.status === 403
+                    ? 'You do not have permission to view this record.'
+                    : 'This record could not be loaded.');
+                const payload = await response.json();
+                setRecord(payload.result);
+            }).catch((reason) => {
+                if (!controller.signal.aborted) setError(reason.message);
+            });
+        return () => controller.abort();
+    }, [selection]);
+
+    const handleClick = (event: MouseEvent<HTMLElement>) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey
+            || event.shiftKey || event.altKey) return;
+        const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+        if (!anchor || !event.currentTarget.contains(anchor)
+            || anchor.target || anchor.hasAttribute('download')) return;
+        const url = new URL(anchor.href);
+        if (url.origin !== window.location.origin) return;
+        const match = recordPath.exec(url.pathname);
+        if (!match) return;
+        event.preventDefault();
+        event.stopPropagation();
+        triggerRef.current = anchor;
+        setRecord(null);
+        setError('');
+        setSelection({ kind: match[1] === 'jobs' ? 'job' : 'candidate', id: match[2] });
+    };
+
+    const fullUrl = selection
+        ? `/staff/${selection.kind === 'candidate' ? 'candidates' : 'jobs'}/${selection.id}`
+        : '';
+    const title = selection?.kind === 'candidate'
+        ? record ? (record as CandidateRecord).candidate.fullName ?? 'Unnamed candidate'
+            : 'Candidate preview'
+        : selection?.kind === 'job'
+            ? record ? (record as JobRecord).job.title : 'Job preview'
+            : 'Record preview';
+    const subtitle = selection?.kind === 'candidate' && record
+        ? (record as CandidateRecord).candidate.headline ?? 'Candidate profile'
+        : selection?.kind === 'job' && record
+            ? (record as JobRecord).client?.name ?? 'Job details'
+            : 'Loading record';
+
+    return <>
+        <main onClickCapture={handleClick}
+            className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <Sheet open={selection !== null} onOpenChange={(open) => { if (!open) setSelection(null); }}>
+            <SheetContent side="right" className="w-full max-w-full gap-0 p-0 sm:max-w-[min(900px,75vw)]"
+                onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    if (triggerRef.current?.isConnected) triggerRef.current.focus();
+                }}>
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 pr-12">
+                    <div className="min-w-0 space-y-1">
+                        <SheetTitle className="break-words text-base">{title}</SheetTitle>
+                        <SheetDescription>{subtitle}</SheetDescription>
+                    </div>
+                    {selection ? <Button size="sm" variant="outline" asChild>
+                        <Link href={fullUrl}>Open full {selection.kind}</Link>
+                    </Button> : null}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                    {error ? <p role="alert" className="text-sm text-destructive">{error}</p>
+                        : !selection || !record ? <p role="status" className="text-sm text-muted-foreground">
+                            Loading preview…</p>
+                            : selection?.kind === 'candidate'
+                                ? <CandidatePreview key={selection.id} record={record as CandidateRecord} />
+                                : <JobPreview key={selection?.id} record={record as JobRecord} />}
+                </div>
+            </SheetContent>
+        </Sheet>
+    </>;
+}
