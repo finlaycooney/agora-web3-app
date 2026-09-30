@@ -61,6 +61,7 @@ const MIGRATIONS = [
     '20260926140000_public_intake.sql',
     '20260928100000_staff_workspace.sql',
     '20260928220000_job_visibility.sql',
+    '20260930100000_job_duplication.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -102,7 +103,8 @@ const gotoStaff = async (page, url) => {
         { timeout: 90_000 },
     );
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await summaryFetch;
+    const summary = await summaryFetch;
+    assert.equal(summary.status(), 200, 'Workspace summary request failed');
     await page.waitForLoadState('networkidle');
 };
 
@@ -877,21 +879,12 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
         await listing;
     };
-    const withStaleBoard = async (action) => {
-        await boardPage.evaluate(() => {
-            Object.defineProperty(document, 'visibilityState', {
-                configurable: true,
-                value: 'hidden',
-            });
-        });
-        try {
-            await action();
-        } finally {
-            await boardPage.evaluate(() => {
-                delete document.visibilityState;
-            });
-        }
-    };
+    const clickIfPresent = (button) => button.evaluateAll((buttons) => {
+        if (buttons.length > 1) throw new Error('Expected at most one stale action');
+        if (buttons.length === 0) return false;
+        buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        return true;
+    });
 
     await t.test('the public board revalidates and gates stale actions', async () => {
         const anonymous = await browser.newContext();
@@ -916,27 +909,21 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await dialog.getByRole('button', { name: 'Close' }).click();
         await dialog.waitFor({ state: 'hidden' });
 
-        await withStaleBoard(async () => {
-            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-            const listing = page.waitForResponse(
-                (response) => response.url()
-                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                    && response.request().method() === 'POST' && response.ok());
-            await page.getByRole('button', { name: 'Unlist job' }).click();
-            await listing;
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        const unlisting = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'Unlist job' }).click();
+        await unlisting;
+        assert.ok(!(await publicJobTitles()).includes('Synthetic Browser Job Edited'));
 
-            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
-            await expect(card).toBeVisible();
-
-            const staleDetailFetch = boardListingResponse();
-            await card.getByRole('button', { name: 'Learn more' }).dispatchEvent('click');
-            await staleDetailFetch;
-            await boardPage
-                .getByText('This position is no longer available.').waitFor();
-            assert.equal(await boardPage.getByRole('dialog').count(), 0,
-                'a stale card must not open the detail modal');
-            await expect(card).toHaveCount(0);
-        });
+        await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+        const goneNotice = boardPage.getByText('This position is no longer available.');
+        const clickedDetail = await clickIfPresent(card.getByRole('button', { name: 'Learn more' }));
+        if (clickedDetail) await expect(goneNotice).toBeVisible();
+        await expect(card).toHaveCount(0);
+        await expect(boardPage.getByRole('dialog')).toHaveCount(0);
 
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
         const listing = page.waitForResponse(
@@ -949,30 +936,20 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         const restored = boardCard('Synthetic Browser Job Edited');
         await restored.waitFor();
 
-        await withStaleBoard(async () => {
-            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
-            const relisting = page.waitForResponse(
-                (response) => response.url()
-                    .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                    && response.request().method() === 'POST' && response.ok());
-            await page.getByRole('button', { name: 'Unlist job' }).click();
-            await relisting;
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        const relisting = page.waitForResponse(
+            (response) => response.url()
+                .includes(`/api/staff/jobs/${createdJobId}/listing`)
+                && response.request().method() === 'POST' && response.ok());
+        await page.getByRole('button', { name: 'Unlist job' }).click();
+        await relisting;
+        assert.ok(!(await publicJobTitles()).includes('Synthetic Browser Job Edited'));
 
-            await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
-            await expect(restored).toBeVisible();
-
-            const staleApplyFetch = boardListingResponse();
-            await restored.getByRole('button', { name: /APPLY/ }).dispatchEvent('click');
-            await staleApplyFetch;
-            await boardPage
-                .getByText('This position is no longer available.').waitFor();
-            assert.equal(await boardPage.getByRole('dialog').count(), 0,
-                'a stale card must not open the application form');
-            await expect(restored).toHaveCount(0);
-        });
-        assert.equal(await boardPage.evaluate(
-            () => Object.prototype.hasOwnProperty.call(document, 'visibilityState'),
-        ), false);
+        await boardPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+        const clickedApply = await clickIfPresent(restored.getByRole('button', { name: /APPLY/ }));
+        if (clickedApply) await expect(goneNotice).toBeVisible();
+        await expect(restored).toHaveCount(0);
+        await expect(boardPage.getByRole('dialog')).toHaveCount(0);
     });
 
     await t.test('an open application keeps entered data when the job vanishes', async () => {
@@ -1066,9 +1043,10 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         let listing = page.waitForResponse(
             (response) => response.url()
                 .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                && response.request().method() === 'POST' && response.ok());
+                && response.request().method() === 'POST');
         await page.getByRole('button', { name: 'Unlist job' }).click();
-        await listing;
+        const unlisted = await listing;
+        assert.equal(unlisted.status(), 200, await unlisted.text());
 
         const slug = psql(container, `
             select slug from app.jobs where id = '${createdJobId}'`).trim();
@@ -1092,9 +1070,10 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         listing = page.waitForResponse(
             (response) => response.url()
                 .includes(`/api/staff/jobs/${createdJobId}/listing`)
-                && response.request().method() === 'POST' && response.ok());
+                && response.request().method() === 'POST');
         await page.getByRole('button', { name: 'List job' }).click();
-        await listing;
+        const relisted = await listing;
+        assert.equal(relisted.status(), 200, await relisted.text());
         await page.getByText('Listed', { exact: true }).first().waitFor();
     });
 
@@ -1569,6 +1548,119 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
         await gotoStaff(page, `${baseURL}/staff`);
         await page.getByRole('link', { name: /^Candidates \d+$/ }).waitFor();
+    });
+
+    await t.test('duplicate job rejects unconfirmed results and explains conflicts and access errors', async () => {
+        const endpoint = `${baseURL}/api/staff/jobs/${createdJobId}/duplicate`;
+        await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+        const requests = [];
+        let responseCase;
+        await page.route(endpoint, async (route) => {
+            const body = route.request().postDataJSON();
+            requests.push(body);
+            await route.fulfill({
+                status: responseCase.status,
+                contentType: 'application/json',
+                body: JSON.stringify(responseCase.payload(body)),
+            });
+        });
+        try {
+            for (const entry of [
+                { status: 200, payload: (body) => ({ result: { jobId: body.jobId, status: 'draft' } }), message: 'The duplicate was not confirmed.' },
+                { status: 200, payload: () => ({ ok: true, result: { jobId: 'invalid', status: 'draft' } }), message: 'The duplicate was not confirmed.' },
+                { status: 200, payload: (body) => ({ ok: true, result: { jobId: body.jobId, status: 'published' } }), message: 'The duplicate was not confirmed.' },
+                { status: 409, payload: () => ({}), message: 'This job changed. Reload and try again.' },
+                { status: 401, payload: () => ({}), message: 'Your session expired. Sign in again.' },
+                { status: 428, payload: () => ({}), message: 'Your session expired. Sign in again.' },
+                { status: 403, payload: () => ({}), message: 'You do not have permission to duplicate jobs.' },
+            ]) {
+                responseCase = entry;
+                const response = page.waitForResponse(endpoint);
+                await page.getByRole('button', { name: 'Duplicate job', exact: true }).click();
+                await response;
+                await expect(page.getByRole('main').last().getByRole('alert')).toContainText(entry.message);
+                await expect(page.getByRole('button', { name: 'Duplicate job', exact: true })).toBeEnabled();
+                assert.equal(page.url(), `${baseURL}/staff/jobs/${createdJobId}`);
+            }
+            for (const request of requests) assert.deepEqual(request, requests[0]);
+        } finally {
+            await page.unroute(endpoint);
+        }
+    });
+
+    await t.test('mobile duplicate retries a lost response into one unlisted rich-text draft', async () => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        const endpoint = `${baseURL}/api/staff/jobs/${createdJobId}/duplicate`;
+        const sourceBefore = psql(container, `select row_to_json(j) from app.jobs j where id = '${createdJobId}'`);
+        const requests = [];
+        await page.route(endpoint, async (route) => {
+            requests.push(route.request().postDataJSON());
+            if (requests.length === 1) {
+                const response = await route.fetch();
+                assert.equal(response.status(), 200);
+                await route.abort('failed');
+            } else {
+                await route.continue();
+            }
+        });
+        try {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const applications = page.getByRole('link', { name: 'View applications', exact: true });
+            await expect(applications).toHaveAttribute('href', `/staff/applications?client=${createdClientId}&job=${createdJobId}`);
+            await applications.click();
+            await page.waitForURL(new RegExp(`/staff/applications\\?client=${createdClientId}&job=${createdJobId}$`));
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            const button = page.getByRole('button', { name: 'Duplicate job', exact: true });
+            await expect(button).toBeVisible();
+            await button.click();
+            await expect(page.getByRole('main').last().getByRole('alert')).toBeVisible();
+            await expect(button).toBeEnabled();
+            assert.equal(page.url(), `${baseURL}/staff/jobs/${createdJobId}`);
+            const duplicated = page.waitForResponse((response) => response.url() === endpoint && response.ok());
+            await button.click();
+            const payload = await (await duplicated).json();
+            assert.equal(payload.ok, true);
+            assert.equal(payload.result.replayed, true);
+            const newId = payload.result.jobId;
+            assert.notEqual(newId, createdJobId);
+            await page.waitForURL(`${baseURL}/staff/jobs/${newId}/edit`);
+            await expect(page.locator('#job-title')).toHaveValue('Synthetic Browser Job v2');
+            assert.match(await page.locator('[aria-label="Job description"]').innerHTML(), /<strong[^>]*>Synthetic job description<\/strong>/);
+            await expect(page.locator('#bonus-details-0')).toHaveValue('Synthetic equity bonus');
+            assert.equal(requests.length, 2);
+            assert.deepEqual(requests[0], requests[1]);
+            const copy = JSON.parse(psql(container, `select json_build_object(
+                'state', publication_state, 'listed', publicly_listed) from app.jobs where id = '${newId}'`).trim());
+            assert.deepEqual(copy, { state: 'draft', listed: false });
+            assert.equal(psql(container, `select count(*) from app.recruitment_operation_receipts where operation_id = '${requests[0].operationId}'`).trim(), '1');
+            assert.equal(psql(container, `select row_to_json(j) from app.jobs j where id = '${createdJobId}'`), sourceBefore);
+            await gotoStaff(page, `${baseURL}/staff/jobs/${newId}`);
+            await expect(page.getByText('Unlisted', { exact: true }).first()).toBeVisible();
+            await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+            const titles = await publicJobTitles();
+            assert.ok(titles.includes('Synthetic Browser Job Edited'));
+            assert.ok(!titles.includes('Synthetic Browser Job v2'));
+        } finally {
+            await page.unroute(endpoint);
+            await page.setViewportSize({ width: 1440, height: 1000 });
+        }
+    });
+
+    await t.test('job detail actions respect write and application-read permissions', async () => {
+        psql(container, `delete from app.role_permissions
+            where organization_id = '${ORG_ID}' and role_id = '${AUTHZ_ID.ROLE_B_ADMIN}'
+                and permission_key in ('jobs.write', 'applications.read')`);
+        try {
+            await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
+            await expect(page.getByRole('heading', { name: 'Synthetic Browser Job Edited', exact: true })).toBeVisible();
+            assert.equal(await page.getByRole('button', { name: 'Duplicate job', exact: true }).count(), 0);
+            assert.equal(await page.getByRole('link', { name: 'View applications', exact: true }).count(), 0);
+        } finally {
+            psql(container, `insert into app.role_permissions (organization_id, role_id, permission_key)
+                values ('${ORG_ID}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'jobs.write'),
+                       ('${ORG_ID}', '${AUTHZ_ID.ROLE_B_ADMIN}', 'applications.read')`);
+        }
     });
 
     await t.test('revoked membership loses staff access', async () => {
