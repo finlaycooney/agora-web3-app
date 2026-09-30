@@ -17,12 +17,14 @@ import {
     GOOGLE_MIGRATION,
     INVITES_MIGRATION,
     INVITE_DOMAINS_MIGRATION,
+    RUNTIME_ROLE,
     installStaffFixture,
     staffPoolOptions,
 } from '../support/staff-authorization.js';
 import { PRIVACY_MIGRATIONS } from '../support/privacy-foundation.js';
 import { PRIVACY_OPS_MIGRATION } from '../support/privacy-operations.js';
 import {
+    CJ_ID,
     CJ_SUBJECTS,
     WORKFLOW_MIGRATION,
     clientJobFixtureSql,
@@ -51,6 +53,8 @@ const MIGRATIONS = [
     '20260928220000_job_visibility.sql',
     PROFILE_MIGRATION,
     SERIALIZATION_MIGRATION,
+    '20261001090000_public_intake_duplicate_review.sql',
+    '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
 ];
 
@@ -64,6 +68,9 @@ const { ORG_B } = AUTHZ_ID;
 const scalar = (container, sql) => psql(container, sql).trim();
 
 import { saveCandidateUpload, candidateUploadReferenced, getCandidateUploadDetails } from '../../src/lib/candidate-upload-operations.js';
+import { submitPublicApplication } from '../../src/lib/intake-operations.js';
+import { listCandidateDuplicateReviews, getCandidateDuplicateComparison, mergeCandidateDuplicates } from '../../src/lib/duplicate-review-operations.js';
+import { getCandidateProfile, resolveCandidateRedirect } from '../../src/lib/candidate-profile-read.js';
 
 test('candidate upload PostgreSQL atomicity, email safety and retry receipts', async (t) => {
     assertLocalTestEnvironment();
@@ -71,9 +78,6 @@ test('candidate upload PostgreSQL atomicity, email safety and retry receipts', a
     let pool;
     t.after(async () => { await pool?.end(); await stopAndRemoveContainer(container); });
     for (const file of MIGRATIONS) {
-        if (file === '20261002100000_candidate_upload.sql') {
-            for (const extra of (process.env.CANDIDATE_UPLOAD_EXTRA_MIGRATIONS ?? '').split(',').filter(Boolean)) psql(container, readFileSync(extra, 'utf8'));
-        }
         psql(container, readMigration(file));
     }
     const password = installStaffFixture(container);
@@ -119,6 +123,62 @@ test('candidate upload PostgreSQL atomicity, email safety and retry receipts', a
     assert.deepEqual(raced.map(r => r.status).sort(), ['created','duplicate']);
     const noSecondary = await save(makeInput('single@example.test', [])); assert.equal(noSecondary.status, 'created');
     await assert.rejects(saveCandidateUpload(pool, identity(CJ_SUBJECTS.VIEWER), ORG_B, makeInput('denied@example.test', [])), { code: 'FORBIDDEN' });
+    await t.test('uploaded CV survives duplicate intake and either merge direction', async () => {
+        const jobId = randomUUID();
+        psql(container, `
+            grant app_intake to ${RUNTIME_ROLE};
+            insert into app.role_permissions (organization_id, role_id, permission_key) values
+                ('${ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'duplicates.review'),
+                ('${ORG_B}', '${CJ_ID.ROLE_B_ADMIN}', 'candidates.merge');
+            insert into app.jobs (id,organization_id,client_id,pipeline_id,slug,title,description,
+                location_display,employment_type,publication_state,application_state,
+                publicly_listed,publication_reviewed_by,publication_reviewed_at,published_at)
+            values ('${jobId}','${ORG_B}','${CJ_ID.CLIENT_LEGACY_B}','${CJ_ID.PIPELINE_B}',
+                'upload-merge-job','Upload merge job','Synthetic','Remote','full_time','published','open',
+                true,'${AUTHZ_ID.MEMBER_B_ADMIN}',now(),now());
+        `);
+        for (const keepUploaded of [true, false]) {
+            const suffix = keepUploaded ? 'target' : 'source';
+            const primary = `merge-${suffix}@example.test`;
+            const secondary = `merge-${suffix}-secondary@example.test`;
+            const uploadedInput = makeInput(primary, [secondary]);
+            const uploaded = await save(uploadedInput);
+            const intake = await submitPublicApplication(pool, ORG_B, {
+                jobSlug: 'upload-merge-job', reference: keepUploaded ? 'AG-BBBB00000071' : 'AG-BBBB00000072',
+                fullName: 'Ada Lovelace', email: secondary.toUpperCase(),
+                professionalUrl: null, achievement: null, document: null, submissionId: randomUUID(),
+            });
+            assert.equal(intake.accepted, true);
+            assert.notEqual(intake.candidateId, uploaded.candidateId, 'intake queues the possible match without auto-merging');
+            const queue = await listCandidateDuplicateReviews(pool, actor, ORG_B);
+            const review = queue.reviews.find((item) =>
+                [item.candidateAId,item.candidateBId].includes(uploaded.candidateId)
+                && [item.candidateAId,item.candidateBId].includes(intake.candidateId));
+            assert.ok(review, 'uploaded secondary email participates in duplicate review');
+            const comparison = await getCandidateDuplicateComparison(pool, actor, ORG_B, { reviewId: review.id });
+            const targetId = keepUploaded ? uploaded.candidateId : intake.candidateId;
+            const sourceId = keepUploaded ? intake.candidateId : uploaded.candidateId;
+            const versionFor = (id) => [comparison.candidateA,comparison.candidateB].find((entry) => entry.candidate.candidateId === id).candidate.version;
+            const merge = await mergeCandidateDuplicates(pool, actor, ORG_B, {
+                reviewId: review.id, expectedVersion: review.version, targetCandidateId: targetId,
+                expectedTargetVersion: versionFor(targetId), expectedSourceVersion: versionFor(sourceId),
+                primaryEmail: secondary,
+            });
+            assert.equal(merge.targetCandidateId, targetId);
+            assert.equal(await resolveCandidateRedirect(pool, actor, ORG_B, sourceId), targetId);
+            const profile = await getCandidateProfile(pool, actor, ORG_B, { candidateId: targetId });
+            assert.equal(profile.candidate.email.toLowerCase(), secondary, 'explicit merge primary controls displayed primary');
+            assert.equal(profile.documents.length, 1);
+            assert.equal(profile.applications.length, 1);
+            assert.deepEqual([...new Set(profile.identifiers.filter((entry) => entry.kind === 'email').map((entry) => entry.value.toLowerCase()))].sort(), [primary,secondary].sort());
+            assert.equal(await candidateUploadReferenced(context, uploadedInput.document.objectKey), true, 'merge cannot orphan the uploaded object');
+            assert.equal(scalar(container, `select count(*) from app.documents d join app.file_blobs b on b.id = d.blob_id join app.blob_locations l on l.blob_id = b.id
+                where d.id = '${uploaded.documentId}' and d.candidate_id = '${targetId}' and b.candidate_id = '${targetId}'
+                and l.object_key = '${uploadedInput.document.objectKey}' and l.state = 'available'`), '1');
+            const details = await getCandidateUploadDetails(pool, actor, ORG_B, { candidateId: targetId });
+            assert.deepEqual(details.secondaryEmails, [], 'promoted upload secondary is not duplicated beneath current primary');
+        }
+    });
     psql(container, `update app.candidates set lifecycle = 'restricted' where id = '${input.candidateId}'`);
     await assert.rejects(save(makeInput('secondary@example.test', [])), { code: '42501' });
     psql(container, `update app.candidates set secondary_emails = array['clear@example.test'] where id = '${noSecondary.candidateId}'`);

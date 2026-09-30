@@ -10,8 +10,8 @@ Retries with the same operation and payload return the original candidate. Draft
 
 Apply the existing candidate-profile and intake-serialization migrations, then the additive `20261002100000_candidate_upload.sql` migration before enabling this UI. The server needs the existing `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` storage configuration and a private `cv-submissions` bucket. Existing document download controls remain in force. No duplicate-review migrations are modified.
 
-The upload API is `POST /api/staff/candidates/upload`, using multipart `fields` JSON, `cvFile` and `operationId`. The browser never receives storage service credentials.
+The upload API is `POST /api/staff/candidates/upload`, using multipart `fields` JSON, `cvFile` and `operationId`. The browser never receives storage service credentials. The former JSON create action is rejected so it cannot bypass the required upload fields.
 
 ## Verification
 
-Use Node 22. `npm test` includes upload contracts, actual file validation, API outcomes and safe cleanup. `npm run test:db:candidate-upload` creates a disposable PostgreSQL 17 container to verify persistence, duplicate conflicts, retry behavior, permissions and metadata cleanup. `npm run test:staff-workspace` includes desktop/mobile candidate form checks; its browser upload route uses synthetic storage responses, while the database suite tests the real persistence function. For a focused browser run, use `STAFF_WORKSPACE_CANDIDATES_ONLY=1 node --test tests/staff-workspace/workspace.test.js`.
+Use Node 22. `npm test` includes upload contracts, actual file validation, API outcomes and safe cleanup. `npm run test:db:candidate-upload` creates a disposable PostgreSQL 17 container to verify persistence, duplicate conflicts, retry behavior, permissions and metadata cleanup. `npm run test:staff-workspace` includes desktop/mobile candidate form checks; the browser exercises the real upload API and database with a synthetic local storage service. For a focused browser run, use `STAFF_WORKSPACE_CANDIDATES_ONLY=1 node --test tests/staff-workspace/workspace.test.js`.

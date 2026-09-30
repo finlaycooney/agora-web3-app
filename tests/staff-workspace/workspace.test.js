@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { saveCandidateProfile } from '../../src/lib/candidate-profile-operations.js';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +67,7 @@ const MIGRATIONS = [
     '20260930090100_candidate_intake_serialization.sql',
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
+    '20261002100000_candidate_upload.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -184,6 +187,50 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     const baseURL = `http://127.0.0.1:${port}`;
     const databaseUrl = `postgresql://agora_authz_test:${runtimePassword}@127.0.0.1:${publishedPort(container, 5432)}/postgres`;
 
+    // Only the external storage service is synthetic: requests exercise the
+    // real authenticated upload API, file validation and database transaction.
+    let failNextUpload = false;
+    const storedCvs = new Map();
+    const storageServer = createServer(async (request, response) => {
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const bytes = Buffer.concat(chunks);
+        const pathname = new URL(request.url, 'http://localhost').pathname;
+        response.setHeader('content-type', 'application/json');
+        if (request.method === 'POST' && pathname.startsWith('/storage/v1/object/cv-submissions/')) {
+            if (failNextUpload) {
+                failNextUpload = false;
+                response.writeHead(503);
+                response.end(JSON.stringify({ statusCode: '503', error: 'Service Unavailable', message: 'Synthetic storage failure' }));
+                return;
+            }
+            const key = decodeURIComponent(pathname.slice('/storage/v1/object/cv-submissions/'.length));
+            storedCvs.set(key, bytes);
+            response.end(JSON.stringify({ Key: `cv-submissions/${key}` }));
+        } else if (request.method === 'POST' && pathname.startsWith('/storage/v1/object/sign/cv-submissions/')) {
+            response.end(JSON.stringify({ signedURL: `${pathname.slice('/storage/v1'.length)}?token=synthetic` }));
+        } else if (request.method === 'GET' && pathname.startsWith('/storage/v1/object/sign/cv-submissions/')) {
+            const key = decodeURIComponent(pathname.slice('/storage/v1/object/sign/cv-submissions/'.length));
+            if (!storedCvs.has(key)) { response.writeHead(404); response.end('{}'); return; }
+            response.setHeader('content-type', 'application/pdf');
+            response.end(storedCvs.get(key));
+        } else if (request.method === 'DELETE' && pathname === '/storage/v1/object/cv-submissions') {
+            for (const key of JSON.parse(bytes.toString()).prefixes) storedCvs.delete(key);
+            response.end('[]');
+        } else {
+            response.writeHead(404);
+            response.end(JSON.stringify({ error: 'Unexpected synthetic storage request' }));
+        }
+    });
+    await new Promise(resolve => storageServer.listen(0, '127.0.0.1', resolve));
+    const storageURL = `http://127.0.0.1:${storageServer.address().port}`;
+    t.after(() => { storageServer.closeAllConnections(); storageServer.close(); });
+    const fixturePool = new pg.Pool({ connectionString: databaseUrl });
+    t.after(() => fixturePool.end());
+    const seedCandidate = fields => saveCandidateProfile(fixturePool,
+        { provider: 'google', issuer: 'https://accounts.google.com', subject: SUBJECT }, ORG_ID,
+        { candidateId: randomUUID(), expectedVersion: null, fields, operationId: randomUUID() });
+
     const childEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
@@ -202,9 +249,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         E2E_DATABASE_URL: '',
         E2E_REAL_BACKEND: '',
         RESEND_API_KEY: '',
-        NEXT_PUBLIC_SUPABASE_URL: '',
+        NEXT_PUBLIC_SUPABASE_URL: storageURL,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
-        SUPABASE_SERVICE_ROLE_KEY: '',
+        SUPABASE_SERVICE_ROLE_KEY: 'synthetic-storage-service-key',
         SUPABASE_DB_URL: '',
         GITHUB_ID: '',
         GITHUB_SECRET: '',
@@ -320,35 +367,16 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     t.after(async () => { await browser.close().catch(() => {}); });
     mkdirSync(resultsDir, { recursive: true });
 
-    // Browser contract checks isolate storage; persistence/editing still use the real API.
-    // Real upload authorization, storage and atomicity are covered by backend tests.
-    let failNextUpload = false;
     const uploads = [];
-    const mockUploadStorage = async (context) => context.route('**/api/staff/candidates/upload', async (route) => {
+    const observeUploads = async (context) => context.route('**/api/staff/candidates/upload', async (route) => {
         const request = route.request();
         const form = await new Response(request.postDataBuffer(), {
             headers: { 'content-type': request.headers()['content-type'] },
         }).formData();
-        const fields = JSON.parse(form.get('fields'));
         const cv = form.get('cvFile');
-        assert.ok(cv instanceof File);
-        assert.ok(cv.size > 0);
-        assert.match(form.get('operationId'), /^[0-9a-f-]{36}$/);
-        uploads.push({ fields, name: cv.name, operationId: form.get('operationId') });
-        if (failNextUpload) {
-            failNextUpload = false;
-            await route.fulfill({ status: 503, json: { error: 'Synthetic storage unavailable. Please retry.' } });
-            return;
-        }
-        const response = await context.request.post(`${baseURL}/api/staff/candidates`, {
-            data: { action: 'createCandidate', operationId: form.get('operationId'), fields: {
-                fullName: `${fields.firstName} ${fields.lastName}`, email: fields.primaryEmail,
-                headline: fields.headline, location: fields.location,
-                ownerMembershipId: fields.ownerMembershipId,
-            } },
-        });
-        const payload = await response.json();
-        await route.fulfill({ status: response.status(), json: payload });
+        assert.ok(cv instanceof File && cv.size > 0);
+        uploads.push({ fields: JSON.parse(form.get('fields')), name: cv.name, operationId: form.get('operationId') });
+        await route.continue();
     });
     const fillUpload = async (dialog, first, last, email) => {
         await fillWhenReady(dialog.getByLabel('First name'), first);
@@ -361,7 +389,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
 
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await desktop.addCookies(staffCookies);
-    await mockUploadStorage(desktop);
+    await observeUploads(desktop);
     const page = await desktop.newPage();
     page.setDefaultTimeout(90_000);
 
@@ -1931,7 +1959,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.screenshot({ path: join(resultsDir, 'staff-workspace-candidate-upload.png'), fullPage: true });
         failNextUpload = true;
         await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
-        await expect(dialog.getByText('Synthetic storage unavailable. Please retry.')).toBeVisible();
+        await expect(dialog.getByText('Candidate upload could not be completed. Retry with the same details and CV.')).toBeVisible();
         await expect(dialog.getByLabel('First name')).toHaveValue('Profile');
         await expect(dialog.getByLabel('Secondary email 1', { exact: true })).toHaveValue('secondary@example.test');
         await expect(dialog.getByRole('status')).toContainText('replacement.pdf');
@@ -1945,6 +1973,15 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await created;
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/, {
             timeout: 90_000 });
+
+        const savedCandidateId = new URL(page.url()).pathname.split('/').pop();
+        assert.equal(psql(container, `select count(*) from app.documents where candidate_id = '${savedCandidateId}'`).trim(), '1');
+        assert.equal(psql(container, `select secondary_emails[1] from app.candidates where id = '${savedCandidateId}'`).trim(), 'secondary@example.test');
+        assert.ok(Array.from(storedCvs.values()).some(bytes => bytes.equals(createSyntheticPdf())));
+        const savedDocumentId = psql(container, `select current_document_id from app.candidates where id = '${savedCandidateId}'`).trim();
+        const downloaded = await desktop.request.get(`${baseURL}/api/staff/documents/${savedDocumentId}`);
+        assert.equal(downloaded.status(), 200);
+        assert.ok((await downloaded.body()).equals(createSyntheticPdf()), 'The uploaded CV downloads through the existing authorized document API');
 
         const heading = page.getByRole('heading', {
             name: 'Profile Persona', level: 1 });
@@ -2022,23 +2059,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     await runCase('a duplicate email offers the existing record', async () => {
-        const seed = await fetch(`${baseURL}/api/staff/candidates`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                cookie: cookieHeader(staffCookies),
-            },
-            body: JSON.stringify({
-                action: 'createCandidate',
-                fields: {
-                    fullName: 'Duplicate Target',
-                    email: 'dupe-check@example.test',
-                },
-                operationId: randomUUID(),
-            }),
-        });
-        assert.equal(seed.status, 200);
-        const existing = (await seed.json()).result.candidateId;
+        const { candidateId: existing } = await seedCandidate({ fullName: 'Duplicate Target', email: 'dupe-check@example.test' });
 
         await gotoStaff(page, `${baseURL}/staff/candidates`);
         const addButton = page.getByRole('button', { name: 'Add candidate' });
@@ -2108,8 +2129,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                     operationId: randomUUID(),
                 }),
             });
-            assert.equal(denied.status, 403,
-                'the API must deny writes for read-only staff');
+            assert.equal(denied.status, 400,
+                'legacy creation must reject requests without the required CV workflow');
             const deniedPatch = await fetch(
                 `${baseURL}/api/staff/candidates/${CJ_ID.CANDIDATE_B}`, {
                     method: 'PATCH',
@@ -2135,7 +2156,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         });
         try {
             await context.addCookies(staffCookies);
-            await mockUploadStorage(context);
+            await observeUploads(context);
             const mobile = await context.newPage();
             mobile.setDefaultTimeout(90_000);
             await gotoStaff(mobile, `${baseURL}/staff/candidates`);
@@ -2197,20 +2218,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     await runCase('the profile dialog discards drafts and resists stale versions', async () => {
-        const seed = await fetch(`${baseURL}/api/staff/candidates`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                cookie: cookieHeader(staffCookies),
-            },
-            body: JSON.stringify({
-                action: 'createCandidate',
-                fields: { fullName: 'Dialog Guard', headline: 'First' },
-                operationId: randomUUID(),
-            }),
-        });
-        assert.equal(seed.status, 200);
-        const candidateId = (await seed.json()).result.candidateId;
+        const { candidateId: candidateId } = await seedCandidate({ fullName: 'Dialog Guard', headline: 'First' });
 
         await gotoStaff(page, `${baseURL}/staff/candidates/${candidateId}`);
         const editButton = page.getByRole('button', { name: 'Edit profile' });
