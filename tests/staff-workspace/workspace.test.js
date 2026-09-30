@@ -1655,6 +1655,216 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
+    await t.test('client form shows inline errors and normalizes bare URLs', async () => {
+        const fixtureId = randomUUID();
+        psql(container, `insert into app.clients (id, organization_id, name, status)
+            values ('${fixtureId}', '${ORG_ID}', 'Synthetic Validation Client', 'draft')`);
+        const clientPosts = [];
+        const countPosts = (request) => {
+            if (request.method() === 'POST'
+                && request.url().includes('/api/staff/clients')) {
+                clientPosts.push(request.url());
+            }
+        };
+        page.on('request', countPosts);
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients/${fixtureId}`);
+            await fillWhenReady(
+                page.locator('#client-contact-name'), 'Casey Valid');
+            await fillWhenReady(
+                page.locator('#client-contact-email'), 'casey.valid@synthetic.test');
+            await fillWhenReady(page.locator('#client-telegram'), 'ab');
+            await clickUntil(
+                () => page.getByRole('button', { name: 'Add social link' }).click(),
+                page.locator('#social-url-0'),
+            );
+            await fillWhenReady(
+                page.locator('#social-url-0'), 'https://www.google.com');
+            await page.getByRole('button', { name: 'Save changes' }).click();
+
+            await expect(page.locator('#client-telegram'))
+                .toHaveAttribute('aria-invalid', 'true');
+            await expect(page.locator('#social-url-0'))
+                .toHaveAttribute('aria-invalid', 'true');
+            await expect(page.locator('#client-telegram-error'))
+                .toHaveText(/Use 5–32 letters, numbers or underscores/);
+            await expect(page.locator('#social-url-0-error'))
+                .toHaveText('Use a LinkedIn link, or choose Other.');
+            await expect(page.locator('#client-telegram')).toBeFocused();
+            assert.equal(clientPosts.length, 0);
+            await expect(page.getByText('Please check the highlighted fields.'))
+                .toBeVisible();
+            assert.equal(
+                await page.getByText('Check these fields', { exact: false }).count(), 0);
+            assert.equal(
+                await page.getByText('socialLinks[', { exact: false }).count(), 0);
+
+            await page.setViewportSize({ width: 390, height: 1000 });
+            try {
+                await expect(page.locator('#client-telegram-error')).toBeVisible();
+                await expect(page.locator('#social-url-0-error')).toBeVisible();
+                assert.equal(await page.evaluate(() =>
+                    document.documentElement.scrollWidth
+                        - document.documentElement.clientWidth), 0);
+                await page.screenshot({
+                    path: join(resultsDir, 'staff-client-inline-errors.png') });
+            } finally {
+                await page.setViewportSize({ width: 1440, height: 1000 });
+            }
+
+            await fillWhenReady(page.locator('#client-telegram'), '@valid_user');
+            await fillWhenReady(page.locator('#client-website'), 'www.google.com');
+            await clickUntil(
+                () => page.getByRole('combobox', { name: 'Social link 1 platform' })
+                    .click(),
+                page.getByRole('listbox'),
+            );
+            await page.getByRole('option', { name: 'other', exact: true }).click();
+            await fillWhenReady(page.locator('#social-url-0'), 'www.google.com');
+            await page.locator('#social-url-0').blur();
+            await page.locator('#client-website').blur();
+            await expect(page.locator('#social-url-0'))
+                .toHaveValue('https://www.google.com');
+            await expect(page.locator('#client-website'))
+                .toHaveValue('https://www.google.com');
+            await expect(page.locator('#client-telegram'))
+                .not.toHaveAttribute('aria-invalid', 'true');
+            await expect(page.locator('#social-url-0'))
+                .not.toHaveAttribute('aria-invalid', 'true');
+
+            const saved = page.waitForResponse(
+                (response) => response.url().includes('/api/staff/clients')
+                    && response.request().method() === 'POST' && response.ok());
+            await page.getByRole('button', { name: 'Save changes' }).click();
+            await saved;
+            await page.getByRole('status').filter({ hasText: 'Changes saved.' })
+                .waitFor();
+            assert.equal(clientPosts.length, 1);
+
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await expect(page.locator('#client-telegram')).toHaveValue('valid_user');
+            await expect(page.locator('#client-website'))
+                .toHaveValue('https://www.google.com');
+            await expect(page.locator('#social-url-0'))
+                .toHaveValue('https://www.google.com');
+            await expect(page.getByRole('combobox',
+                { name: 'Social link 1 platform' })).toContainText('other');
+
+            const enterSaved = page.waitForResponse(
+                (response) => response.url().includes('/api/staff/clients')
+                    && response.request().method() === 'POST' && response.ok());
+            await fillWhenReady(page.locator('#client-website'), 'www.example.org');
+            await page.locator('#client-website').press('Enter');
+            const enterResponse = await enterSaved;
+            assert.equal(
+                enterResponse.request().postDataJSON()?.fields?.website,
+                'https://www.example.org');
+            await expect(page.locator('#client-website'))
+                .toHaveValue('https://www.example.org');
+        } finally {
+            page.off('request', countPosts);
+            psql(container, `delete from app.clients where id = '${fixtureId}'`);
+        }
+    });
+
+    await t.test('client form maps server field errors to the submitted rows', async () => {
+        const fixtureId = randomUUID();
+        psql(container, `insert into app.clients (id, organization_id, name, status)
+            values ('${fixtureId}', '${ORG_ID}', 'Synthetic Server Error Client', 'draft')`);
+        let releasePost = () => {};
+        const holdPost = new Promise((resolve) => { releasePost = resolve; });
+        let postCount = 0;
+        await page.route('**/api/staff/clients/**', async (route) => {
+            if (route.request().method() === 'POST') {
+                postCount += 1;
+                await holdPost;
+                await route.fulfill({
+                    status: 400,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        ok: false,
+                        code: 'INVALID_FIELDS',
+                        fields: {
+                            telegramUsername: 'must be a valid Telegram username',
+                            'socialLinks[0].url': 'must be a valid URL',
+                        },
+                    }),
+                });
+                return;
+            }
+            await route.fallback();
+        });
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients/${fixtureId}`);
+            await fillWhenReady(
+                page.locator('#client-contact-name'), 'Casey Server');
+            await fillWhenReady(
+                page.locator('#client-contact-email'), 'casey.server@synthetic.test');
+            await fillWhenReady(page.locator('#client-telegram'), 'valid_user');
+            await fillWhenReady(
+                page.locator('#client-website'), 'https://valid.example');
+            for (const target of ['#social-url-0', '#social-url-1']) {
+                await clickUntil(
+                    () => page.getByRole('button', { name: 'Add social link' })
+                        .click(),
+                    page.locator(target),
+                );
+            }
+            await clickUntil(
+                () => page.getByRole('combobox', { name: 'Social link 2 platform' })
+                    .click(),
+                page.getByRole('listbox'),
+            );
+            await page.getByRole('option', { name: 'other', exact: true }).click();
+            await fillWhenReady(
+                page.locator('#social-url-1'), 'https://second.example');
+
+            await page.getByRole('button', { name: 'Save changes' }).click();
+            await expect(page.locator('#client-name')).toBeDisabled();
+            await expect(page.getByRole('button', { name: 'Saving…' }))
+                .toBeDisabled();
+            await page.getByRole('button', { name: 'Saving…' })
+                .click({ force: true });
+            await page.locator('#client-name').evaluate(
+                (el) => el.closest('form')?.requestSubmit());
+            await page.waitForTimeout(500);
+            assert.equal(postCount, 1);
+            releasePost();
+
+            await expect(page.locator('#client-telegram'))
+                .toHaveAttribute('aria-invalid', 'true');
+            await expect(page.locator('#client-telegram-error'))
+                .toHaveText(/Use 5–32 letters/);
+            await expect(page.locator('#social-url-1'))
+                .toHaveAttribute('aria-invalid', 'true');
+            await expect(page.locator('#social-url-1-error'))
+                .toHaveText('Enter a valid web address, such as https://example.com.');
+            await expect(page.locator('#social-url-0'))
+                .not.toHaveAttribute('aria-invalid', 'true');
+            assert.equal(await page.locator('#social-url-0-error').count(), 0);
+            await expect(page.locator('#social-url-1'))
+                .toHaveValue('https://second.example');
+            await expect(page.locator('#client-telegram')).toHaveValue('valid_user');
+
+            await fillWhenReady(
+                page.locator('#social-url-1'), 'https://second.example/fixed');
+            assert.equal(await page.locator('#social-url-1-error').count(), 0);
+            await expect(page.locator('#social-url-1'))
+                .not.toHaveAttribute('aria-invalid', 'true');
+            await page.getByRole('button', { name: 'Remove social link 1' }).click();
+            await expect(page.locator('#social-url-0'))
+                .toHaveValue('https://second.example/fixed');
+            await expect(page.locator('#social-url-0'))
+                .not.toHaveAttribute('aria-invalid', 'true');
+            assert.equal(await page.locator('#social-url-0-error').count(), 0);
+            await expect(page.locator('#client-telegram'))
+                .toHaveAttribute('aria-invalid', 'true');
+        } finally {
+            await page.unroute('**/api/staff/clients/**');
+            psql(container, `delete from app.clients where id = '${fixtureId}'`);
+        }
+    });
+
     await t.test('revoked membership loses staff access', async () => {
         psql(container, `
             update app.organization_memberships

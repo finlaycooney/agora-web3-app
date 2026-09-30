@@ -4,6 +4,7 @@ import {
     EMPTY_JOB_DOCUMENT,
     ClientJobContractError,
     jobDocumentText,
+    normalizeClientUrlInput,
     normalizeJobDocument,
     validateClientDraftInput,
     validateClientInput,
@@ -378,4 +379,32 @@ test('jobDocumentText extracts plain text and rejects non-canonical input', () =
         'a\nb',
     );
     assert.equal(jobDocumentText(EMPTY_JOB_DOCUMENT), '');
+});
+
+test('normalizeClientUrlInput upgrades bare hosts and rejects unsafe input', () => {
+    assert.equal(
+        normalizeClientUrlInput('www.google.com'), 'https://www.google.com');
+    assert.equal(
+        normalizeClientUrlInput('linkedin.com/in/someone'),
+        'https://linkedin.com/in/someone');
+    assert.equal(
+        normalizeClientUrlInput('  https://Example.com/Path '),
+        'https://Example.com/Path');
+    assert.equal(
+        normalizeClientUrlInput('//cdn.example.com/x'), 'https://cdn.example.com/x');
+    for (const bad of [
+        'javascript:alert(1)',
+        'data:text/html;base64,AAAA',
+        'ftp://example.com/file',
+        'mailto:dana@example.com',
+        'dana@example.com',
+        'some page.html',
+        '/relative/path',
+        'user:pass@example.com',
+        '',
+        null,
+        42,
+    ]) {
+        assert.equal(normalizeClientUrlInput(bad), null, JSON.stringify(bad));
+    }
 });
