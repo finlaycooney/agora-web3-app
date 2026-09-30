@@ -83,6 +83,13 @@ const urlHost = (value) => {
     }
 };
 
+export const normalizeClientUrlInput = (value) => {
+    const normalized = normalizeUrlInput(value);
+    return normalized !== null && isSafeUrl(normalized) && urlHost(normalized) !== null
+        ? normalized
+        : null;
+};
+
 const hostMatches = (host, domain) => host === domain || host.endsWith(`.${domain}`);
 
 const platformHostAllowed = (platform, host) => {

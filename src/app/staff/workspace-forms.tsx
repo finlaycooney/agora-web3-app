@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/staff-ui/button';
@@ -30,8 +30,12 @@ import {
     EMPTY_JOB_DOCUMENT,
     SOCIAL_PLATFORM_NAMES,
     SOCIAL_PLATFORMS,
+    ClientJobContractError,
+    normalizeClientUrlInput,
+    validateClientInput,
 } from '@/lib/client-job-contracts.js';
-import { staffMutation } from '@/lib/staff-mutation';
+import { mapClientFieldErrors } from '@/lib/client-form-errors.js';
+import { staffMutation, StaffMutationError } from '@/lib/staff-mutation';
 
 const nativeSelectClass =
     'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -40,11 +44,15 @@ function Field({
     label,
     htmlFor,
     required,
+    error,
+    hint,
     children,
 }: {
     label: string;
     htmlFor?: string;
     required?: boolean;
+    error?: string;
+    hint?: string;
     children: ReactNode;
 }) {
     return (
@@ -59,6 +67,22 @@ function Field({
                 ) : null}
             </Label>
             {children}
+            {error ? (
+                <span
+                    id={htmlFor ? `${htmlFor}-error` : undefined}
+                    className="text-xs text-destructive"
+                >
+                    {error}
+                </span>
+            ) : null}
+            {hint ? (
+                <span
+                    id={htmlFor ? `${htmlFor}-hint` : undefined}
+                    className="text-xs text-muted-foreground"
+                >
+                    {hint}
+                </span>
+            ) : null}
         </div>
     );
 }
@@ -75,6 +99,27 @@ interface JobBonus {
     type: string;
     details: string;
 }
+
+interface SocialRow {
+    key: string;
+    platform: string;
+    url: string;
+}
+
+const CLIENT_FIELD_IDS: Record<string, string> = {
+    name: 'client-name',
+    contactName: 'client-contact-name',
+    contactEmail: 'client-contact-email',
+    telegramUsername: 'client-telegram',
+    website: 'client-website',
+    anonymousDescription: 'client-anon-description',
+};
+
+const TELEGRAM_HINT =
+    'Use 5–32 letters, numbers or underscores, starting with a letter.'
+        + ' @ is optional.';
+
+const invalidClass = 'border-destructive focus-visible:ring-destructive';
 
 export function ClientForm({
     clientId,
@@ -94,38 +139,211 @@ export function ClientForm({
     };
 }) {
     const router = useRouter();
+    const formRef = useRef<HTMLFormElement>(null);
+    const busyRef = useRef(false);
+    const focusRequestRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [links, setLinks] = useState<SocialLink[]>(
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [rowErrors, setRowErrors] = useState<
+        Record<string, { platform?: string; url?: string }>
+    >({});
+    const [socialError, setSocialError] = useState<string | null>(null);
+    const [values, setValues] = useState({
+        name: initial?.name ?? '',
+        contactName: initial?.contactName ?? '',
+        contactEmail: initial?.contactEmail ?? '',
+        telegramUsername: initial?.telegramUsername ?? '',
+        website: initial?.website ?? '',
+        anonymousDescription: initial?.anonymousDescription ?? '',
+        isStealth: initial?.isStealth ?? false,
+    });
+    const [links, setLinks] = useState<SocialRow[]>(
         (initial?.socialLinks ?? []).map((link) => ({
+            key: crypto.randomUUID(),
             platform: link.platform,
             url: link.url,
         })),
     );
 
-    const submit = async (form: HTMLFormElement) => {
-        const data = new FormData(form);
-        const stealth = data.get('isStealth') === 'on';
-        const fields = {
-            name: String(data.get('name') ?? ''),
-            contactName: String(data.get('contactName') ?? '') || null,
-            contactEmail: String(data.get('contactEmail') ?? '') || null,
-            telegramUsername: String(data.get('telegramUsername') ?? '') || null,
-            website: String(data.get('website') ?? '') || null,
+    useEffect(() => {
+        const target = focusRequestRef.current;
+        if (!target) return;
+        const element = formRef.current
+            ?.querySelector<HTMLElement>(`#${CSS.escape(target)}`);
+        if (!element || element.matches(':disabled')) return;
+        focusRequestRef.current = null;
+        element.focus();
+    });
+
+    const patch = (partial: Partial<typeof values>) => {
+        setSaved(false);
+        setValues((current) => ({ ...current, ...partial }));
+    };
+
+    const clearFieldError = (field: string) => {
+        setFieldErrors((current) => {
+            if (!(field in current)) return current;
+            const next = { ...current };
+            delete next[field];
+            return next;
+        });
+    };
+
+    const change = (field: keyof typeof values, value: string | boolean) => {
+        patch({ [field]: value });
+        clearFieldError(field);
+    };
+
+    const clearRowError = (key: string) => {
+        setRowErrors((current) => {
+            if (!(key in current)) return current;
+            const next = { ...current };
+            delete next[key];
+            return next;
+        });
+    };
+
+    const clearSocialErrors = () => {
+        setRowErrors({});
+        setSocialError(null);
+    };
+
+    const updateLink = (key: string, partial: Partial<SocialRow>) => {
+        setSaved(false);
+        clearRowError(key);
+        setSocialError(null);
+        setLinks((current) =>
+            current.map((link) =>
+                link.key === key ? { ...link, ...partial } : link,
+            ),
+        );
+    };
+
+    const removeLink = (key: string) => {
+        setSaved(false);
+        clearSocialErrors();
+        setLinks((current) => current.filter((link) => link.key !== key));
+    };
+
+    const addLink = () => {
+        setSaved(false);
+        clearSocialErrors();
+        setLinks((current) => [
+            ...current,
+            { key: crypto.randomUUID(), platform: 'linkedin', url: '' },
+        ]);
+    };
+
+    const describedBy = (id: string, hasError: boolean, hasHint = false) =>
+        [
+            hasError ? `${id}-error` : null,
+            hasHint ? `${id}-hint` : null,
+        ].filter(Boolean).join(' ') || undefined;
+
+    const applyErrors = (
+        errors: Record<string, unknown>,
+        submittedKeys: string[],
+    ) => {
+        const mapped = mapClientFieldErrors(errors, submittedKeys);
+        setFieldErrors(mapped.fields);
+        setRowErrors(Object.fromEntries(mapped.rows));
+        setSocialError(mapped.group);
+        const scalarOrder = [
+            'name',
+            'contactName',
+            'contactEmail',
+            'telegramUsername',
+            'website',
+            'anonymousDescription',
+        ];
+        let target = scalarOrder
+            .filter((field) => mapped.fields[field])
+            .map((field) => CLIENT_FIELD_IDS[field])[0] ?? null;
+        if (!target) {
+            const index = links.findIndex((link) => mapped.rows.has(link.key));
+            if (index >= 0) {
+                const row = mapped.rows.get(links[index].key);
+                target = `social-${row?.url ? 'url' : 'platform'}-${index}`;
+            } else if (mapped.group && links.length > 0) {
+                target = 'social-url-0';
+            }
+        }
+        focusRequestRef.current = target;
+    };
+
+    const submit = async () => {
+        const submittedKeys = links
+            .filter((link) => link.url.trim() !== '')
+            .map((link) => link.key);
+        const raw = {
+            name: values.name,
+            contactName: values.contactName || null,
+            contactEmail: values.contactEmail || null,
+            telegramUsername: values.telegramUsername || null,
+            website: values.website || null,
             socialLinks: links
-                .map((link) => ({ platform: link.platform, url: link.url.trim() }))
+                .map((link) => ({
+                    platform: link.platform,
+                    url: link.url.trim(),
+                }))
                 .filter((link) => link.url !== ''),
-            isStealth: stealth,
-            anonymousDescription: stealth
-                ? (String(data.get('anonymousDescription') ?? '') || null)
+            isStealth: values.isStealth,
+            anonymousDescription: values.isStealth
+                ? values.anonymousDescription || null
                 : null,
         };
+        let fields;
+        try {
+            fields = validateClientInput(raw);
+        } catch (caught) {
+            if (caught instanceof ClientJobContractError) {
+                applyErrors(caught.fieldErrors, submittedKeys);
+                setError('Please check the highlighted fields.');
+                return;
+            }
+            throw caught;
+        }
+        setFieldErrors({});
+        setRowErrors({});
+        setSocialError(null);
+        setValues((current) => ({
+            ...current,
+            name: fields.name ?? current.name,
+            contactName: fields.contactName ?? '',
+            contactEmail: fields.contactEmail ?? '',
+            telegramUsername: fields.telegramUsername ?? '',
+            website: fields.website ?? '',
+            anonymousDescription: fields.anonymousDescription ?? '',
+        }));
+        const normalizedLinks = fields.socialLinks ?? [];
+        let normalizedIndex = 0;
+        setLinks((current) => current.map((link) => {
+            if (link.url.trim() === '') return link;
+            const normalized = normalizedLinks[normalizedIndex];
+            normalizedIndex += 1;
+            return normalized
+                ? { ...link, platform: normalized.platform, url: normalized.url }
+                : link;
+        }));
         const url = clientId ? `/api/staff/clients/${clientId}` : '/api/staff/clients';
-        const payload = await staffMutation(url, {
-            fields,
-            ...(clientId ? { expectedVersion: initial?.version } : {}),
-        });
+        let payload;
+        try {
+            payload = await staffMutation(url, {
+                fields,
+                ...(clientId ? { expectedVersion: initial?.version } : {}),
+            });
+        } catch (caught) {
+            if (caught instanceof StaffMutationError
+                && caught.status === 400
+                && Object.keys(caught.fieldErrors).length > 0) {
+                applyErrors(caught.fieldErrors, submittedKeys);
+                setError('Please check the highlighted fields.');
+                return;
+            }
+            throw caught;
+        }
         if (clientId) {
             setSaved(true);
             router.refresh();
@@ -136,26 +354,21 @@ export function ClientForm({
             throw new Error('Could not save. Please try again.');
         }
         router.push(`/staff/clients/${targetId}`);
-        router.refresh();
-    };
-
-    const updateLink = (index: number, patch: Partial<SocialLink>) => {
-        setLinks((current) =>
-            current.map((link, position) =>
-                position === index ? { ...link, ...patch } : link,
-            ),
-        );
     };
 
     return (
         <form
+            ref={formRef}
+            noValidate
             className="flex max-w-xl flex-col gap-5"
             onSubmit={(event) => {
                 event.preventDefault();
+                if (busyRef.current) return;
+                busyRef.current = true;
                 setError(null);
                 setSaved(false);
                 setBusy(true);
-                void submit(event.currentTarget)
+                void submit()
                     .catch((caught) =>
                         setError(
                             caught instanceof Error
@@ -163,67 +376,150 @@ export function ClientForm({
                                 : 'Could not save. Please try again.',
                         ),
                     )
-                    .finally(() => setBusy(false));
+                    .finally(() => {
+                        busyRef.current = false;
+                        setBusy(false);
+                    });
             }}
         >
-            <Field label="Client name" htmlFor="client-name" required>
+            <fieldset
+                disabled={busy}
+                className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0"
+            >
+            <Field
+                label="Client name"
+                htmlFor="client-name"
+                required
+                error={fieldErrors.name}
+            >
                 <Input
                     id="client-name"
                     name="name"
                     required
                     maxLength={256}
-                    defaultValue={initial?.name ?? ''}
+                    value={values.name}
+                    aria-invalid={fieldErrors.name ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-name', Boolean(fieldErrors.name))}
+                    className={fieldErrors.name ? invalidClass : undefined}
+                    onChange={(event) => change('name', event.target.value)}
                 />
             </Field>
-            <Field label="Contact name" htmlFor="client-contact-name">
+            <Field
+                label="Contact name"
+                htmlFor="client-contact-name"
+                required
+                error={fieldErrors.contactName}
+            >
                 <Input
                     id="client-contact-name"
                     name="contactName"
+                    required
                     maxLength={256}
-                    defaultValue={initial?.contactName ?? ''}
+                    value={values.contactName}
+                    aria-invalid={fieldErrors.contactName ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-contact-name', Boolean(fieldErrors.contactName))}
+                    className={fieldErrors.contactName ? invalidClass : undefined}
+                    onChange={(event) =>
+                        change('contactName', event.target.value)}
                 />
             </Field>
-            <Field label="Contact email" htmlFor="client-contact-email">
+            <Field
+                label="Contact email"
+                htmlFor="client-contact-email"
+                required
+                error={fieldErrors.contactEmail}
+            >
                 <Input
                     id="client-contact-email"
                     name="contactEmail"
                     type="email"
+                    required
                     maxLength={254}
-                    defaultValue={initial?.contactEmail ?? ''}
+                    value={values.contactEmail}
+                    aria-invalid={fieldErrors.contactEmail ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-contact-email', Boolean(fieldErrors.contactEmail))}
+                    className={fieldErrors.contactEmail ? invalidClass : undefined}
+                    onChange={(event) =>
+                        change('contactEmail', event.target.value)}
                 />
             </Field>
-            <Field label="Telegram username" htmlFor="client-telegram">
+            <Field
+                label="Telegram username"
+                htmlFor="client-telegram"
+                error={fieldErrors.telegramUsername}
+                hint={fieldErrors.telegramUsername ? undefined : TELEGRAM_HINT}
+            >
                 <Input
                     id="client-telegram"
                     name="telegramUsername"
-                    maxLength={32}
-                    defaultValue={initial?.telegramUsername ?? ''}
+                    maxLength={33}
+                    value={values.telegramUsername}
+                    aria-invalid={
+                        fieldErrors.telegramUsername ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-telegram',
+                        Boolean(fieldErrors.telegramUsername),
+                        !fieldErrors.telegramUsername)}
+                    className={
+                        fieldErrors.telegramUsername ? invalidClass : undefined}
+                    onChange={(event) =>
+                        change('telegramUsername', event.target.value)}
                 />
             </Field>
-            <Field label="Website" htmlFor="client-website">
+            <Field
+                label="Website"
+                htmlFor="client-website"
+                error={fieldErrors.website}
+            >
                 <Input
                     id="client-website"
                     name="website"
                     type="url"
-                    defaultValue={initial?.website ?? ''}
+                    inputMode="url"
+                    value={values.website}
+                    aria-invalid={fieldErrors.website ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-website', Boolean(fieldErrors.website))}
+                    className={fieldErrors.website ? invalidClass : undefined}
+                    onChange={(event) => change('website', event.target.value)}
+                    onBlur={(event) => {
+                        const normalized = normalizeClientUrlInput(
+                            event.target.value);
+                        if (normalized !== null
+                            && normalized !== event.target.value.trim()) {
+                            patch({ website: normalized });
+                        }
+                    }}
                 />
             </Field>
 
             <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-foreground">Social links</span>
-                {links.map((link, index) => (
-                    <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                {links.map((link, index) => {
+                    const rowError = rowErrors[link.key] ?? {};
+                    return (
+                    <div key={link.key} className="flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-40">
                             <Label htmlFor={`social-platform-${index}`}>Platform</Label>
                             <Select
                                 value={link.platform}
                                 onValueChange={(value) =>
-                                    updateLink(index, { platform: value })
+                                    updateLink(link.key, { platform: value })
                                 }
                             >
                                 <SelectTrigger
                                     id={`social-platform-${index}`}
                                     aria-label={`Social link ${index + 1} platform`}
+                                    aria-invalid={
+                                        rowError.platform ? true : undefined}
+                                    aria-describedby={describedBy(
+                                        `social-platform-${index}`,
+                                        Boolean(rowError.platform))}
+                                    className={
+                                        rowError.platform ? invalidClass : undefined}
                                 >
                                     <SelectValue />
                                 </SelectTrigger>
@@ -237,45 +533,74 @@ export function ClientForm({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {rowError.platform ? (
+                                <span
+                                    id={`social-platform-${index}-error`}
+                                    className="text-xs text-destructive"
+                                >
+                                    {rowError.platform}
+                                </span>
+                            ) : null}
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                             <Label htmlFor={`social-url-${index}`}>URL</Label>
                             <Input
                                 id={`social-url-${index}`}
                                 type="url"
+                                inputMode="url"
                                 placeholder="https://…"
                                 value={link.url}
+                                aria-invalid={rowError.url ? true : undefined}
+                                aria-describedby={describedBy(
+                                    `social-url-${index}`,
+                                    Boolean(rowError.url))}
+                                className={rowError.url ? invalidClass : undefined}
                                 onChange={(event) =>
-                                    updateLink(index, { url: event.target.value })
+                                    updateLink(link.key, { url: event.target.value })
                                 }
+                                onBlur={(event) => {
+                                    const normalized = normalizeClientUrlInput(
+                                        event.target.value);
+                                    if (normalized !== null
+                                        && normalized !== event.target.value.trim()) {
+                                        updateLink(link.key, { url: normalized });
+                                    }
+                                }}
                             />
+                            {rowError.url ? (
+                                <span
+                                    id={`social-url-${index}-error`}
+                                    className="text-xs text-destructive"
+                                >
+                                    {rowError.url}
+                                </span>
+                            ) : null}
                         </div>
                         <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
                             className="self-end"
                             aria-label={`Remove social link ${index + 1}`}
-                            onClick={() =>
-                                setLinks((current) =>
-                                    current.filter((_, position) => position !== index),
-                                )
-                            }
+                            onClick={() => removeLink(link.key)}
                         >
                             <Trash2 aria-hidden="true" />
                         </Button>
                     </div>
-                ))}
+                    );
+                })}
+                {socialError ? (
+                    <span id="client-social-links-error" className="text-xs text-destructive">
+                        {socialError}
+                    </span>
+                ) : null}
                 {links.length < 8 ? (
                     <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="self-start"
-                        onClick={() =>
-                            setLinks((current) => [
-                                ...current,
-                                { platform: 'linkedin', url: '' },
-                            ])
-                        }
+                        onClick={addLink}
                     >
                         <Plus aria-hidden="true" />
                         Add social link
@@ -287,18 +612,35 @@ export function ClientForm({
                 <Checkbox
                     name="isStealth"
                     value="on"
-                    defaultChecked={initial?.isStealth ?? false}
+                    checked={values.isStealth}
+                    onCheckedChange={(checked) =>
+                        change('isStealth', checked === true)}
                 />
                 Stealth client (hidden identity in public listings)
             </label>
-            <Field label="Anonymous description" htmlFor="client-anon-description">
+            <Field
+                label="Anonymous description"
+                htmlFor="client-anon-description"
+                required={values.isStealth}
+                error={fieldErrors.anonymousDescription}
+            >
                 <Textarea
                     id="client-anon-description"
                     name="anonymousDescription"
                     rows={2}
-                    defaultValue={initial?.anonymousDescription ?? ''}
+                    value={values.anonymousDescription}
+                    aria-invalid={
+                        fieldErrors.anonymousDescription ? true : undefined}
+                    aria-describedby={describedBy(
+                        'client-anon-description',
+                        Boolean(fieldErrors.anonymousDescription))}
+                    className={
+                        fieldErrors.anonymousDescription ? invalidClass : undefined}
+                    onChange={(event) =>
+                        change('anonymousDescription', event.target.value)}
                 />
             </Field>
+            </fieldset>
             {error && (
                 <p role="alert" className="text-sm text-destructive">
                     {error}
