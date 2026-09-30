@@ -61,6 +61,10 @@ const MIGRATIONS = [
     '20260926140000_public_intake.sql',
     '20260928100000_staff_workspace.sql',
     '20260928220000_job_visibility.sql',
+    '20260930090000_candidate_profiles.sql',
+    '20260930090100_candidate_intake_serialization.sql',
+    '20261001090000_public_intake_duplicate_review.sql',
+    '20261001100000_candidate_merge.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -1052,6 +1056,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             select slug from app.jobs where id = '${createdJobId}'`).trim();
         const result = await boardPage.evaluate(async (jobId) => {
             const form = new FormData();
+            form.append('submissionId', crypto.randomUUID());
             form.append('jobId', jobId);
             form.append('fullName', 'Ada Lovelace');
             form.append('email', 'ada@example.com');

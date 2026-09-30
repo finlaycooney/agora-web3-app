@@ -116,6 +116,27 @@ test('submitPublicApplication validates the document descriptor', async () => {
     );
 });
 
+test('submission ID occupies the intake request argument, not an identifier argument', async () => {
+    const calls = [];
+    const client = {
+        query: async (sql, values) => {
+            calls.push({ sql, values });
+            return { rows: [{ result: { accepted: true } }] };
+        },
+        release() {},
+    };
+    const pool = { connect: async () => client };
+    const submissionId = '00000000-0000-4000-8000-000000000042';
+    await submitPublicApplication(pool, '00000000-0000-4000-8000-000000000001', {
+        jobSlug: 'founding-engineer', reference: 'AG-0123456789AB',
+        submissionId, fullName: 'Test Applicant', email: 'applicant@example.com',
+        professionalUrl: null, achievement: null, document: null,
+    });
+    const call = calls.find(({ sql }) => sql.includes('app.submit_public_application_v1('));
+    assert.equal(call.values[7], submissionId);
+    assert.notEqual(call.values[3], submissionId);
+});
+
 test('rateLimitAllow admits up to the limit inside the window', () => {
     const options = { limit: 3, windowMs: 60_000, now: 1_000_000 };
     assert.equal(rateLimitAllow('k-unit-1', options), true);

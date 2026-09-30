@@ -34,43 +34,57 @@ test('staff MFA pages redirect unauthenticated visitors to sign-in', async ({ pa
     }
 });
 
-test('staff workspace pages redirect unauthenticated visitors to sign-in', async ({ page }) => {
-    const id = '00000000-0000-4000-8000-000000000000';
-    for (const path of [
-        '/staff/clients',
-        '/staff/clients/new',
-        `/staff/clients/${id}`,
-        '/staff/jobs',
-        '/staff/jobs/new',
-        `/staff/jobs/${id}`,
-        `/staff/jobs/${id}/edit`,
-        '/staff/applications',
-        '/staff/candidates',
-        `/staff/candidates/${id}`,
-        '/staff/members',
-    ]) {
+const id = '00000000-0000-4000-8000-000000000000';
+for (const path of [
+    '/staff/clients',
+    '/staff/clients/new',
+    `/staff/clients/${id}`,
+    '/staff/jobs',
+    '/staff/jobs/new',
+    `/staff/jobs/${id}`,
+    `/staff/jobs/${id}/edit`,
+    '/staff/applications',
+    '/staff/candidates',
+    '/staff/candidates/duplicates',
+    `/staff/candidates/${id}`,
+    '/staff/members',
+]) {
+    test(`${path} redirects unauthenticated visitors to sign-in`, async ({ page }) => {
         await gotoStaff(page, path);
         await expect(page).toHaveURL(/\/staff\/sign-in/);
-    }
-});
+    });
+}
 
-test('staff data API routes reject unauthenticated requests', async ({ request }) => {
-    const id = '00000000-0000-4000-8000-000000000000';
-    for (const path of [
-        '/api/staff/clients',
-        `/api/staff/clients/${id}`,
-        '/api/staff/jobs',
-        `/api/staff/jobs/${id}/draft`,
-        `/api/staff/jobs/${id}/revision`,
-        `/api/staff/jobs/${id}/publish`,
-        `/api/staff/jobs/${id}/listing`,
-        '/api/staff/applications',
-        '/api/staff/candidates',
-        '/api/staff/members',
-    ]) {
+for (const path of [
+    '/api/staff/clients',
+    `/api/staff/clients/${id}`,
+    '/api/staff/jobs',
+    `/api/staff/jobs/${id}/draft`,
+    `/api/staff/jobs/${id}/revision`,
+    `/api/staff/jobs/${id}/publish`,
+    `/api/staff/jobs/${id}/listing`,
+    '/api/staff/applications',
+    '/api/staff/candidates',
+    '/api/staff/candidates/duplicates',
+    '/api/staff/members',
+]) {
+    test(`${path} rejects unauthenticated requests`, async ({ request }) => {
         const response = await request.post(path, { data: {} });
         expect(response.status()).toBe(401);
-    }
+    });
+}
+
+test('duplicate review API rejects unauthenticated reads', async ({ request }) => {
+    const response = await request.get('/api/staff/candidates/duplicates');
+    expect(response.status()).toBe(401);
+});
+
+test('duplicate merge API rejects unauthenticated writes', async ({ request }) => {
+    const response = await request.post('/api/staff/candidates/duplicates/merge', {
+        data: {},
+        headers: { origin: 'http://127.0.0.1:3000' },
+    });
+    expect(response.status()).toBe(401);
 });
 
 test('staff document download rejects unauthenticated requests', async ({ request }) => {

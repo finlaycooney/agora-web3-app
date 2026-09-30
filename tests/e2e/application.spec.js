@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { createSyntheticDocx } from '../support/cv-fixtures.js';
+import { JOBS } from '../../src/data/jobs.js';
 
 const openApplication = async (page) => {
     await page.route('**/api/auth/session', (route) => route.fulfill({ json: {} }));
+    await page.route('**/api/public/jobs', (route) => route.fulfill({ json: { jobs: JOBS } }));
     await page.goto('/jobs');
     await page.getByRole('button', { name: '[ APPLY ]', exact: true }).first().click();
     await expect(page.getByRole('dialog')).toContainText('Founding Engineer');
@@ -40,6 +42,7 @@ test('submits the selected job and all visible candidate fields', async ({ page 
     expect(requestBody).toContain('https://www.linkedin.com/in/ada');
     expect(requestBody).toContain('ada-cv.docx');
     expect(requestBody).toContain('Built a protocol.');
+    expect(requestBody).toContain('submissionId');
 });
 
 test('explains an email entered as a professional URL and clears the error when corrected', async ({ page }) => {
