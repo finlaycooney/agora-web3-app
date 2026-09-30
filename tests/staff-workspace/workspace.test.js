@@ -162,7 +162,11 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     const container = await startPostgresContainer('pgstaffbrowser', POSTGRES_17_IMAGE, {
         publish: true,
     });
-    t.after(() => stopAndRemoveContainer(container));
+    let fixturePool;
+    t.after(async () => {
+        await fixturePool?.end();
+        stopAndRemoveContainer(container);
+    });
 
     for (const fileName of MIGRATIONS) {
         psql(container, readMigration(fileName));
@@ -225,8 +229,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     await new Promise(resolve => storageServer.listen(0, '127.0.0.1', resolve));
     const storageURL = `http://127.0.0.1:${storageServer.address().port}`;
     t.after(() => { storageServer.closeAllConnections(); storageServer.close(); });
-    const fixturePool = new pg.Pool({ connectionString: databaseUrl });
-    t.after(() => fixturePool.end());
+    fixturePool = new pg.Pool({ connectionString: databaseUrl });
     const seedCandidate = fields => saveCandidateProfile(fixturePool,
         { provider: 'google', issuer: 'https://accounts.google.com', subject: SUBJECT }, ORG_ID,
         { candidateId: randomUUID(), expectedVersion: null, fields, operationId: randomUUID() });
