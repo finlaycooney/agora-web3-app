@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/staff-ui/button';
@@ -16,8 +16,12 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/staff-ui/table';
+import {
+    AddCandidateDialog,
+    type CandidateProfileOptions,
+} from './candidate-profile-dialog';
 
-interface CandidateRow {
+export interface CandidateRow {
     candidateId: string;
     fullName: string | null;
     email: string | null;
@@ -25,6 +29,8 @@ interface CandidateRow {
     applicationCount: number;
     hasCv: boolean;
     createdAt: string;
+    headline?: string | null;
+    location?: string | null;
 }
 
 const formatDate = (iso: string) =>
@@ -36,11 +42,16 @@ export function CandidatesBrowser({
     candidates,
     capped = false,
     canReviewDuplicates = false,
+    profileOptions = null,
+    profileUnavailable = false,
 }: {
     candidates: CandidateRow[];
     capped?: boolean;
     canReviewDuplicates?: boolean;
+    profileOptions?: CandidateProfileOptions | null;
+    profileUnavailable?: boolean;
 }) {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const query = searchParams.get('q') ?? '';
 
@@ -100,7 +111,20 @@ export function CandidatesBrowser({
                         <Link href="/staff/candidates/duplicates">Review matches</Link>
                     </Button>
                 ) : null}
+                {profileOptions?.canWrite === true ? (
+                    <AddCandidateDialog
+                        options={profileOptions}
+                        onCreated={(candidateId) =>
+                            router.push(`/staff/candidates/${candidateId}`)}
+                    />
+                ) : null}
             </div>
+
+            {profileUnavailable ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    Profile editing is temporarily unavailable.
+                </p>
+            ) : null}
 
             <span role="status" className="text-xs text-muted-foreground">
                 {visible.length} candidate{visible.length === 1 ? '' : 's'}
@@ -141,6 +165,11 @@ export function CandidatesBrowser({
                                     >
                                         {row.fullName ?? 'Unnamed'}
                                     </a>
+                                    {row.headline ? (
+                                        <div className="text-xs text-muted-foreground">
+                                            {row.headline}
+                                        </div>
+                                    ) : null}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">
                                     {row.email ?? '—'}

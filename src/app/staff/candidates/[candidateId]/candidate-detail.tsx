@@ -19,6 +19,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/staff-ui/tabs';
 import { Textarea } from '@/components/staff-ui/textarea';
 import { cn } from '@/lib/utils';
+import {
+    EditCandidateProfileButton,
+    type CandidateProfileOptions,
+} from '../candidate-profile-dialog';
 
 const AVATAR_PALETTE = [
     'bg-[#f1f3f5] text-[#4b5563]',
@@ -99,10 +103,12 @@ interface Workspace {
         lifecycle: string;
         ownerName: string | null;
         createdAt: string;
+        version: string;
         email?: string | null;
         professionalUrl?: string | null;
         headline?: string | null;
         location?: string | null;
+        ownerMembershipId?: string | null;
     };
     identifiers: { kind: string; value: string; verification: string }[];
     applications: CandidateApplication[];
@@ -128,7 +134,9 @@ interface Workspace {
         writeNotes: boolean;
         changeStage: boolean;
         downloadDocuments: boolean;
+        writeCandidates?: boolean;
     };
+    profileOptions?: CandidateProfileOptions;
 }
 
 function StageSelect({
@@ -268,9 +276,12 @@ const DETAIL_TABS = ['applications', 'documents', 'notes'] as const;
 
 export function CandidateDetail({
     workspace,
+    profileUnavailable = false,
 }: {
     workspace: Workspace;
+    profileUnavailable?: boolean;
 }) {
+    const router = useRouter();
     const { candidate, identifiers, applications, stages, documents, notes, capabilities } =
         workspace;
     const searchParams = useSearchParams();
@@ -301,6 +312,9 @@ export function CandidateDetail({
     const professionalUrl = candidate.professionalUrl !== undefined
         ? candidate.professionalUrl
         : identifiers.find((entry) => entry.kind === 'professional_url')?.value;
+    const canEditProfile = !profileUnavailable
+        && capabilities.writeCandidates === true
+        && workspace.profileOptions !== undefined;
     const palette = AVATAR_PALETTE[name.length % AVATAR_PALETTE.length];
 
     return (
@@ -312,6 +326,11 @@ export function CandidateDetail({
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 Back to candidates
             </Link>
+            {profileUnavailable ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    Profile editing is temporarily unavailable.
+                </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-4">
                 <span
                     aria-hidden="true"
@@ -324,9 +343,11 @@ export function CandidateDetail({
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
                     <h1 className="text-[26px] leading-8 font-medium text-foreground">{name}</h1>
-                    {candidate.headline ? <p className="text-sm">{candidate.headline}</p> : null}
+                    {candidate.headline ? (
+                        <p className="text-sm text-foreground">{candidate.headline}</p>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        {email ? <span>{email}</span> : null}
+                        {email ? <span data-testid="candidate-primary-email">{email}</span> : null}
                         {professionalUrl ? (
                             <a
                                 href={professionalUrl}
@@ -346,11 +367,39 @@ export function CandidateDetail({
                         Other emails: {otherEmails.join(', ')}
                     </p> : null}
                 </div>
+                {canEditProfile ? (
+                    <div className="w-full sm:ml-auto sm:w-auto">
+                        <EditCandidateProfileButton
+                            options={workspace.profileOptions as CandidateProfileOptions}
+                            candidate={{
+                                fullName: candidate.fullName ?? '',
+                                email: email ?? null,
+                                professionalUrl: professionalUrl ?? null,
+                                headline: candidate.headline ?? null,
+                                location: candidate.location ?? null,
+                                ownerMembershipId: candidate.ownerMembershipId ?? null,
+                                professionalSummary: candidate.professionalSummary,
+                            }}
+                            candidateId={candidate.candidateId}
+                            version={String(candidate.version)}
+                            onSaved={() => router.refresh()}
+                        />
+                    </div>
+                ) : null}
             </div>
 
-            {candidate.professionalSummary ? <p className="text-sm whitespace-pre-wrap">
-                {candidate.professionalSummary}
-            </p> : null}
+            {candidate.professionalSummary ? (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm whitespace-pre-wrap">
+                            {candidate.professionalSummary}
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : null}
 
             <Tabs value={tab} onValueChange={setTab}>
                 <TabsList>
