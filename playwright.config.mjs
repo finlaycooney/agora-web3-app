@@ -8,6 +8,7 @@ assertNonproductionTestEnvironment();
 export default defineConfig({
     testDir: './tests/e2e',
     fullyParallel: false,
+    workers: 2,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 2 : 0,
     reporter: process.env.CI ? 'github' : 'list',

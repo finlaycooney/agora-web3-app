@@ -1,5 +1,5 @@
-import { notFound } from 'next/navigation';
-import { getCandidateWorkspace } from '@/lib/pipeline-operations';
+import { notFound, redirect } from 'next/navigation';
+import { getCandidateProfile, resolveCandidateRedirect } from '@/lib/candidate-profile-read';
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
 import { PageHeader } from '@/components/staff-preview/shared';
@@ -19,7 +19,7 @@ export default async function StaffCandidatePage({
     const { candidateId } = await params;
     let workspace = null;
     try {
-        workspace = await getCandidateWorkspace(
+        workspace = await getCandidateProfile(
             gate.pool, gate.identity, gate.organizationId, { candidateId });
     } catch (error) {
         if (error instanceof StaffAuthorizationError && error.code === 'FORBIDDEN') {
@@ -41,6 +41,9 @@ export default async function StaffCandidatePage({
             );
         }
         if ((error as { code?: string })?.code === 'P0002') {
+            const target = await resolveCandidateRedirect(
+                gate.pool, gate.identity, gate.organizationId, candidateId);
+            if (target) redirect(`/staff/candidates/${target}`);
             notFound();
         }
         throw error;
