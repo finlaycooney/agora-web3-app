@@ -45,7 +45,6 @@ const candidateRoute = await import(
 const ORG_ID = '11111111-2222-3333-4444-555555555555';
 const OP_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const CANDIDATE_ID = 'bbbbbbbb-2222-3333-4444-555555555555';
-const EXISTING_ID = 'cccccccc-3333-4444-5555-666666666666';
 
 const IDENTITY = {
     provider: 'google',
@@ -165,40 +164,14 @@ test('missing MFA denies the write before any operation', async () => {
     assert.equal(calls.operations.length, 0);
 });
 
-test('create passes a fresh candidate id and null expectedVersion', async () => {
-    const response = await candidatesRoute.POST(jsonPost(createBody()));
-    assert.equal(response.status, 200);
-    const body = await response.json();
-    assert.equal(body.ok, true);
-    assert.equal(body.result.status, 'created');
-    const [call] = calls.operations;
-    assert.equal(call[0], 'saveCandidateProfile');
-    assert.equal(call[1].expectedVersion, null);
-    assert.match(call[1].candidateId,
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    assert.equal(call[1].candidateId, body.result.candidateId);
-    assert.equal(call[1].operationId, OP_ID);
-    assert.equal(call[1].fields.fullName, 'Grace Hopper');
-});
-
-test('a duplicate result returns 409 with the existing candidate id', async () => {
-    stubs.set('@/lib/candidate-profile-operations:saveCandidateProfile',
-        async () => ({ status: 'duplicate', candidateId: EXISTING_ID, version: '3' }));
-    const response = await candidatesRoute.POST(jsonPost(createBody()));
-    assert.equal(response.status, 409);
-    const body = await response.json();
-    assert.equal(body.ok, false);
-    assert.equal(body.code, 'DUPLICATE_CANDIDATE');
-    assert.equal(body.candidateId, EXISTING_ID);
-});
-
-test('unknown create keys are rejected before the operation', async () => {
-    for (const extra of [
-        { cvFile: 'x' }, { jobId: CANDIDATE_ID }, { note: 'hi' }, { tags: [] },
-    ]) {
-        const response = await candidatesRoute.POST(
-            jsonPost(createBody(extra)));
-        assert.equal(response.status, 400, JSON.stringify(extra));
+test('legacy creation cannot bypass required CV upload, even with complete profile fields', async () => {
+    for (const extra of [{}, { cvFile: 'fake.pdf' }, { fields: { fullName: 'Grace Hopper', email: 'grace@example.test' } }, { jobId: CANDIDATE_ID }]) {
+        const response = await candidatesRoute.POST(jsonPost(createBody(extra)));
+        assert.equal(response.status, 400);
+        assert.equal(response.headers.get('cache-control'), 'private, no-store');
+        const body = await response.json();
+        assert.equal(body.code, 'CANDIDATE_UPLOAD_REQUIRED');
+        assert.match(body.error, /\/api\/staff\/candidates\/upload/);
     }
     assert.equal(calls.operations.length, 0);
 });
@@ -265,17 +238,18 @@ test('PATCH requires a string expectedVersion', async () => {
     assert.equal(calls.operations.length, 0);
 });
 
-test('a replayed operation id returns the stored result', async () => {
+test('a replayed PATCH operation id returns the stored result', async () => {
     stubs.set('@/lib/candidate-profile-operations:saveCandidateProfile',
         async (pool, identity, org, input) => {
             calls.operations.push(['saveCandidateProfile', input]);
             return {
-                status: 'created', candidateId: input.candidateId,
+                status: 'updated', candidateId: input.candidateId,
                 version: '1', replayed: true,
             };
         });
-    const first = await candidatesRoute.POST(jsonPost(createBody()));
-    const second = await candidatesRoute.POST(jsonPost(createBody()));
+    const edit = () => candidateRoute.PATCH(jsonPatch(CANDIDATE_ID, { fields: { fullName: 'Grace Hopper' }, expectedVersion: '1', operationId: OP_ID }), params(CANDIDATE_ID));
+    const first = await edit();
+    const second = await edit();
     assert.equal(first.status, 200);
     assert.equal(second.status, 200);
     assert.equal(calls.operations.length, 2);
@@ -289,8 +263,6 @@ test('capability denial returns 403 and never reaches the fallback', async () =>
             throw new StaffAuthorizationError(
                 'FORBIDDEN', 'a required permission is not granted');
         });
-    const response = await candidatesRoute.POST(jsonPost(createBody()));
-    assert.equal(response.status, 403);
     const patch = await candidateRoute.PATCH(
         jsonPatch(CANDIDATE_ID, {
             fields: { fullName: 'x' },
@@ -308,8 +280,6 @@ test('a missing profile function returns 503 instead of a stack', async () => {
                     'function app.save_candidate_profile_v1(uuid, bigint, jsonb, uuid, uuid) does not exist'),
                 { code: '42883' });
         });
-    const create = await candidatesRoute.POST(jsonPost(createBody()));
-    assert.equal(create.status, 503);
     const patch = await candidateRoute.PATCH(
         jsonPatch(CANDIDATE_ID, {
             fields: { fullName: 'x' },
@@ -327,7 +297,7 @@ test('unrelated missing functions do not trigger the fallback response', async (
                 { code: '42883' });
         });
     await assert.rejects(
-        candidatesRoute.POST(jsonPost(createBody())),
+        candidateRoute.PATCH(jsonPatch(CANDIDATE_ID, { fields: { fullName: 'Grace Hopper' }, expectedVersion: '1', operationId: OP_ID }), params(CANDIDATE_ID)),
         /list_candidates_v1/,
         'an unrelated 42883 must propagate to staffErrorResponse unchanged',
     );
@@ -357,4 +327,12 @@ test('addNote keeps working through the legacy action', async () => {
 test('an unknown action returns 400', async () => {
     const response = await candidatesRoute.POST(jsonPost({ action: 'explode' }));
     assert.equal(response.status, 400);
+});
+
+test('addNote retains permission denial mapping', async () => {
+    stubs.set('@/lib/pipeline-operations:addCandidateNote', async () => {
+        throw new StaffAuthorizationError('FORBIDDEN', 'a required permission is not granted');
+    });
+    const response = await candidatesRoute.POST(jsonPost({ action: 'addNote', candidateId: CANDIDATE_ID, body: 'hello' }));
+    assert.equal(response.status, 403);
 });

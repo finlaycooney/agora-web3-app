@@ -105,6 +105,7 @@ interface Workspace {
         createdAt: string;
         version: string;
         email?: string | null;
+        secondaryEmails?: string[];
         professionalUrl?: string | null;
         headline?: string | null;
         location?: string | null;
@@ -305,9 +306,11 @@ export function CandidateDetail({
     const email = candidate.email !== undefined
         ? candidate.email
         : identifiers.find((entry) => entry.kind === 'email')?.value;
+    const secondaryEmails = candidate.secondaryEmails ?? [];
     const otherEmails = Array.from(new Set(identifiers
         .filter((entry) => entry.kind === 'email'
-            && entry.value.trim().toLowerCase() !== email?.trim().toLowerCase())
+            && entry.value.trim().toLowerCase() !== email?.trim().toLowerCase()
+            && !secondaryEmails.includes(entry.value.trim().toLowerCase()))
         .map((entry) => entry.value)));
     const professionalUrl = candidate.professionalUrl !== undefined
         ? candidate.professionalUrl
@@ -348,6 +351,7 @@ export function CandidateDetail({
                     ) : null}
                     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                         {email ? <span data-testid="candidate-primary-email">{email}</span> : null}
+                        {secondaryEmails.length > 0 ? <span>· Secondary emails: {secondaryEmails.join(', ')}</span> : null}
                         {professionalUrl ? (
                             <a
                                 href={professionalUrl}
@@ -364,7 +368,7 @@ export function CandidateDetail({
                         {candidate.location ? <span>· {candidate.location}</span> : null}
                     </div>
                     {otherEmails.length > 0 ? <p className="text-xs text-muted-foreground">
-                        Other emails: {otherEmails.join(', ')}
+                        Other recorded emails: {otherEmails.join(', ')}
                     </p> : null}
                 </div>
                 {canEditProfile ? (

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { saveCandidateProfile } from '../../src/lib/candidate-profile-operations.js';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +67,7 @@ const MIGRATIONS = [
     '20260930090100_candidate_intake_serialization.sql',
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
+    '20261002100000_candidate_upload.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -152,10 +155,18 @@ const sampleContrast = (locator) => locator.first().evaluate((node) => {
 
 test('staff workspace end-to-end in a real browser', async (t) => {
     assertLocalTestEnvironment();
+    const runCase = (name, body) => t.test(name, {
+        skip: process.env.STAFF_WORKSPACE_CANDIDATES_ONLY === '1'
+            && !/candidate|profile|duplicate email/.test(name),
+    }, body);
     const container = await startPostgresContainer('pgstaffbrowser', POSTGRES_17_IMAGE, {
         publish: true,
     });
-    t.after(() => stopAndRemoveContainer(container));
+    let fixturePool;
+    t.after(async () => {
+        await fixturePool?.end();
+        stopAndRemoveContainer(container);
+    });
 
     for (const fileName of MIGRATIONS) {
         psql(container, readMigration(fileName));
@@ -180,6 +191,49 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     const baseURL = `http://127.0.0.1:${port}`;
     const databaseUrl = `postgresql://agora_authz_test:${runtimePassword}@127.0.0.1:${publishedPort(container, 5432)}/postgres`;
 
+    // Only the external storage service is synthetic: requests exercise the
+    // real authenticated upload API, file validation and database transaction.
+    let failNextUpload = false;
+    const storedCvs = new Map();
+    const storageServer = createServer(async (request, response) => {
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const bytes = Buffer.concat(chunks);
+        const pathname = new URL(request.url, 'http://localhost').pathname;
+        response.setHeader('content-type', 'application/json');
+        if (request.method === 'POST' && pathname.startsWith('/storage/v1/object/cv-submissions/')) {
+            if (failNextUpload) {
+                failNextUpload = false;
+                response.writeHead(503);
+                response.end(JSON.stringify({ statusCode: '503', error: 'Service Unavailable', message: 'Synthetic storage failure' }));
+                return;
+            }
+            const key = decodeURIComponent(pathname.slice('/storage/v1/object/cv-submissions/'.length));
+            storedCvs.set(key, bytes);
+            response.end(JSON.stringify({ Key: `cv-submissions/${key}` }));
+        } else if (request.method === 'POST' && pathname.startsWith('/storage/v1/object/sign/cv-submissions/')) {
+            response.end(JSON.stringify({ signedURL: `${pathname.slice('/storage/v1'.length)}?token=synthetic` }));
+        } else if (request.method === 'GET' && pathname.startsWith('/storage/v1/object/sign/cv-submissions/')) {
+            const key = decodeURIComponent(pathname.slice('/storage/v1/object/sign/cv-submissions/'.length));
+            if (!storedCvs.has(key)) { response.writeHead(404); response.end('{}'); return; }
+            response.setHeader('content-type', 'application/pdf');
+            response.end(storedCvs.get(key));
+        } else if (request.method === 'DELETE' && pathname === '/storage/v1/object/cv-submissions') {
+            for (const key of JSON.parse(bytes.toString()).prefixes) storedCvs.delete(key);
+            response.end('[]');
+        } else {
+            response.writeHead(404);
+            response.end(JSON.stringify({ error: 'Unexpected synthetic storage request' }));
+        }
+    });
+    await new Promise(resolve => storageServer.listen(0, '127.0.0.1', resolve));
+    const storageURL = `http://127.0.0.1:${storageServer.address().port}`;
+    t.after(() => { storageServer.closeAllConnections(); storageServer.close(); });
+    fixturePool = new pg.Pool({ connectionString: databaseUrl });
+    const seedCandidate = fields => saveCandidateProfile(fixturePool,
+        { provider: 'google', issuer: 'https://accounts.google.com', subject: SUBJECT }, ORG_ID,
+        { candidateId: randomUUID(), expectedVersion: null, fields, operationId: randomUUID() });
+
     const childEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
@@ -198,9 +252,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         E2E_DATABASE_URL: '',
         E2E_REAL_BACKEND: '',
         RESEND_API_KEY: '',
-        NEXT_PUBLIC_SUPABASE_URL: '',
+        NEXT_PUBLIC_SUPABASE_URL: storageURL,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
-        SUPABASE_SERVICE_ROLE_KEY: '',
+        SUPABASE_SERVICE_ROLE_KEY: 'synthetic-storage-service-key',
         SUPABASE_DB_URL: '',
         GITHUB_ID: '',
         GITHUB_SECRET: '',
@@ -316,12 +370,33 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     t.after(async () => { await browser.close().catch(() => {}); });
     mkdirSync(resultsDir, { recursive: true });
 
+    const uploads = [];
+    const observeUploads = async (context) => context.route('**/api/staff/candidates/upload', async (route) => {
+        const request = route.request();
+        const form = await new Response(request.postDataBuffer(), {
+            headers: { 'content-type': request.headers()['content-type'] },
+        }).formData();
+        const cv = form.get('cvFile');
+        assert.ok(cv instanceof File && cv.size > 0);
+        uploads.push({ fields: JSON.parse(form.get('fields')), name: cv.name, operationId: form.get('operationId') });
+        await route.continue();
+    });
+    const fillUpload = async (dialog, first, last, email) => {
+        await fillWhenReady(dialog.getByLabel('First name'), first);
+        await fillWhenReady(dialog.getByLabel('Last name'), last);
+        await fillWhenReady(dialog.getByLabel('Primary email'), email);
+        await dialog.locator('#candidate-cv').setInputFiles({
+            name: 'synthetic-cv.pdf', mimeType: 'application/pdf', buffer: createSyntheticPdf(),
+        });
+    };
+
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await desktop.addCookies(staffCookies);
+    await observeUploads(desktop);
     const page = await desktop.newPage();
     page.setDefaultTimeout(90_000);
 
-    await t.test('overview renders live metrics, tasks, review queue and clients hiring', async () => {
+    await runCase('overview renders live metrics, tasks, review queue and clients hiring', async () => {
         await gotoStaff(page, `${baseURL}/staff`);
         await page.getByRole('heading', { name: 'Overview', level: 1 }).waitFor();
 
@@ -336,7 +411,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.match(await page.getByRole('main').last().innerText(), /You’re up to date/);
     });
 
-    await t.test('tasks can be added, completed, reloaded and reopened', async () => {
+    await runCase('tasks can be added, completed, reloaded and reopened', async () => {
         const tasksFetch = page.waitForResponse(
             (response) => response.url().includes('/api/staff/tasks?')
                 && response.request().method() === 'GET' && response.ok(),
@@ -400,7 +475,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             .waitFor();
     });
 
-    await t.test('attention bell reflects real counts and errors honestly', async () => {
+    await runCase('attention bell reflects real counts and errors honestly', async () => {
         await gotoStaff(page, `${baseURL}/staff`);
         const bell = page.getByRole('button', { name: /Workspace updates, \d+ item/ });
         await bell.waitFor();
@@ -438,7 +513,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.keyboard.press('Escape');
     });
 
-    await t.test('task list paginates, races safely and survives API failures', async () => {
+    await runCase('task list paginates, races safely and survives API failures', async () => {
         const batch = [];
         for (let index = 0; index < 24; index += 1) {
             batch.push(`('${randomUUID()}', '${ORG_ID}',
@@ -560,7 +635,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     let createdClientId;
-    await t.test('client creation persists fields and social links', async () => {
+    await runCase('client creation persists fields and social links', async () => {
         await gotoStaff(page, `${baseURL}/staff/clients/new`);
         await page.locator('#client-name').fill('Synthetic Browser Client');
         await page.locator('#client-contact-name').fill('Casey Example');
@@ -598,7 +673,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             .toHaveValue('https://linkedin.com/company/synthetic');
     });
 
-    await t.test('client update keeps social links and confirms the save', async () => {
+    await runCase('client update keeps social links and confirms the save', async () => {
         await gotoStaff(page, `${baseURL}/staff/clients/${createdClientId}`);
         await fillWhenReady(
             page.locator('#client-name'), 'Synthetic Browser Client Renamed');
@@ -620,7 +695,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     let createdJobId;
-    await t.test('job creation persists rich description and survives reload', async () => {
+    await runCase('job creation persists rich description and survives reload', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/new`);
         await page.locator('#job-client').selectOption(createdClientId);
         await expect(page.locator('#job-public-visibility')).toHaveValue('false');
@@ -657,7 +732,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.match(await main.innerHTML(), /<strong[^>]*>Synthetic job description<\/strong>/);
     });
 
-    await t.test('job edit preserves rich text and adds a bonus through the UI', async () => {
+    await runCase('job edit preserves rich text and adds a bonus through the UI', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}/edit`);
         await fillWhenReady(
             page.locator('#job-title'), 'Synthetic Browser Job Edited');
@@ -696,7 +771,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             .toHaveValue('Synthetic equity bonus');
     });
 
-    await t.test('publishing updates metrics, the public board and stays reviewable', async () => {
+    await runCase('publishing updates metrics, the public board and stays reviewable', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}/edit`);
         await fillWhenReady(page.locator('#job-remote-regions'), 'Worldwide');
         await fillWhenReady(page.locator('#job-comp-min'), '90000.00');
@@ -786,7 +861,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     let unlistedJobId;
-    await t.test('a job created unlisted publishes off the board until listed', async () => {
+    await runCase('a job created unlisted publishes off the board until listed', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/new`);
         await page.locator('#job-client').selectOption(createdClientId);
         await expect(page.locator('#job-public-visibility')).toHaveValue('false');
@@ -890,7 +965,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         return true;
     });
 
-    await t.test('the public board revalidates and gates stale actions', async () => {
+    await runCase('the public board revalidates and gates stale actions', async () => {
         const anonymous = await browser.newContext();
         boardPage = await anonymous.newPage();
         boardPage.setDefaultTimeout(90_000);
@@ -956,7 +1031,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await expect(boardPage.getByRole('dialog')).toHaveCount(0);
     });
 
-    await t.test('an open application keeps entered data when the job vanishes', async () => {
+    await runCase('an open application keeps entered data when the job vanishes', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
         let listing = page.waitForResponse(
             (response) => response.url()
@@ -1042,7 +1117,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await dialog.getByRole('button', { name: 'Close application form' }).click();
     });
 
-    await t.test('a hidden job refuses direct submissions with a truthful message', async () => {
+    await runCase('a hidden job refuses direct submissions with a truthful message', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs/${createdJobId}`);
         let listing = page.waitForResponse(
             (response) => response.url()
@@ -1082,7 +1157,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Listed', { exact: true }).first().waitFor();
     });
 
-    await t.test('jobs search filters and reset restores the list', async () => {
+    await runCase('jobs search filters and reset restores the list', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs`);
         await page.getByText('Synthetic Browser Job').first().waitFor();
         await page.getByText('Legacy Synthetic Job').first().waitFor();
@@ -1097,7 +1172,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Legacy Synthetic Job').first().waitFor();
     });
 
-    await t.test('overview links route to filtered staff lists', async () => {
+    await runCase('overview links route to filtered staff lists', async () => {
         await gotoStaff(page, `${baseURL}/staff`);
         await page.getByRole('link', { name: /^Open roles/ }).first().click();
         await page.waitForURL(/\/staff\/jobs\?/);
@@ -1113,7 +1188,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/);
     });
 
-    await t.test('applications ?review=1 filters to the initial stage', async () => {
+    await runCase('applications ?review=1 filters to the initial stage', async () => {
         await gotoStaff(page, `${baseURL}/staff/applications?review=1`);
         await page.getByRole('button', { name: 'Awaiting review' }).waitFor();
         assert.equal(
@@ -1124,7 +1199,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Synthetic Candidate B').waitFor();
     });
 
-    await t.test('same-path workspace links re-sync filters and history restores them', async () => {
+    await runCase('same-path workspace links re-sync filters and history restores them', async () => {
         await gotoStaff(page, `${baseURL}/staff/applications`);
         const reviewToggle = page.getByRole('button', { name: 'Awaiting review' });
         await reviewToggle.waitFor();
@@ -1146,7 +1221,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await expect(reviewToggle).toHaveAttribute('aria-pressed', 'true');
     });
 
-    await t.test('candidate stage select is readable and the transition persists', async () => {
+    await runCase('candidate stage select is readable and the transition persists', async () => {
         await gotoStaff(page, `${baseURL}/staff/candidates/${CJ_ID.CANDIDATE_B}`);
         const trigger = page.getByRole('combobox', {
             name: 'Stage for application AG-AAAA00000001',
@@ -1194,7 +1269,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             where id = '${CJ_ID.APPLICATION_B}'`);
     });
 
-    await t.test('candidate notes save and persist across reload', async () => {
+    await runCase('candidate notes save and persist across reload', async () => {
         await gotoStaff(page, `${baseURL}/staff/candidates/${CJ_ID.CANDIDATE_B}?tab=notes`);
         await fillWhenReady(page.locator('#note-body'), 'Synthetic browser note');
         const notePosted = page.waitForResponse(
@@ -1209,7 +1284,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Synthetic browser note').waitFor();
     });
 
-    await t.test('candidate detail tabs follow the URL query', async () => {
+    await runCase('candidate detail tabs follow the URL query', async () => {
         await gotoStaff(page, `${baseURL}/staff/candidates/${CJ_ID.CANDIDATE_B}`);
         const notesTab = page.getByRole('tab', { name: /Notes/ });
         const documentsTab = page.getByRole('tab', { name: /Documents/ });
@@ -1230,7 +1305,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.locator('#note-body').waitFor();
     });
 
-    await t.test('member invitation records locally without claiming email delivery', async () => {
+    await runCase('member invitation records locally without claiming email delivery', async () => {
         await gotoStaff(page, `${baseURL}/staff/members`);
         await page.locator('#invite-name').fill('Invited Synthetic');
         await page.locator('#invite-email').fill('invited@synthetic.test');
@@ -1247,7 +1322,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.doesNotMatch(directory, /email sent|invitation sent/i);
     });
 
-    await t.test('the pending-invites bell entry filters the member directory', async () => {
+    await runCase('the pending-invites bell entry filters the member directory', async () => {
         await gotoStaff(page, `${baseURL}/staff/members`);
         const statusTrigger = page.getByRole('combobox', {
             name: 'Filter members by status',
@@ -1261,7 +1336,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Invited Synthetic').waitFor();
     });
 
-    await t.test('staff APIs enforce session, MFA, permission and input gates', async () => {
+    await runCase('staff APIs enforce session, MFA, permission and input gates', async () => {
         const admin = cookieHeader(staffCookies);
         const sessionOnly = cookieHeader(sessionOnlyCookies);
         const recruiter = cookieHeader(recruiterCookies);
@@ -1318,7 +1393,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('members without manage or collaboration permissions see read-only surfaces', async () => {
+    await runCase('members without manage or collaboration permissions see read-only surfaces', async () => {
         const context = await browser.newContext({
             viewport: { width: 1440, height: 1000 },
         });
@@ -1360,7 +1435,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('staff text meets contrast requirements and overlays are opaque', async () => {
+    await runCase('staff text meets contrast requirements and overlays are opaque', async () => {
         await page.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
         await page.getByRole('heading', { name: 'Overview', level: 1 }).waitFor();
         for (const [label, locator] of [
@@ -1400,7 +1475,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.keyboard.press('Escape');
     });
 
-    await t.test('desktop screenshots', async () => {
+    await runCase('desktop screenshots', async () => {
         for (const [name, url] of [
             ['overview', '/staff'],
             ['jobs', '/staff/jobs'],
@@ -1415,7 +1490,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('public jobs page keeps the dark public theme without staff chrome', async () => {
+    await runCase('public jobs page keeps the dark public theme without staff chrome', async () => {
         await page.goto(`${baseURL}/jobs`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle');
         assert.equal(await page.locator('.staff-scope').count(), 0);
@@ -1430,7 +1505,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.ok(luminance < 0.3, `public jobs background should stay dark, got ${background}`);
     });
 
-    await t.test('missing MFA redirects to verification', async () => {
+    await runCase('missing MFA redirects to verification', async () => {
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
         try {
             await context.addCookies(sessionOnlyCookies);
@@ -1443,7 +1518,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('mobile sheet exposes navigation and sign-out', async () => {
+    await runCase('mobile sheet exposes navigation and sign-out', async () => {
         const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
         try {
             await context.addCookies(staffCookies);
@@ -1491,7 +1566,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('a summary outage keeps navigation and protected pages reachable', async () => {
+    await runCase('a summary outage keeps navigation and protected pages reachable', async () => {
         psql(container, `
             alter function app.get_staff_workspace_v1()
                 rename to get_staff_workspace_outage_test;
@@ -1555,7 +1630,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByRole('link', { name: /^Candidates \d+$/ }).waitFor();
     });
 
-    await t.test('client navigation opens saved links, filtered applications and a preselected job form on mobile', async () => {
+    await runCase('client navigation opens saved links, filtered applications and a preselected job form on mobile', async () => {
         const jobsBefore = psql(container, `select count(*) from app.jobs where organization_id = '${ORG_ID}'`);
         await page.setViewportSize({ width: 390, height: 1000 });
         try {
@@ -1587,7 +1662,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('client navigation ignores invalid and foreign preselection without revealing other clients', async () => {
+    await runCase('client navigation ignores invalid and foreign preselection without revealing other clients', async () => {
         const foreignClientId = randomUUID();
         const foreignName = 'Synthetic Foreign Navigation Client';
         psql(container, `insert into app.clients (id, organization_id, name, status)
@@ -1604,7 +1679,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('client navigation cannot bypass job-write or application-read permissions', async () => {
+    await runCase('client navigation cannot bypass job-write or application-read permissions', async () => {
         psql(container, `delete from app.role_permissions
             where organization_id = '${ORG_ID}' and role_id = '${AUTHZ_ID.ROLE_B_ADMIN}'
                 and permission_key in ('jobs.write', 'applications.read')`);
@@ -1638,7 +1713,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('client form shows inline errors and normalizes bare URLs', async () => {
+    await runCase('client form shows inline errors and normalizes bare URLs', async () => {
         const fixtureId = randomUUID();
         psql(container, `insert into app.clients (id, organization_id, name, status)
             values ('${fixtureId}', '${ORG_ID}', 'Synthetic Validation Client', 'draft')`);
@@ -1750,7 +1825,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('client form maps server field errors to the submitted rows', async () => {
+    await runCase('client form maps server field errors to the submitted rows', async () => {
         const fixtureId = randomUUID();
         psql(container, `insert into app.clients (id, organization_id, name, status)
             values ('${fixtureId}', '${ORG_ID}', 'Synthetic Server Error Client', 'draft')`);
@@ -1848,7 +1923,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('a candidate profile is added, reloaded, edited and cleared', async () => {
+    await runCase('a candidate profile is added, reloaded, edited and cleared', async () => {
         await gotoStaff(page, `${baseURL}/staff/candidates`);
         const addButton = page.getByRole('button', { name: 'Add candidate' });
         await addButton.waitFor();
@@ -1857,20 +1932,42 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             page.getByRole('dialog'),
         );
         const dialog = page.getByRole('dialog');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-name'), 'Profile Persona');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-email'), 'persona@example.test');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-headline'), 'QA Engineer');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-location'), 'Lisbon');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-url'), 'persona.example.test');
-        await dialog.locator('#create-candidate-owner')
-            .selectOption({ label: 'Admin Two' });
-        await fillWhenReady(
-            dialog.locator('#create-candidate-summary'), 'Ships quality.');
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByLabel('First name')).toBeFocused();
+        await fillWhenReady(dialog.getByLabel('First name'), 'Profile');
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByLabel('Last name')).toBeFocused();
+        await fillWhenReady(dialog.getByLabel('Last name'), 'Persona');
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByLabel('Primary email')).toBeFocused();
+        await fillWhenReady(dialog.getByLabel('Primary email'), 'persona@example.test');
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByText('Upload a CV to create this candidate.')).toBeVisible();
+        await dialog.locator('#candidate-cv').setInputFiles({ name: 'unsafe.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('invalid') });
+        await expect(dialog.locator('#cv-error')).not.toBeEmpty();
+        await fillUpload(dialog, 'Profile', 'Persona', 'persona@example.test');
+        await dialog.getByRole('button', { name: 'Add secondary email' }).click();
+        await dialog.getByLabel('Secondary email 1', { exact: true }).fill('PERSONA@example.test');
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByText('Each email address must be different.')).toBeVisible();
+        await dialog.getByLabel('Secondary email 1', { exact: true }).fill('secondary@example.test');
+        await dialog.getByRole('button', { name: 'Add secondary email' }).click();
+        await dialog.getByRole('button', { name: 'Remove secondary email 2' }).click();
+        await dialog.getByRole('button', { name: 'Remove CV' }).click();
+        await expect(dialog.locator('#candidate-cv')).toHaveValue('');
+        await dialog.locator('#candidate-cv').setInputFiles({ name: 'replacement.pdf', mimeType: 'application/pdf', buffer: createSyntheticPdf() });
+        await dialog.getByText('Optional details', { exact: true }).click();
+        await dialog.getByLabel('Role / headline').fill('QA Engineer');
+        await dialog.getByLabel('Location').fill('Lisbon');
+        await page.screenshot({ path: join(resultsDir, 'staff-workspace-candidate-upload.png'), fullPage: true });
+        failNextUpload = true;
+        await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await expect(dialog.getByText('Candidate upload could not be completed. Retry with the same details and CV.')).toBeVisible();
+        await expect(dialog.getByLabel('First name')).toHaveValue('Profile');
+        await expect(dialog.getByLabel('Secondary email 1', { exact: true })).toHaveValue('secondary@example.test');
+        await expect(dialog.getByRole('status')).toContainText('replacement.pdf');
+        assert.deepEqual(uploads.at(-1).fields.secondaryEmails, ['secondary@example.test']);
+        assert.equal(uploads.at(-1).name, 'replacement.pdf');
         const created = page.waitForResponse(
             (response) => response.url().includes('/api/staff/candidates')
                 && response.request().method() === 'POST' && response.ok(),
@@ -1880,21 +1977,27 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/, {
             timeout: 90_000 });
 
+        const savedCandidateId = new URL(page.url()).pathname.split('/').pop();
+        assert.equal(psql(container, `select count(*) from app.documents where candidate_id = '${savedCandidateId}'`).trim(), '1');
+        assert.equal(psql(container, `select secondary_emails[1] from app.candidates where id = '${savedCandidateId}'`).trim(), 'secondary@example.test');
+        assert.ok(Array.from(storedCvs.values()).some(bytes => bytes.equals(createSyntheticPdf())));
+        const savedDocumentId = psql(container, `select current_document_id from app.candidates where id = '${savedCandidateId}'`).trim();
+        const downloaded = await desktop.request.get(`${baseURL}/api/staff/documents/${savedDocumentId}`);
+        assert.equal(downloaded.status(), 200);
+        assert.ok((await downloaded.body()).equals(createSyntheticPdf()), 'The uploaded CV downloads through the existing authorized document API');
+
         const heading = page.getByRole('heading', {
             name: 'Profile Persona', level: 1 });
         await heading.waitFor();
         await page.getByText('QA Engineer').waitFor();
         await page.getByText('persona@example.test').waitFor();
-        await page.getByRole('link', { name: 'Profile' }).waitFor();
         await page.getByText(/Lisbon/).waitFor();
-        await page.getByText('Ships quality.').waitFor();
         await page.getByText(/Owner: Admin Two/).waitFor();
 
         await page.reload({ waitUntil: 'domcontentloaded' });
         await heading.waitFor();
         await page.getByText('QA Engineer').waitFor();
         await page.getByText('persona@example.test').waitFor();
-        await page.getByText('Ships quality.').waitFor();
         await page.screenshot({
             path: join(resultsDir, 'staff-workspace-candidate-profile.png'),
             fullPage: true,
@@ -1958,24 +2061,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             'the directory shows the cleared contact, not the identifier');
     });
 
-    await t.test('a duplicate email offers the existing record', async () => {
-        const seed = await fetch(`${baseURL}/api/staff/candidates`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                cookie: cookieHeader(staffCookies),
-            },
-            body: JSON.stringify({
-                action: 'createCandidate',
-                fields: {
-                    fullName: 'Duplicate Target',
-                    email: 'dupe-check@example.test',
-                },
-                operationId: randomUUID(),
-            }),
-        });
-        assert.equal(seed.status, 200);
-        const existing = (await seed.json()).result.candidateId;
+    await runCase('a duplicate email offers the existing record', async () => {
+        const { candidateId: existing } = await seedCandidate({ fullName: 'Duplicate Target', email: 'dupe-check@example.test' });
 
         await gotoStaff(page, `${baseURL}/staff/candidates`);
         const addButton = page.getByRole('button', { name: 'Add candidate' });
@@ -1984,10 +2071,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             page.getByRole('dialog'),
         );
         const dialog = page.getByRole('dialog');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-name'), 'Duplicate Shadow');
-        await fillWhenReady(
-            dialog.locator('#create-candidate-email'), 'DUPE-CHECK@example.test');
+        await fillUpload(dialog, 'Duplicate', 'Shadow', 'DUPE-CHECK@example.test');
         const conflicted = page.waitForResponse(
             (response) => response.url().includes('/api/staff/candidates')
                 && response.request().method() === 'POST'
@@ -1995,9 +2079,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await dialog.getByRole('button', { name: 'Add candidate' }).click();
         await conflicted;
-        await dialog.getByText('A candidate with this email already exists.')
+        await dialog.getByText('A candidate with one of these email addresses already exists.')
             .waitFor();
-        const openExisting = dialog.getByRole('link', { name: 'Open existing' });
+        const openExisting = dialog.getByRole('link', { name: 'Open existing candidate' });
         await openExisting.waitFor();
         await openExisting.click();
         await page.waitForURL(`${baseURL}/staff/candidates/${existing}`);
@@ -2008,7 +2092,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             'the duplicate attempt must not create another candidate');
     });
 
-    await t.test('read-only staff cannot add or edit candidate profiles', async () => {
+    await runCase('read-only staff cannot add or edit candidate profiles', async () => {
         const context = await browser.newContext({
             viewport: { width: 1440, height: 1000 },
         });
@@ -2048,8 +2132,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                     operationId: randomUUID(),
                 }),
             });
-            assert.equal(denied.status, 403,
-                'the API must deny writes for read-only staff');
+            assert.equal(denied.status, 400,
+                'legacy creation must reject requests without the required CV workflow');
             const deniedPatch = await fetch(
                 `${baseURL}/api/staff/candidates/${CJ_ID.CANDIDATE_B}`, {
                     method: 'PATCH',
@@ -2069,12 +2153,13 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('mobile staff can add and edit a candidate profile', async () => {
+    await runCase('mobile staff can add and edit a candidate profile', async () => {
         const context = await browser.newContext({
             viewport: { width: 390, height: 844 },
         });
         try {
             await context.addCookies(staffCookies);
+            await observeUploads(context);
             const mobile = await context.newPage();
             mobile.setDefaultTimeout(90_000);
             await gotoStaff(mobile, `${baseURL}/staff/candidates`);
@@ -2085,10 +2170,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 mobile.getByRole('dialog'),
             );
             const dialog = mobile.getByRole('dialog');
-            await fillWhenReady(
-                dialog.locator('#create-candidate-name'), 'Mobile Persona');
-            await fillWhenReady(
-                dialog.locator('#create-candidate-headline'), 'Field Tester');
+            await fillUpload(dialog, 'Mobile', 'Persona', 'mobile@example.test');
+            await dialog.getByText('Optional details', { exact: true }).click();
+            await dialog.getByLabel('Role / headline').fill('Field Tester');
             const created = mobile.waitForResponse(
                 (response) => response.url().includes('/api/staff/candidates')
                     && response.request().method() === 'POST' && response.ok(),
@@ -2136,21 +2220,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         }
     });
 
-    await t.test('the profile dialog discards drafts and resists stale versions', async () => {
-        const seed = await fetch(`${baseURL}/api/staff/candidates`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                cookie: cookieHeader(staffCookies),
-            },
-            body: JSON.stringify({
-                action: 'createCandidate',
-                fields: { fullName: 'Dialog Guard', headline: 'First' },
-                operationId: randomUUID(),
-            }),
-        });
-        assert.equal(seed.status, 200);
-        const candidateId = (await seed.json()).result.candidateId;
+    await runCase('the profile dialog discards drafts and resists stale versions', async () => {
+        const { candidateId: candidateId } = await seedCandidate({ fullName: 'Dialog Guard', headline: 'First' });
 
         await gotoStaff(page, `${baseURL}/staff/candidates/${candidateId}`);
         const editButton = page.getByRole('button', { name: 'Edit profile' });
@@ -2223,7 +2294,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             .locator('#edit-candidate-headline')).toHaveValue('Second');
     });
 
-    await t.test('revoked membership loses staff access', async () => {
+    await runCase('revoked membership loses staff access', async () => {
         psql(container, `
             update app.organization_memberships
             set status = 'revoked', revoked_at = now()
