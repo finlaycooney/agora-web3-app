@@ -227,7 +227,14 @@ test('staff can reject a match or merge candidates through the review page', asy
             `/staff/candidates/${candidateA}`,
             `/staff/candidates/${candidateB}`,
         ].includes(await page.getByRole('region', { name: 'Candidate A profile' })
-            .getByRole('link', { name: 'Full profile' }).getAttribute('href')));
+            .getByRole('link', { name: 'View profile' }).getAttribute('href')));
+        await page.getByRole('region', { name: 'Candidate A profile' })
+            .getByRole('link', { name: 'View profile' }).click();
+        await expect(page.getByRole('dialog', { name: 'Review Candidate One' }))
+            .toBeVisible({ timeout: 20_000 });
+        await expect(page).toHaveURL(`${baseURL}/staff/candidates/duplicates`);
+        await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+        await expect(page.getByRole('region', { name: 'Candidate A profile' })).toBeVisible();
         const [response] = await Promise.all([
             page.waitForResponse((entry) =>
                 entry.url().includes('/api/staff/candidates/duplicates')
