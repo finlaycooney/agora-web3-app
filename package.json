@@ -29,7 +29,8 @@
     "local:status": "supabase status",
     "local:reset": "supabase db reset",
     "local:stop": "supabase stop",
-    "test:db:candidate-upload": "node --test tests/database/candidate-upload.test.js"
+    "test:db:candidate-upload": "node --test tests/database/candidate-upload.test.js",
+    "test:telegram-intake": "node --test --test-concurrency=1 tests/database/telegram-intake.test.js tests/staff-workspace/telegram-intake.test.js"
   },
   "dependencies": {
     "@heroui/accordion": "^2.2.25",

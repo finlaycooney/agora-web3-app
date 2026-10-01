@@ -127,6 +127,10 @@ test('staff previews records in place and opens CV content', async (t) => {
     const page = await context.newPage();
     page.setDefaultTimeout(20_000);
     const pageErrors = [];
+    const browserWarnings = [];
+    page.on('console', message => {
+        if (['warning', 'error'].includes(message.type())) browserWarnings.push(message.text());
+    });
     const previewRequests = [];
     page.on('request', (request) => {
         if (/\/api\/staff\/(candidates|jobs)\/[0-9a-f-]{36}$/.test(request.url())) {
@@ -249,7 +253,7 @@ test('staff previews records in place and opens CV content', async (t) => {
         await mobilePreview.getByRole('button', { name: 'Close' }).click();
         assert.deepEqual(pageErrors, [], pageErrors.join('\n'));
     } catch (error) {
-        t.diagnostic(`Browser errors:\n${pageErrors.join('\n')}\nServer:\n${output.slice(-30).join('')}`);
+        t.diagnostic(`Browser errors:\n${pageErrors.join('\n')}\nBrowser warnings:\n${browserWarnings.join('\n')}\nPreview DOM:\n${await page.getByRole('dialog').textContent().catch(() => 'No preview')}\nServer:\n${output.slice(-30).join('')}`);
         throw error;
     }
 });
