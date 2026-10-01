@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 
 export const syntheticCvText = 'Synthetic Candidate - integration@example.invalid';
 
-export function createSyntheticPdf() {
+export function createSyntheticPdf({ paddingBytes = 0 } = {}) {
     const stream = `BT /F1 12 Tf 72 720 Td (${syntheticCvText}) Tj ET\n`;
     const objects = [
         '<< /Type /Catalog /Pages 2 0 R >>',
@@ -11,6 +11,8 @@ export function createSyntheticPdf() {
         '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
         `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`,
     ];
+    if (!Number.isSafeInteger(paddingBytes) || paddingBytes < 0 || paddingBytes > 4 * 1024 * 1024) throw new Error('Invalid synthetic PDF padding');
+    if (paddingBytes) objects.push(`<< /Length ${paddingBytes} >>\nstream\n${' '.repeat(paddingBytes)}\nendstream`);
     let pdf = '%PDF-1.7\n';
     const offsets = [0];
     for (const [index, object] of objects.entries()) {

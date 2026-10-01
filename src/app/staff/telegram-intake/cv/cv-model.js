@@ -24,6 +24,7 @@ export function cvGuidance(code) {
         FILE_TOO_LARGE: 'This file exceeds the 4 MB CV limit. Request a smaller PDF or DOCX.',
         SOURCE_UNAVAILABLE: 'This attachment is no longer available for retrieval. Upload the CV manually or request a new file.',
         SOURCE_CHANGED: 'The Telegram attachment changed. This retrieval will not substitute a different file. Review a new attachment or upload the CV manually.',
+        UPLOAD_EXPIRED: 'The upload reservation expired before attachment. Retry retrieval to start a fresh upload.',
         INVALID_FILE: 'The downloaded file did not pass CV validation. Request another PDF or DOCX, or upload a valid CV manually.',
         TELEGRAM_UNAVAILABLE: 'Telegram is temporarily unavailable. Keep the connected Mac running; retrieval will retry.',
         WORKER_ERROR: 'Your Mac could not finish this retrieval. Check the worker before retrying.',
