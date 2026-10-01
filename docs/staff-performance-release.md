@@ -21,6 +21,6 @@ Verify the configured Vercel execution region is close to the database region be
 
 ## Loading behavior
 
-Navigation remains mounted while page content changes. Skeletons use neutral greys and a CSS-only 150 ms visibility delay; content itself is never delayed. List filters and page changes use transitions so existing rows remain visible with an updating indicator. Saves keep their controls busy until refreshed data arrives.
+Navigation remains mounted while page content changes. Skeletons use neutral greys and a CSS-only 150 ms visibility delay; content itself is never delayed. List filters and page changes use transitions so existing rows remain visible with an updating indicator. Candidate stage and note saves keep their controls busy until refreshed data arrives.
 
 Preview data lives only in the mounted preview component's memory: at most five records, retained for 15 seconds for reopening. Mutations, session changes, authorization failures, and window visibility/focus changes invalidate it. It is never persisted to browser storage or shared between users.
