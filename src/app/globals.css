@@ -270,3 +270,13 @@ body {
     color: var(--card-foreground);
     background-color: var(--card);
 }
+
+/* Avoid a skeleton flash when a prefetched staff page resolves quickly.
+   Visibility reserves the layout; the accessible status remains immediate. */
+.staff-loading-reveal {
+  animation: staff-loading-reveal 150ms step-end both;
+}
+@keyframes staff-loading-reveal {
+  from { visibility: hidden; }
+  to { visibility: visible; }
+}

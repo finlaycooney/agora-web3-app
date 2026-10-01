@@ -19,7 +19,7 @@ import { PRIVACY_MIGRATIONS } from '../support/privacy-foundation.js';
 import { PRIVACY_OPS_MIGRATION } from '../support/privacy-operations.js';
 import { WORKFLOW_MIGRATION, clientJobFixtureSql } from '../support/client-job-workflows.js';
 import { STAFF_MFA_COOKIE, createStaffMfaProof } from '../../src/lib/staff-mfa-cookie.js';
-import { createSyntheticPdf } from '../support/cv-fixtures.js';
+import { createSyntheticPdf, syntheticCvText } from '../support/cv-fixtures.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const nextBin = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -46,6 +46,8 @@ const migrations = [
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 async function waitForServer(url) {
@@ -125,6 +127,12 @@ test('staff previews records in place and opens CV content', async (t) => {
     const page = await context.newPage();
     page.setDefaultTimeout(20_000);
     const pageErrors = [];
+    const previewRequests = [];
+    page.on('request', (request) => {
+        if (/\/api\/staff\/(candidates|jobs)\/[0-9a-f-]{36}$/.test(request.url())) {
+            previewRequests.push(request.url());
+        }
+    });
     page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
     try {
         await page.goto(`${baseURL}/staff/candidates?q=Synthetic`, { waitUntil: 'domcontentloaded' });
@@ -142,6 +150,13 @@ test('staff previews records in place and opens CV content', async (t) => {
         await expect(candidatePreview).toHaveCount(0);
         assert.deepEqual(pageErrors, [], pageErrors.join('\n'));
         await expect(candidateLink).toBeFocused();
+        const firstReadCount = previewRequests.length;
+        await candidateLink.click();
+        await expect(candidatePreview).toBeVisible();
+        assert.equal(previewRequests.length, firstReadCount,
+            'reopening a recent preview reuses its authorized in-memory result');
+        await candidatePreview.getByRole('button', { name: 'Close' }).click();
+
 
         await page.route('**/api/staff/candidates/*', async (route) => {
             const response = await route.fetch();
@@ -172,6 +187,8 @@ test('staff previews records in place and opens CV content', async (t) => {
             await route.fulfill({ status: 200, contentType: 'application/pdf',
                 body: createSyntheticPdf() });
         });
+        await page.evaluate(() => window.dispatchEvent(
+            new CustomEvent('staff-workspace-updated', { detail: { scope: 'workspace' } })));
         await candidateLink.click();
         const documentPreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
         await expect(documentPreview.getByRole('tab', { name: /Documents/ }))
@@ -182,6 +199,10 @@ test('staff previews records in place and opens CV content', async (t) => {
             .toBeVisible({ timeout: 20_000 });
         await documentPreview.getByRole('button', { name: 'Synthetic.pdf' }).click();
         const canvas = documentPreview.locator('canvas[aria-label="Page 1 of 1"]');
+        // The canvas mounts before PDF.js finishes its lazy worker/render work.
+        // Accessible text is published only after renderTask.promise resolves.
+        await expect(documentPreview.getByText(syntheticCvText, { exact: true }))
+            .toBeAttached({ timeout: 20_000 });
         await expect.poll(async () => canvas.evaluate((element) => {
             const context = element.getContext('2d');
             if (!context || element.width === 0) return 0;
@@ -191,7 +212,7 @@ test('staff previews records in place and opens CV content', async (t) => {
                 if (pixels[index] < 160 && pixels[index + 3] > 0) dark += 1;
             }
             return dark;
-        })).toBeGreaterThan(100);
+        }), { timeout: 20_000, message: 'the rendered PDF page contains visible ink' }).toBeGreaterThan(100);
         await documentPreview.getByRole('button', { name: 'Close' }).click();
         await page.unroute('**/api/staff/candidates/*');
         await page.unroute('**/api/staff/documents/*?view=text');
@@ -207,6 +228,14 @@ test('staff previews records in place and opens CV content', async (t) => {
         await expect(page).toHaveURL(`${baseURL}/staff/jobs?q=Legacy`);
         await jobPreview.getByRole('button', { name: 'Close' }).click();
         await expect(jobLink).toBeFocused();
+        const jobReadCount = previewRequests.length;
+        await jobLink.click();
+        await expect(jobPreview).toBeVisible();
+        assert.equal(previewRequests.length, jobReadCount,
+            'reopening a job uses the bounded cache');
+        await page.evaluate(() => window.dispatchEvent(new Event('staff-session-invalidated')));
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+
 
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(`${baseURL}/staff/candidates`, { waitUntil: 'domcontentloaded' });

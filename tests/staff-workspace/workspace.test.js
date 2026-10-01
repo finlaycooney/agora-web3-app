@@ -68,6 +68,8 @@ const MIGRATIONS = [
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -1190,12 +1192,63 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         const search = page.locator('#job-search');
         await fillWhenReady(search, 'Browser');
         await page.getByText('Synthetic Browser Job').first().waitFor();
-        assert.equal(
-            await page.getByText('Legacy Synthetic Job').count(), 0,
-            'search filters out non-matching jobs',
-        );
+        await expect(page.getByText('Legacy Synthetic Job')).toHaveCount(0);
         await fillWhenReady(search, '');
         await page.getByText('Legacy Synthetic Job').first().waitFor();
+    });
+
+    await runCase('directory navigation cancels a queued search without restoring abandoned filters', async () => {
+        for (const [section, label, input, query] of [
+            ['jobs', 'Jobs', '#job-search', 'Legacy'],
+            ['clients', 'Clients', '#client-search', 'Synthetic'],
+        ]) {
+            await gotoStaff(page, `${baseURL}/staff/${section}`);
+            const search = page.locator(input);
+            await search.fill('abandoned-query');
+            await page.getByRole('navigation', { name: 'Main navigation' })
+                .getByRole('link', { name: label, exact: true }).click({ force: true });
+            // Observe beyond the actual debounce window to catch a late timer.
+            await page.waitForTimeout(400);
+            await expect(search).toHaveValue('');
+            assert.equal(new URL(page.url()).searchParams.get('q'), null);
+            await search.fill(query);
+            await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(query);
+            await expect(search).toHaveValue(query);
+        }
+    });
+
+    await runCase('client pagination retains rows while updating and searches the full directory', async () => {
+        psql(container, `insert into app.clients (id, organization_id, name, status, created_at)
+            select ('96000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${ORG_ID}', 'Pagination sample ' || lpad(i::text, 3, '0'), 'active',
+                '2026-01-01'::timestamptz + i * interval '1 second'
+            from generate_series(1, 55) i;`);
+        let release;
+        const held = new Promise((resolve) => { release = resolve; });
+        const matcher = (url) => url.pathname === '/staff/clients'
+            && url.searchParams.get('page') === '2' && url.searchParams.has('_rsc');
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients?q=Pagination`);
+            const rows = page.getByRole('main').getByRole('link', { name: /^Pagination sample/ });
+            await expect(rows).toHaveCount(50);
+            await page.route(matcher, async (route) => { await held; await route.continue(); });
+            await page.getByRole('button', { name: 'Next', exact: true }).click();
+            await expect(page.getByText(/Updating…/)).toBeVisible();
+            await expect(rows).toHaveCount(50);
+            await expect(page.getByRole('status', { name: 'Loading page' })).toHaveCount(0);
+            release();
+            await expect(rows).toHaveCount(5);
+            await page.unroute(matcher);
+            await fillWhenReady(page.locator('#client-search'), 'Pagination sample 055');
+            await expect(rows).toHaveCount(1);
+            await expect(rows.first()).toHaveText('Pagination sample 055');
+            await expect(page.getByText(/Page 1 of 1/)).toBeVisible();
+        } finally {
+            release();
+            await page.unroute(matcher);
+            psql(container, `delete from app.clients where organization_id = '${ORG_ID}'
+                and name like 'Pagination sample %';`);
+        }
     });
 
     await runCase('overview links route to filtered staff lists', async () => {
@@ -1305,6 +1358,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await option.click();
         await stagePosted;
+        await expect(trigger).toContainText('Interview', { timeout: 30_000 });
+        await expect(trigger).toBeEnabled();
         await page.reload({ waitUntil: 'domcontentloaded' });
         const reloaded = page.getByRole('combobox', {
             name: 'Stage for application AG-AAAA00000001',
@@ -1628,13 +1683,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 rename to get_staff_workspace_outage_test;
         `);
         try {
-            const summaryOutage = page.waitForResponse(
-                (response) => response.url().includes('/api/staff/workspace')
-                    && response.request().method() === 'GET',
-                { timeout: 90_000 },
-            );
             await page.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
-            await summaryOutage;
             await page.getByText('Workspace summary is temporarily unavailable.')
                 .waitFor();
             const nav = page.getByRole('navigation', { name: 'Main navigation' });
@@ -2017,7 +2066,11 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await dialog.getByLabel('Location').fill('Lisbon');
         await page.screenshot({ path: join(resultsDir, 'staff-workspace-candidate-upload.png'), fullPage: true });
         failNextUpload = true;
+        const failedUpload = page.waitForResponse((response) =>
+            response.url().includes('/api/staff/candidates')
+                && response.request().method() === 'POST' && response.status() >= 500);
         await dialog.getByRole('button', { name: 'Add candidate', exact: true }).click();
+        await failedUpload;
         await expect(dialog.getByText('Candidate upload could not be completed. Retry with the same details and CV.')).toBeVisible();
         await expect(dialog.getByLabel('First name')).toHaveValue('Profile');
         await expect(dialog.getByLabel('Secondary email 1', { exact: true })).toHaveValue('secondary@example.test');
@@ -2361,7 +2414,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await context.addCookies(staffCookies);
             const denied = await context.newPage();
             await denied.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
-            await expect(denied).toHaveURL(/\/staff\/(no-access|sign-in)/);
+            await expect(denied).toHaveURL(/\/staff\/(no-access|sign-in)/, { timeout: 30_000 });
+            await expect(denied.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(0);
         } finally {
             await context.close();
         }

@@ -147,6 +147,9 @@ export function DuplicateReviewsBrowser({
                     : 'Your decision could not be saved. Please try again.');
                 return;
             }
+            if (!demo) window.dispatchEvent(new CustomEvent('staff-workspace-updated', {
+                detail: { scope: 'workspace' },
+            }));
             setResolvedIds((current) => [...current, review.id]);
             setSelectedId(null);
         } catch {
@@ -201,6 +204,9 @@ export function DuplicateReviewsBrowser({
                 setDemoReviews((current) => current.filter((entry) => entry.id !== review.id));
             }
             setMergedId(targetId);
+            if (!demo) window.dispatchEvent(new CustomEvent('staff-workspace-updated', {
+                detail: { scope: 'workspace' },
+            }));
             setResolvedIds((current) => [...current, review.id]);
             setSelectedId(null);
             setMergeChoice(null);
