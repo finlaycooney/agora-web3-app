@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:design": "next dev design-preview --webpack --hostname 127.0.0.1 --port 3100",
+    "dev:staff-fixture": "node scripts/dev-staff-fixture.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
@@ -57,6 +58,7 @@
     "next": "^16.0.10",
     "next-auth": "^4.24.13",
     "ogl": "^1.0.11",
+    "pdfjs-dist": "^5.7.284",
     "qrcode": "^1.5.4",
     "radix-ui": "1.4.3",
     "react": "^18.3.1",

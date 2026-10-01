@@ -69,6 +69,12 @@ interface JobRecord {
 const date = (value: string) => new Date(value).toLocaleDateString('en-GB', {
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
 });
+const jobFieldLabels: Record<string, string> = {
+    full_time: 'Full-time', part_time: 'Part-time', contract: 'Contract',
+    internship: 'Internship', onsite: 'On-site', hybrid: 'Hybrid', remote: 'Remote',
+};
+const displayLabel = (value: string) => jobFieldLabels[value]
+    ?? value.charAt(0).toUpperCase() + value.slice(1);
 
 function CandidatePreview({ record }: { record: CandidateRecord }) {
     const { candidate, applications, documents, notes, capabilities } = record;
@@ -140,20 +146,22 @@ function CandidatePreview({ record }: { record: CandidateRecord }) {
 function JobPreview({ record }: { record: JobRecord }) {
     const { job, draft, published } = record;
     const initial = draft ? 'draft' : 'published';
-    return <Tabs defaultValue={initial} className="space-y-4">
+    return <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{displayLabel(job.publicationState)}</Badge>
+            <Badge variant="secondary">Applications {displayLabel(job.applicationState)}</Badge>
+        </div>
+        {!draft && !published ? <p className="text-sm text-muted-foreground">
+            No job description is available yet.</p> : <Tabs defaultValue={initial} className="space-y-4">
         <TabsList aria-label="Job preview sections">
             {draft ? <TabsTrigger value="draft">Draft</TabsTrigger> : null}
             {published ? <TabsTrigger value="published">Published</TabsTrigger> : null}
         </TabsList>
-        {!draft && !published ? <p className="text-sm text-muted-foreground">
-            No revision is available for this job.</p> : null}
         {(['draft', 'published'] as const).map((kind) => {
             const revision = kind === 'draft' ? draft : published;
             if (!revision) return null;
             return <TabsContent key={kind} value={kind} className="space-y-5">
                 <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <Badge variant="secondary">{job.publicationState}</Badge>
-                    <Badge variant="secondary">Applications {job.applicationState}</Badge>
                     <span>Revision #{revision.revisionNumber}</span>
                 </div>
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -163,14 +171,16 @@ function JobPreview({ record }: { record: JobRecord }) {
                         ['Locations', revision.locations?.join(', ')],
                     ].filter((entry) => entry[1]).map(([label, value]) =>
                         <div key={label as string}><dt className="text-xs text-muted-foreground">{label}</dt>
-                            <dd>{value}</dd></div>)}
+                            <dd>{label === 'Locations' ? value : displayLabel(value as string)}</dd>
+                        </div>)}
                 </dl>
                 <div className="border-t border-border pt-4">
                     <JobDocumentView document={revision.descriptionDocument} />
                 </div>
             </TabsContent>;
         })}
-    </Tabs>;
+    </Tabs>}
+    </div>;
 }
 
 const recordPath = /^\/staff\/(candidates|jobs)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
@@ -205,7 +215,7 @@ export function RecordPreview({ children }: { children: ReactNode }) {
         if (!anchor || !event.currentTarget.contains(anchor)
             || anchor.target || anchor.hasAttribute('download')) return;
         const url = new URL(anchor.href);
-        if (url.origin !== window.location.origin) return;
+        if (url.origin !== window.location.origin || url.search || url.hash) return;
         const match = recordPath.exec(url.pathname);
         if (!match) return;
         event.preventDefault();
@@ -238,7 +248,15 @@ export function RecordPreview({ children }: { children: ReactNode }) {
             <SheetContent side="right" className="w-full max-w-full gap-0 p-0 sm:max-w-[min(900px,75vw)]"
                 onCloseAutoFocus={(event) => {
                     event.preventDefault();
-                    if (triggerRef.current?.isConnected) triggerRef.current.focus();
+                    if (triggerRef.current?.isConnected) {
+                        triggerRef.current.focus();
+                    } else {
+                        const heading = document.querySelector<HTMLElement>('main h1');
+                        if (heading) {
+                            heading.tabIndex = -1;
+                            heading.focus();
+                        }
+                    }
                 }}>
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 pr-12">
                     <div className="min-w-0 space-y-1">

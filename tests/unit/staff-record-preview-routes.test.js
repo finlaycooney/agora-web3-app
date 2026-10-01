@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createSyntheticDocx, syntheticCvText } from '../support/cv-fixtures.js';
+import { createSyntheticDocx, createSyntheticPdf, syntheticCvText } from '../support/cv-fixtures.js';
 import { installRouteMocks, setRouteStub, stubModule } from '../support/staff-route-mocks.js';
 
 const stubs = new Map();
@@ -51,7 +51,8 @@ function storageStub(mimeType) {
             return {
                 download: async (key) => {
                     calls.push(['download', key]);
-                    return { data: new Blob([createSyntheticDocx()]), error: null };
+                    return { data: new Blob([mimeType === 'application/pdf'
+                        ? createSyntheticPdf() : createSyntheticDocx()]), error: null };
                 },
                 createSignedUrl: async (key, ttl, options) => {
                     calls.push(['sign', key, ttl, options]);
@@ -84,6 +85,18 @@ test('PDF inline view signs without download disposition; ordinary download keep
     const download = await documents.GET(request(), params);
     assert.equal(download.status, 302);
     assert.deepEqual(calls.at(-1)[3], { download: 'one.docx' });
+});
+
+test('PDF page renderer receives authorized same-origin bytes without caching', async () => {
+    setup();
+    const calls = storageStub('application/pdf');
+    const response = await documents.GET(request('bytes'),
+        { params: Promise.resolve({ documentId: ID }) });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'application/pdf');
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.ok(Buffer.from(await response.arrayBuffer()).toString('utf8').startsWith('%PDF-'));
+    assert.deepEqual(calls, [['bucket', 'private-cvs'], ['download', 'one.docx']]);
 });
 
 test('preview refuses mismatched content type and unauthenticated requests', async () => {

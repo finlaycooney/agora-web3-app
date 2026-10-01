@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 
 import { Button } from '@/components/staff-ui/button';
+import { PdfDocumentPreview } from './pdf-document-preview';
 
 export interface CandidateDocumentRecord {
     documentId: string;
@@ -72,7 +73,9 @@ export function RealCandidateDocuments({
                         {document.filename}
                     </span>}
                     <p className="text-xs text-muted-foreground">
-                        {Math.round(document.sizeBytes / 1024)} KB
+                        {new Date(document.receivedAt).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+                        })} · {Math.max(1, Math.round(document.sizeBytes / 1024))} KB
                         {document.scanState !== 'clean' ? ` · Scan: ${document.scanState}` : ''}
                     </p>
                 </div>
@@ -89,10 +92,8 @@ export function RealCandidateDocuments({
             <div className="border-b border-border px-4 py-2 text-sm font-medium">
                 {selected.filename}
             </div>
-            {isPdf ? <iframe title={`Preview of ${selected.filename}`}
-                src={`/api/staff/documents/${selected.documentId}?view=inline`}
-                referrerPolicy="no-referrer"
-                className="h-[min(70vh,720px)] w-full bg-white" />
+            {isPdf ? <PdfDocumentPreview key={selected.documentId}
+                documentId={selected.documentId} filename={selected.filename} />
                 : isDocx ? <div className="max-h-[min(70vh,720px)] overflow-auto px-4 py-5">
                     {error ? <p role="alert" className="text-sm text-destructive">{error}</p>
                         : text === null ? <p role="status" className="text-sm text-muted-foreground">

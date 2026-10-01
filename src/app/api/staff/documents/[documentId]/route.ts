@@ -10,7 +10,7 @@ import {
 export const runtime = 'nodejs';
 
 const SIGNED_URL_TTL_SECONDS = 60;
-const MAX_TEXT_BYTES = 4 * 1024 * 1024;
+const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 // Issues a short-lived signed URL for a verified blob location. The procedure
@@ -31,7 +31,7 @@ export async function GET(
     }
     const { documentId } = await params;
     const view = new URL(request.url).searchParams.get('view');
-    if (view !== null && view !== 'inline' && view !== 'text') {
+    if (view !== null && view !== 'inline' && view !== 'text' && view !== 'bytes') {
         return Response.json({ error: 'unsupported view' }, { status: 400 });
     }
     try {
@@ -45,9 +45,10 @@ export async function GET(
         const supabase = createClient(supabaseUrl, serviceRoleKey, {
             auth: { persistSession: false, autoRefreshToken: false },
         });
-        if (view === 'text') {
-            if (document.mimeType !== DOCX_MIME) {
-                return Response.json({ error: 'text preview is unavailable for this file type' }, {
+        if (view === 'text' || view === 'bytes') {
+            if ((view === 'text' && document.mimeType !== DOCX_MIME)
+                || (view === 'bytes' && document.mimeType !== 'application/pdf')) {
+                return Response.json({ error: 'preview is unavailable for this file type' }, {
                     status: 415,
                     headers: { 'cache-control': 'private, no-store' },
                 });
@@ -57,10 +58,20 @@ export async function GET(
             if (downloadError || !file) {
                 return Response.json({ error: 'document unavailable' }, { status: 404 });
             }
-            if (file.size > MAX_TEXT_BYTES) {
+            if (file.size > MAX_PREVIEW_BYTES) {
                 return Response.json({ error: 'document is too large to preview' }, { status: 413 });
             }
             const buffer = Buffer.from(await file.arrayBuffer());
+            if (view === 'bytes') {
+                return new Response(buffer, {
+                    headers: {
+                        'content-type': 'application/pdf',
+                        'content-disposition': 'inline',
+                        'cache-control': 'private, no-store',
+                        'x-content-type-options': 'nosniff',
+                    },
+                });
+            }
             const { value } = await mammoth.extractRawText({ buffer });
             return Response.json({ text: value.slice(0, 200_000) }, {
                 headers: {

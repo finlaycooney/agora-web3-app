@@ -19,6 +19,7 @@ import { PRIVACY_MIGRATIONS } from '../support/privacy-foundation.js';
 import { PRIVACY_OPS_MIGRATION } from '../support/privacy-operations.js';
 import { WORKFLOW_MIGRATION, clientJobFixtureSql } from '../support/client-job-workflows.js';
 import { STAFF_MFA_COOKIE, createStaffMfaProof } from '../../src/lib/staff-mfa-cookie.js';
+import { createSyntheticPdf } from '../support/cv-fixtures.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const nextBin = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -44,6 +45,7 @@ const migrations = [
     '20260930090100_candidate_intake_serialization.sql',
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
+    '20261002100000_candidate_upload.sql',
 ];
 
 async function waitForServer(url) {
@@ -131,10 +133,11 @@ test('staff previews records in place and opens CV content', async (t) => {
             .getByRole('link', { name: 'Synthetic Candidate B' }).first();
         await candidateLink.click();
         const candidatePreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
-        await expect(candidatePreview).toBeVisible();
+        await expect(candidatePreview).toBeVisible({ timeout: 20_000 });
         await expect(page).toHaveURL(`${baseURL}/staff/candidates?q=Synthetic`);
         await candidatePreview.getByRole('tab', { name: /Documents/ }).click();
-        await expect(candidatePreview.getByText('No documents on file.')).toBeVisible();
+        await expect(candidatePreview.getByText('No documents on file.'))
+            .toBeVisible({ timeout: 20_000 });
         await candidatePreview.getByRole('button', { name: 'Close' }).click();
         await expect(candidatePreview).toHaveCount(0);
         assert.deepEqual(pageErrors, [], pageErrors.join('\n'));
@@ -148,6 +151,11 @@ test('staff previews records in place and opens CV content', async (t) => {
                 filename: 'Synthetic.docx', purpose: 'cv', lifecycle: 'active',
                 scanState: 'clean', sizeBytes: 256, receivedAt: new Date().toISOString(),
             });
+            payload.result.documents.push({
+                documentId: 'cccccccc-3333-4333-8333-333333333333',
+                filename: 'Synthetic.pdf', purpose: 'cv', lifecycle: 'active',
+                scanState: 'clean', sizeBytes: 512, receivedAt: new Date().toISOString(),
+            });
             payload.result.capabilities.downloadDocuments = true;
             await route.fulfill({ response, json: payload });
         });
@@ -155,14 +163,32 @@ test('staff previews records in place and opens CV content', async (t) => {
             await route.fulfill({ status: 200, contentType: 'application/json',
                 body: JSON.stringify({ text: 'Synthetic extracted resume text' }) });
         });
+        await page.route('**/api/staff/documents/*?view=bytes', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/pdf',
+                body: createSyntheticPdf() });
+        });
         await candidateLink.click();
         const documentPreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
         await documentPreview.getByRole('tab', { name: /Documents/ }).click();
         await documentPreview.getByRole('button', { name: 'Synthetic.docx' }).click();
-        await expect(documentPreview.getByText('Synthetic extracted resume text')).toBeVisible();
+        await expect(documentPreview.getByText('Synthetic extracted resume text'))
+            .toBeVisible({ timeout: 20_000 });
+        await documentPreview.getByRole('button', { name: 'Synthetic.pdf' }).click();
+        const canvas = documentPreview.locator('canvas[aria-label="Page 1 of 1"]');
+        await expect.poll(async () => canvas.evaluate((element) => {
+            const context = element.getContext('2d');
+            if (!context || element.width === 0) return 0;
+            const pixels = context.getImageData(0, 0, element.width, element.height).data;
+            let dark = 0;
+            for (let index = 0; index < pixels.length; index += 4) {
+                if (pixels[index] < 160 && pixels[index + 3] > 0) dark += 1;
+            }
+            return dark;
+        })).toBeGreaterThan(100);
         await documentPreview.getByRole('button', { name: 'Close' }).click();
         await page.unroute('**/api/staff/candidates/*');
         await page.unroute('**/api/staff/documents/*?view=text');
+        await page.unroute('**/api/staff/documents/*?view=bytes');
 
         await page.goto(`${baseURL}/staff/jobs?q=Legacy`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle');
@@ -170,10 +196,21 @@ test('staff previews records in place and opens CV content', async (t) => {
             .getByRole('link', { name: 'Legacy Synthetic Job' }).first();
         await jobLink.click();
         const jobPreview = page.getByRole('dialog', { name: 'Legacy Synthetic Job' });
-        await expect(jobPreview).toBeVisible();
+        await expect(jobPreview).toBeVisible({ timeout: 20_000 });
         await expect(page).toHaveURL(`${baseURL}/staff/jobs?q=Legacy`);
         await jobPreview.getByRole('button', { name: 'Close' }).click();
         await expect(jobLink).toBeFocused();
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${baseURL}/staff/candidates`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle');
+        await page.getByRole('main').getByRole('link', { name: 'Synthetic Candidate B' }).click();
+        const mobilePreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
+        await expect(mobilePreview).toBeVisible({ timeout: 20_000 });
+        assert.ok((await mobilePreview.boundingBox()).width <= 390);
+        assert.equal(await page.evaluate(() =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+        await mobilePreview.getByRole('button', { name: 'Close' }).click();
         assert.deepEqual(pageErrors, [], pageErrors.join('\n'));
     } catch (error) {
         t.diagnostic(`Browser errors:\n${pageErrors.join('\n')}\nServer:\n${output.slice(-30).join('')}`);
