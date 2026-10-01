@@ -1476,23 +1476,39 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     });
 
     await runCase('member invitation records locally without claiming email delivery', async () => {
-        await gotoStaff(page, `${baseURL}/staff/members`);
-        await page.locator('#invite-name').fill('Invited Synthetic');
-        await page.locator('#invite-email').fill('invited@synthetic.test');
-        await page.locator('#invite-role').selectOption({ index: 1 });
-        const invited = page.waitForResponse(
-            (response) => response.url().includes('/api/staff/members')
-                && response.request().method() === 'POST' && response.ok(),
-        );
-        await page.getByRole('button', { name: 'Record invitation' }).click();
-        await invited;
-        await page.getByText(/Invitation recorded/).waitFor();
-        // Assert the refreshed directory instead of a particular RSC transport
-        // response. This row comes from server-loaded data, not an optimistic insert.
-        await expect(page.getByRole('row', { name: /Invited Synthetic/ })).toBeVisible();
-        await page.waitForLoadState('networkidle');
-        const directory = await page.getByRole('main').last().innerText();
-        assert.doesNotMatch(directory, /email sent|invitation sent/i);
+        // This form starts an RSC refresh after saving. Give it its own document
+        // so navigation work from earlier cases cannot remount its success state.
+        const page = await desktop.newPage();
+        page.setDefaultTimeout(90_000);
+        const browserEvents = [];
+        page.on('framenavigated', frame => {
+            if (frame === page.mainFrame()) browserEvents.push(`navigation: ${new URL(frame.url()).pathname}`);
+        });
+        page.on('console', message => {
+            if (browserEvents.length < 40) browserEvents.push(`${message.type()}: ${message.text().slice(0, 400)}`);
+        });
+        try {
+            await gotoStaff(page, `${baseURL}/staff/members`);
+            await page.locator('#invite-name').fill('Invited Synthetic');
+            await page.locator('#invite-email').fill('invited@synthetic.test');
+            await page.locator('#invite-role').selectOption({ index: 1 });
+            const invited = page.waitForResponse(
+                (response) => response.url().includes('/api/staff/members')
+                    && response.request().method() === 'POST' && response.ok(),
+            );
+            await page.getByRole('button', { name: 'Record invitation' }).click();
+            await invited;
+            await page.getByText(/Invitation recorded/).waitFor();
+            // Assert the refreshed directory instead of a particular RSC transport
+            // response. This row comes from server-loaded data, not an optimistic insert.
+            await expect(page.getByRole('row', { name: /Invited Synthetic/ })).toBeVisible();
+            await page.waitForLoadState('networkidle');
+            const directory = await page.getByRole('main').last().innerText();
+            assert.doesNotMatch(directory, /email sent|invitation sent/i);
+        } catch (error) {
+            t.diagnostic(`Invitation browser events: ${browserEvents.join('\n')}\nNext output: ${serverOutput.slice(-20).join('').slice(-8000)}`);
+            throw error;
+        } finally { await page.close(); }
     });
 
     await runCase('the pending-invites bell entry filters the member directory', async () => {
