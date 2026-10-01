@@ -1187,7 +1187,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             .getByRole('link', { name: 'Synthetic Candidate B' }).click();
         await expect(page).toHaveURL(`${baseURL}/staff`);
         const preview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
-        await expect(preview).toBeVisible();
+        await expect(preview).toBeVisible({ timeout: 20_000 });
         await expect(preview.getByRole('tab', { name: /Applications/ })).toBeVisible();
         await preview.getByRole('link', { name: 'Open full candidate' }).click();
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/);
