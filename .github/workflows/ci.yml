@@ -251,3 +251,29 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify private Telegram login and disconnect
         run: npm run test:telegram-connection
+
+
+  telegram-history:
+    name: Telegram history import
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install application dependencies
+        run: npm ci
+      - name: Install isolated Mac connector dependencies
+        run: npm ci --ignore-scripts --prefix services/telegram-connector
+      - name: Check installed Telegram SDK without connecting
+        run: |
+          node services/telegram-connector/check-runtime.mjs
+          node node_modules/typescript/bin/tsc --noEmit --skipLibCheck --strict --target es2022 --module nodenext --moduleResolution nodenext services/telegram-connector/sdk-contract.mts
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify private selection and resumable history import
+        run: npm run test:telegram-history
