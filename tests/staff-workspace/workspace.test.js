@@ -1305,6 +1305,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await option.click();
         await stagePosted;
+        await expect(trigger).toContainText('Interview', { timeout: 30_000 });
+        await expect(trigger).toBeEnabled();
         await page.reload({ waitUntil: 'domcontentloaded' });
         const reloaded = page.getByRole('combobox', {
             name: 'Stage for application AG-AAAA00000001',
