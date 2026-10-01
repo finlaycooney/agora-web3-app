@@ -31,10 +31,12 @@ export async function handleTelegramMaintenance(request, { secret, getPool, run 
     try {
         const pool = getPool();
         if (!pool) return json({ error: 'Maintenance is not configured.' }, 503);
-        const result = await run(pool);
+        const rawResult = await run(pool);
+        // Permit rolling deployment before the additive CV cleanup migration.
+        const result = { ...rawResult, analysesPurged: rawResult?.analysesPurged === undefined ? 0 : rawResult.analysesPurged };
         // Return a fixed aggregate response, never source text or database errors.
         const counts = {};
-        for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted']) {
+        for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted', 'analysesPurged']) {
             if (!Number.isSafeInteger(result?.[key]) || result[key] < 0) throw new Error('Invalid maintenance result');
             counts[key] = result[key];
         }
