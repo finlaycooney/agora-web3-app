@@ -187,13 +187,19 @@ test('exact authorized search and queue claims remain bounded at 5k, 20k and 100
     await f.admin.query(`update app.profile_search_sources set status='ready',projection_text='Name: Synthetic scale profile',
       source_sha256=encode(sha256(convert_to('Name: Synthetic scale profile','UTF8')),'hex'),lease_token=null,lease_expires_at=null
       where organization_id=$1 and source_type='candidate'`, [org]);
-    await f.admin.query(`insert into app.profile_search_chunks(source_id,ordinal,organization_id,owner_user_id,revision,start_byte,end_byte,sha256,token_count,embedding)
+    const seedClient = await f.admin.connect();
+    try {
+      await seedClient.query('begin');
+      await seedClient.query("select set_config('app.organization_id',$1,true),set_config('app.actor_id',$2,true)", [org, AUTHZ_ID.USER_ADMIN2]);
+      await seedClient.query(`insert into app.profile_search_chunks(source_id,ordinal,organization_id,owner_user_id,revision,start_byte,end_byte,sha256,token_count,embedding)
       select s.id,0,s.organization_id,null,s.revision,0,29,encode(sha256(convert_to('Name: Synthetic scale profile','UTF8')),'hex'),10,
         array(select (x/sqrt(v.norm))::real from unnest(v.vector_values) x)
       from app.profile_search_sources s cross join lateral (
         select array_agg(sin(i*0.23+hashtextextended(s.source_id::text,0)%1000000*0.001)) vector_values,
           sum(power(sin(i*0.23+hashtextextended(s.source_id::text,0)%1000000*0.001),2)) norm from generate_series(1,384)i
-      )v where s.organization_id=$1 and s.source_type='candidate' and not exists(select 1 from app.profile_search_chunks c where c.source_id=s.id)`, [org]);
+      )v where s.organization_id=$1 and s.source_type='candidate' and s.component='profile' and not exists(select 1 from app.profile_search_chunks c where c.source_id=s.id)`, [org]);
+      await seedClient.query('commit');
+    } catch (error) { await seedClient.query('rollback'); throw error; } finally { seedClient.release(); }
     await f.admin.query('analyze app.profile_search_sources; analyze app.profile_search_chunks; analyze app.candidates');
     const requested = await f.action({ action: 'search', operationId: randomUUID(), query: 'Synthetic scale query', scope: 'approved', readyOnly: false });
     const { job } = await f.host('claim', { capabilities: ['minilm-v1'] }); assert.equal(job.id, requested.queryId); assert.equal(job.kind, 'query');

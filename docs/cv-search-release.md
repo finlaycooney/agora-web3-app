@@ -37,6 +37,8 @@ The release enforces **12,000 authorized ready passages** across profiles and CV
 
 The test host is an Apple M1 Pro with 16 GiB RAM; Docker has 8 CPUs and approximately 7.75 GiB RAM. Hosted resources can differ, so a passing local test is not a production throughput guarantee. Above the supported CV corpus, the application fails explicitly and offers profile-only search, never silently omitting candidates or CV tails. Before substantially larger CV corpora are enabled, measure an indexed vector-search backend with the same authorization and relevance tests; increasing this constant alone is insufficient.
 
+The existing profile-only scale regression also passed with complete ranking at 5,000 / 20,000 / 100,000 synthetic profiles. Single-query database times were 377 / 1,878 / 9,638 ms; first-page times were 73 / 52 / 71 ms. The largest tier is close to the 10-second execution deadline and is not evidence of headroom for simultaneous users. These single-query checks are separate from the smaller concurrent CV-inclusive acceptance above.
+
 ## Live acceptance still required
 
 Connect a recruiter account, import a long full history, review incomplete and complete drafts, approve a CV-backed candidate, wait for both profile and CV indexing, and search for a fact present only in the approved CV. Repeat with another permitted staff member and one without document access. Replace/restrict the CV while a search is open and verify stale results disappear. Verify Mac restart/replay and hosted cleanup credentials separately. Raw conversation retention remains governed by the earlier reviewed-source controls.
