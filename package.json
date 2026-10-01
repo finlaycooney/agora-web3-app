@@ -33,7 +33,8 @@
     "test:telegram-intake": "node --test --test-concurrency=1 tests/database/telegram-intake.test.js tests/staff-workspace/telegram-intake.test.js",
     "test:telegram-connection": "node --test --test-concurrency=1 tests/database/telegram-connection.test.js tests/staff-workspace/telegram-connection.test.js",
     "test:telegram-history": "node --test --test-concurrency=1 tests/database/telegram-history.test.js tests/database/telegram-history-runtime.test.js tests/staff-workspace/telegram-history.test.js",
-    "test:telegram-extraction": "node --test --test-concurrency=1 tests/database/telegram-extraction.test.js tests/database/telegram-extraction-runtime.test.js tests/staff-workspace/telegram-extraction.test.js"
+    "test:telegram-extraction": "node --test --test-concurrency=1 tests/database/telegram-extraction.test.js tests/database/telegram-extraction-runtime.test.js tests/staff-workspace/telegram-extraction.test.js",
+    "test:telegram-cv": "node --test --test-concurrency=1 tests/database/telegram-cv.test.js tests/database/telegram-cv-runtime.test.js tests/staff-workspace/telegram-cv.test.js"
   },
   "dependencies": {
     "@heroui/accordion": "^2.2.25",

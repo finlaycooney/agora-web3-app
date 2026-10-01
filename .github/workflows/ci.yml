@@ -296,3 +296,24 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify extraction, retries and private candidate review
         run: npm run test:telegram-extraction
+
+  telegram-cv:
+    name: Telegram CV retrieval
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install isolated Telegram SDK
+        run: npm ci --ignore-scripts --prefix services/telegram-connector
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify retrieval, private storage and candidate review
+        run: npm run test:telegram-cv
