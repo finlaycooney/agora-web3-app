@@ -24,9 +24,10 @@ import {
     TableRow,
 } from '@/components/staff-ui/table';
 import { cn } from '@/lib/utils';
+import { filterApplicationRows } from '@/lib/application-filters';
 import { flagParam, textParam, uuidParam } from '../filter-params';
 
-interface ApplicationRow {
+export interface ApplicationRow {
     applicationId: string;
     candidateId: string;
     candidateName: string | null;
@@ -86,10 +87,12 @@ const parseFilters = (params: { get(name: string): string | null }): Application
 export function ApplicationsBrowser({
     applications,
     jobs,
+    clientOptions = [],
     capped = false,
 }: {
     applications: ApplicationRow[];
     jobs: { id: string; title: string }[];
+    clientOptions?: { id: string; name: string }[];
     capped?: boolean;
 }) {
     const searchParams = useSearchParams();
@@ -99,57 +102,46 @@ export function ApplicationsBrowser({
         syncUrl(next);
     };
 
+    const scopedApplications = useMemo(
+        () => filterApplicationRows(applications, filters, { includeStage: false }),
+        [applications, filters],
+    );
+
     const stages = useMemo(() => {
         const seen = new Map<string, { label: string; kind: string; count: number }>();
         for (const row of applications) {
             const existing = seen.get(row.stageKey);
             if (existing) {
-                existing.count += 1;
+                continue;
             } else {
                 seen.set(row.stageKey, {
-                    label: row.stageLabel, kind: row.stageKind, count: 1,
+                    label: row.stageLabel, kind: row.stageKind, count: 0,
                 });
             }
         }
+        for (const row of scopedApplications) {
+            const stage = seen.get(row.stageKey);
+            if (stage) stage.count += 1;
+        }
         return Array.from(seen.entries()).map(([key, value]) => ({ key, ...value }));
-    }, [applications]);
+    }, [applications, scopedApplications]);
 
     const clients = useMemo(() => {
-        const seen = new Map<string, string>();
+        const seen = new Map(clientOptions.map((client) => [client.id, client.name]));
         for (const row of applications) {
             if (!seen.has(row.clientId)) seen.set(row.clientId, row.clientName);
         }
         return Array.from(seen.entries())
             .map(([id, name]) => ({ id, name }))
             .sort((left, right) => left.name.localeCompare(right.name));
-    }, [applications]);
+    }, [applications, clientOptions]);
 
     const reviewSupported = applications.every(
         (row) => typeof row.stageIsInitial === 'boolean',
     );
 
-    const visible = useMemo(() => {
-        const needle = filters.query.trim().toLowerCase();
-        return applications.filter((row) => {
-            if (filters.jobId !== 'all' && row.jobId !== filters.jobId) return false;
-            if (filters.clientId !== 'all' && row.clientId !== filters.clientId) return false;
-            if (
-                filters.stage !== 'all'
-                && row.stageKey !== filters.stage
-                && row.stageId !== filters.stage
-            ) {
-                return false;
-            }
-            if (filters.review && reviewSupported && row.stageIsInitial !== true) {
-                return false;
-            }
-            if (needle) {
-                const haystack = `${row.candidateName ?? ''} ${row.jobTitle} ${row.clientName} ${row.publicReference}`.toLowerCase();
-                if (!haystack.includes(needle)) return false;
-            }
-            return true;
-        });
-    }, [applications, filters, reviewSupported]);
+    const visible = useMemo(() => filterApplicationRows(applications, filters),
+        [applications, filters]);
 
     const filtersSet =
         filters.query.trim() !== ''
@@ -171,9 +163,6 @@ export function ApplicationsBrowser({
                     <h1 className="text-[26px] leading-8 font-medium text-foreground">
                         Applications
                     </h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
-                        Review candidates across your clients and open roles.
-                    </p>
                 </div>
             </div>
 
@@ -184,31 +173,31 @@ export function ApplicationsBrowser({
             >
                 <button
                     type="button"
-                    aria-pressed={filters.stage === 'all' && !filters.review}
-                    onClick={() => update({ ...filters, stage: 'all', review: false })}
+                    aria-pressed={filters.stage === 'all'}
+                    onClick={() => update({ ...filters, stage: 'all' })}
                     className={cn(
                         'flex flex-col gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                        filters.stage === 'all' && !filters.review
+                        filters.stage === 'all'
                             ? 'border-ring bg-accent'
                             : 'hover:bg-hover',
                     )}
                 >
                     <span className="text-sm text-muted-foreground">All applications</span>
                     <span className="text-[26px] leading-8 font-semibold text-foreground">
-                        {applications.length}
+                        {scopedApplications.length}
                     </span>
                 </button>
                 {stages.map((stage) => (
                     <button
                         key={stage.key}
                         type="button"
-                        aria-pressed={filters.stage === stage.key && !filters.review}
+                        aria-pressed={filters.stage === stage.key}
                         onClick={() =>
-                            update({ ...filters, stage: stage.key, review: false })
+                            update({ ...filters, stage: stage.key })
                         }
                         className={cn(
                             'flex flex-col gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                            filters.stage === stage.key && !filters.review
+                            filters.stage === stage.key
                                 ? 'border-ring bg-accent'
                                 : 'hover:bg-hover',
                         )}
@@ -247,7 +236,12 @@ export function ApplicationsBrowser({
                         onValueChange={(value) => update({ ...filters, jobId: value })}
                     >
                         <SelectTrigger id="job-filter" aria-label="Filter by job">
-                            <SelectValue placeholder="All jobs" />
+                            <SelectValue placeholder="All jobs">
+                                {filters.jobId === 'all' ? 'All jobs'
+                                    : jobs.find((job) => job.id === filters.jobId)?.title
+                                        ?? applications.find((row) => row.jobId === filters.jobId)?.jobTitle
+                                        ?? 'Unavailable job'}
+                            </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All jobs</SelectItem>
@@ -266,7 +260,10 @@ export function ApplicationsBrowser({
                         onValueChange={(value) => update({ ...filters, clientId: value })}
                     >
                         <SelectTrigger id="client-filter" aria-label="Filter by client">
-                            <SelectValue placeholder="All clients" />
+                            <SelectValue placeholder="All clients">
+                                {filters.clientId === 'all' ? 'All clients'
+                                    : clients.find((client) => client.id === filters.clientId)?.name ?? 'Unavailable client'}
+                            </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All clients</SelectItem>
