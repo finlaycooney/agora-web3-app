@@ -103,7 +103,6 @@ export function ClientsBrowser({
             <PageHeader
                 eyebrow="Workspace"
                 title="Clients"
-                description="Your client relationships and hiring activity."
                 actions={
                     canCreate ? (
                         <Button asChild>
@@ -323,7 +322,7 @@ export function ClientsBrowser({
                                             {client.jobCount} job{client.jobCount === 1 ? '' : 's'}
                                         </span>
                                     )}
-                                    {canReadApplications ? (
+                                    {canReadApplications && client.jobCount > 0 ? (
                                         <Link
                                             href={`/staff/applications?client=${client.id}`}
                                             className="relative z-10 rounded-sm text-xs font-medium text-accent-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"

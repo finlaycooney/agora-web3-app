@@ -420,6 +420,56 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.match(await page.getByRole('main').last().innerText(), /You’re up to date/);
     });
 
+    await runCase('application client labels and stage totals stay correct for empty and inaccessible clients', async () => {
+        const emptyClient = '97000000-0000-4000-8000-000000000001';
+        const foreignClient = '97000000-0000-4000-8000-000000000002';
+        psql(container, `insert into app.clients (id, organization_id, name, status) values
+            ('${emptyClient}', '${ORG_ID}', 'Empty filter client', 'active'),
+            ('${foreignClient}', '${AUTHZ_ID.ORG_A}', 'Private foreign filter client', 'active');`);
+        try {
+            await gotoStaff(page, `${baseURL}/staff/clients?q=Empty`);
+            await expect(page.getByRole('main').getByRole('link', { name: 'Empty filter client' })).toBeVisible();
+            await expect(page.getByRole('main').locator(`a[href="/staff/applications?client=${emptyClient}"]`)).toHaveCount(0);
+            await expect(page.getByRole('main').getByText('0 jobs', { exact: true })).toBeVisible();
+            await expect(page.getByText('Your client relationships and hiring activity.')).toHaveCount(0);
+
+            await gotoStaff(page, `${baseURL}/staff/applications?client=${emptyClient}`);
+            await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Empty filter client');
+            const cards = page.getByRole('group', { name: 'Stage filter cards' });
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*0/);
+            for (const card of await cards.getByRole('button').all()) await expect(card).toHaveText(/0$/);
+            await expect(page.getByText('No applications found', { exact: true })).toBeVisible();
+            await expect(page.getByText('Review candidates across your clients and open roles.')).toHaveCount(0);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Empty filter client');
+
+            await page.getByRole('button', { name: 'Clear filters' }).click();
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*1/);
+            await page.locator('#application-search').fill('no-such-candidate');
+            for (const card of await cards.getByRole('button').all()) await expect(card).toHaveText(/0$/);
+            await page.getByRole('button', { name: 'Clear filters' }).click();
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*1/);
+
+            await page.getByRole('button', { name: 'Awaiting review', exact: true }).click();
+            await cards.getByRole('button', { name: /^All applications/ }).click();
+            await expect(page.getByRole('button', { name: 'Awaiting review', exact: true })).toHaveAttribute('aria-pressed', 'true');
+            assert.equal(new URL(page.url()).searchParams.get('review'), '1');
+
+            await gotoStaff(page, `${baseURL}/staff/applications?client=${foreignClient}`);
+            await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Unavailable client');
+            await expect(page.getByText('Private foreign filter client')).toHaveCount(0);
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*0/);
+            await page.setViewportSize({ width: 390, height: 844 });
+            await gotoStaff(page, `${baseURL}/staff/applications?client=${emptyClient}`);
+            await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Empty filter client');
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: join(resultsDir, 'staff-applications-empty-client-mobile.png'), fullPage: true });
+        } finally {
+            await page.setViewportSize({ width: 1440, height: 1000 });
+            psql(container, `delete from app.clients where id in ('${emptyClient}', '${foreignClient}');`);
+        }
+    });
+
     await runCase('tasks can be added, completed, reloaded and reopened', async () => {
         const tasksFetch = page.waitForResponse(
             (response) => response.url().includes('/api/staff/tasks?')
