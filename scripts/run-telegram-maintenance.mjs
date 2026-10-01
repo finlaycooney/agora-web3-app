@@ -24,9 +24,10 @@ export async function requestMaintenance({ url, secret, fetchImpl = fetch }) {
         }
     } finally { reader.releaseLock(); }
     const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (result.analysesPurged === undefined) result.analysesPurged = 0;
     if (result.ok !== true) throw new Error('Maintenance did not complete');
     const counts = {};
-    for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted']) {
+    for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted', 'analysesPurged']) {
         if (!Number.isSafeInteger(result[key]) || result[key] < 0) throw new Error('Invalid maintenance response');
         counts[key] = result[key];
     }
@@ -35,15 +36,15 @@ export async function requestMaintenance({ url, secret, fetchImpl = fetch }) {
 }
 
 export async function drainMaintenance(options, request = requestMaintenance) {
-    const totals = { runs: 0, ownersProcessed: 0, batchesPurged: 0, messagesPurged: 0, bytesFreed: 0, queriesExpired: 0, queryResultRowsDeleted: 0, remainingWork: false };
+    const totals = { runs: 0, ownersProcessed: 0, batchesPurged: 0, messagesPurged: 0, bytesFreed: 0, queriesExpired: 0, queryResultRowsDeleted: 0, analysesPurged: 0, remainingWork: false };
     // Keep each hosted invocation small while allowing a scheduled run to drain
     // several pages. Held sources cannot cause an unbounded busy loop.
     for (let i = 0; i < 8; i++) {
         const result = await request(options);
         totals.runs++;
-        for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted']) totals[key] += result[key];
+        for (const key of ['ownersProcessed', 'batchesPurged', 'messagesPurged', 'bytesFreed', 'queriesExpired', 'queryResultRowsDeleted', 'analysesPurged']) totals[key] += result[key];
         totals.remainingWork = result.remainingWork;
-        if (!result.remainingWork || result.batchesPurged + result.queriesExpired + result.queryResultRowsDeleted === 0) break;
+        if (!result.remainingWork || result.batchesPurged + result.queriesExpired + result.queryResultRowsDeleted + result.analysesPurged === 0) break;
     }
     return totals;
 }

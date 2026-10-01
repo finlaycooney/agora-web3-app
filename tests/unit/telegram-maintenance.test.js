@@ -4,7 +4,7 @@ import { handleTelegramMaintenance, runTelegramMaintenance } from '../../src/lib
 import { drainMaintenance, requestMaintenance } from '../../scripts/run-telegram-maintenance.mjs';
 
 const secret = 'a'.repeat(43);
-const counts = { ownersProcessed: 1, batchesPurged: 2, messagesPurged: 40, bytesFreed: 5120, queriesExpired: 3, queryResultRowsDeleted: 100, remainingWork: false };
+const counts = { ownersProcessed: 1, batchesPurged: 2, messagesPurged: 40, bytesFreed: 5120, queriesExpired: 3, queryResultRowsDeleted: 100, analysesPurged: 0, remainingWork: false };
 const request = (headers = {}, path = '', method = 'GET') => new Request(`https://synthetic.invalid/api/telegram-maintenance${path}`, { method, headers });
 
 test('maintenance authenticates before opening a database pool and rejects browser and parameterized requests', async () => {
@@ -73,4 +73,21 @@ test('scheduler drains bounded pages and yields when consumers still hold source
     const held = await drainMaintenance({}, async () => ({ ...counts, batchesPurged: 0, queriesExpired: 0, queryResultRowsDeleted: 0, remainingWork: true }));
     assert.equal(held.runs, 1);
     const empty = await drainMaintenance({}, async () => counts); assert.equal(empty.runs, 1);
+});
+
+
+test('analysis cleanup counts are bounded aggregates and keep scheduled cleanup moving', async () => {
+    const req = request({ authorization: `Bearer ${secret}` });
+    const options = { secret, getPool: () => ({}), run: async () => ({ ...counts, analysesPurged: 2 }) };
+    assert.equal((await (await handleTelegramMaintenance(req, options)).json()).analysesPurged, 2);
+    options.run = async () => ({ ...counts, analysesPurged: 'private parsed text' });
+    assert.equal((await handleTelegramMaintenance(req, options)).status, 503);
+    const older = { ...counts }; delete older.analysesPurged;
+    options.run = async () => older;
+    assert.equal((await (await handleTelegramMaintenance(req, options)).json()).analysesPurged, 0);
+    assert.equal((await requestMaintenance({ url: 'https://synthetic.invalid/api/telegram-maintenance', secret,
+        fetchImpl: async () => Response.json({ ok: true, ...older }) })).analysesPurged, 0);
+    const draining = await drainMaintenance({}, async () => ({ ...counts, batchesPurged: 0, queriesExpired: 0,
+        queryResultRowsDeleted: 0, analysesPurged: 2, remainingWork: true }));
+    assert.equal(draining.runs, 8); assert.equal(draining.analysesPurged, 16);
 });
