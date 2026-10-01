@@ -19,7 +19,7 @@ import { PRIVACY_MIGRATIONS } from '../support/privacy-foundation.js';
 import { PRIVACY_OPS_MIGRATION } from '../support/privacy-operations.js';
 import { WORKFLOW_MIGRATION, clientJobFixtureSql } from '../support/client-job-workflows.js';
 import { STAFF_MFA_COOKIE, createStaffMfaProof } from '../../src/lib/staff-mfa-cookie.js';
-import { createSyntheticPdf } from '../support/cv-fixtures.js';
+import { createSyntheticPdf, syntheticCvText } from '../support/cv-fixtures.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const nextBin = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -199,6 +199,10 @@ test('staff previews records in place and opens CV content', async (t) => {
             .toBeVisible({ timeout: 20_000 });
         await documentPreview.getByRole('button', { name: 'Synthetic.pdf' }).click();
         const canvas = documentPreview.locator('canvas[aria-label="Page 1 of 1"]');
+        // The canvas mounts before PDF.js finishes its lazy worker/render work.
+        // Accessible text is published only after renderTask.promise resolves.
+        await expect(documentPreview.getByText(syntheticCvText, { exact: true }))
+            .toBeAttached({ timeout: 20_000 });
         await expect.poll(async () => canvas.evaluate((element) => {
             const context = element.getContext('2d');
             if (!context || element.width === 0) return 0;
@@ -208,7 +212,7 @@ test('staff previews records in place and opens CV content', async (t) => {
                 if (pixels[index] < 160 && pixels[index + 3] > 0) dark += 1;
             }
             return dark;
-        })).toBeGreaterThan(100);
+        }), { timeout: 20_000, message: 'the rendered PDF page contains visible ink' }).toBeGreaterThan(100);
         await documentPreview.getByRole('button', { name: 'Close' }).click();
         await page.unroute('**/api/staff/candidates/*');
         await page.unroute('**/api/staff/documents/*?view=text');
