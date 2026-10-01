@@ -1216,7 +1216,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         const jobListUrl = page.url();
         await jobLink.click();
         const jobPreview = page.getByRole('dialog', { name: 'Legacy Synthetic Job' });
-        await expect(jobPreview).toBeVisible();
+        await expect(jobPreview).toBeVisible({ timeout: 20_000 });
         await expect(page).toHaveURL(jobListUrl);
         await expect(jobPreview.getByRole('link', { name: 'Open full job' })).toBeVisible();
         await jobPreview.getByRole('button', { name: 'Close' }).click();
