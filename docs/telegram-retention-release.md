@@ -63,6 +63,14 @@ backlog. Physical deletion is separately bounded: up to 100 query text/vector
 expirations and 5,000 cached result rows per request. Large result sets can need
 multiple passes. Retained source batches with unresolved consumers remain held.
 
+The local PostgreSQL 17 volume check seeded 100,036 expired results across several
+owners. Staff expiry removed the first 500; 20 restricted maintenance calls
+removed the remaining 99,536. Calls took 104 ms at p95 and at most 110 ms, and the
+small owners finished within three calls. The live query, its vector and results,
+and all 100,000 indexed sources remained intact. These synthetic local timings
+do not include hosted-network latency or production load. Run the opt-in check
+with `TELEGRAM_RETENTION_SCALE=1 node --test tests/database/telegram-retention-volume.test.js`.
+
 ## Release acceptance
 
 Verify catch-up when extraction temporarily empties before the final import page,

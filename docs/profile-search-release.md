@@ -5,6 +5,11 @@ private drafts. Raw conversations, evidence quotes, unresolved suggestions, CV
 contents, and other recruiters' private drafts are outside the search corpus.
 Existing name/email lookup stays available as a separate search option.
 
+The subsequent [reviewed-source lifecycle release](telegram-retention-release.md)
+adds scheduled query-cache cleanup that runs without the Mac. Configure that
+maintenance service as part of a complete deployment; this search migration alone
+only performs cleanup during authenticated activity.
+
 ## Release sequence
 
 Apply the profile-search migration after the Telegram CV migration while

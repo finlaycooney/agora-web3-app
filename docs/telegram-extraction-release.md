@@ -78,3 +78,10 @@ The provider protocol and source validation can be tested without a live account
 A production demonstration still requires an explicitly configured provider and
 a recruiter-led Telegram connection. Synthetic results are not a substitute for
 reviewing actual extraction quality before enabling the feature broadly.
+
+## Follow-up: automatic catch-up and source retention
+
+Apply the [reviewed-source lifecycle release](telegram-retention-release.md) after
+this checkpoint. It adds automatic extraction as import pages arrive, intact
+oversized-message handling, and explicit reviewed-source cleanup. The extraction
+worker must be updated with the matching singleton-message contract.
