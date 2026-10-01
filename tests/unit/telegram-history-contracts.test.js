@@ -38,3 +38,13 @@ test('cursor and flood-wait contracts exclude private SDK locators and bound del
     assert.throws(() => historyWorkerInput('defer', { ...input, retryAfterSeconds: 604801 }));
     assert.throws(() => historyWorkerInput('claim', { ...proof, accountUserId: 'not-an-id' }));
 });
+
+test('sync cursors retain decimal checkpoints including empty-history zero, without widening the wire schema', () => {
+    for (const afterMessageId of ['0', '99', '2147483647']) {
+        const cursor = { beforeMessageId: null, upperMessageId: null, afterMessageId };
+        assert.deepEqual(historyCursor(cursor, 'history'), cursor);
+        assert.deepEqual(historyWorkerInput('complete', { ...page, records: [], done: true, fromCursor: cursor, nextCursor: cursor }).payload.fromCursor, cursor);
+    }
+    for (const afterMessageId of [0, null, '-1', '00', '2147483648']) assert.throws(() => historyCursor({ beforeMessageId: null, upperMessageId: null, afterMessageId }, 'history'));
+    assert.throws(() => historyCursor({ beforeMessageId: null, upperMessageId: null, afterMessageId: '0', secret: 'private' }, 'history'));
+});

@@ -16,8 +16,9 @@ export function historyCursor(v, kind) {
         if (typeof v.excludePinned !== 'boolean') fail('cursor');
         return { folder: number(v.folder, 0, 1, 'folder'), offsetDate: number(v.offsetDate, 0, 4102444800, 'offsetDate'), offsetId: messageId(v.offsetId, true), offsetPeer: v.offsetPeer === null ? null : historyPeer(v.offsetPeer), excludePinned: v.excludePinned };
     }
-    exact(v, ['beforeMessageId', 'upperMessageId']);
-    return { beforeMessageId: v.beforeMessageId === null ? null : messageId(v.beforeMessageId), upperMessageId: v.upperMessageId === null ? null : messageId(v.upperMessageId) };
+    exact(v, ['beforeMessageId', 'upperMessageId', 'afterMessageId']);
+    const sync = Object.hasOwn(v, 'afterMessageId') ? { afterMessageId: messageId(v.afterMessageId, true) } : {};
+    return { ...sync, beforeMessageId: v.beforeMessageId === null ? null : messageId(v.beforeMessageId), upperMessageId: v.upperMessageId === null ? null : messageId(v.upperMessageId) };
 }
 const username = v => { if (v == null) return null; if (typeof v !== 'string' || !/^[A-Za-z0-9_]{1,32}$/.test(v)) fail('username'); return v; };
 function dialog(v) {

@@ -37,3 +37,7 @@ test('only ongoing discovery or imports require frequent visible polling', () =>
     assert.equal(historyPollingDelay({ discovery: { status: 'completed' }, chats: [{ import: { status: 'waiting' } }] }), 3000);
     assert.equal(historyPollingDelay({ discovery: { status: 'completed' }, chats: [{ import: { status: 'paused' } }] }), 15000);
 });
+
+test('completed selected histories offer an explicit sync pause', () => {
+    assert.deepEqual(importActions({ selected: true, import: { status: 'completed' }, sync: { enabled: true } }).map(a => a.label), ['Pause sync', 'Deselect chat']);
+});

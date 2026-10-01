@@ -118,9 +118,15 @@ RPC deadline and cancellation signal. The connector renews its control lease and
 heartbeat between pages. Dialogs and history are read in bounded pages of at most
 100 entries; request bodies have a 256 KiB cap and larger pages are retried with a
 smaller page size. One oversized message pauses its chat instead of truncating or
-skipping it. An empty raw page confirms completion. New messages after the initial
-snapshot and edits to previously imported messages need a later incremental-sync
-feature; deleted/inaccessible Telegram content cannot be recovered by this import.
+skipping it. An empty raw page confirms completion. After the initial snapshot is fully imported, selected chats automatically sync
+new messages in bounded pages, with a target interval of 60 seconds per chat.
+Each pass freezes its upper message ID; arrivals during paging are picked up by
+the next pass. The hosted checkpoint advances only after the entire pass succeeds.
+Downtime is recovered from that checkpoint, and reconnecting the same account
+rebinds automatic work while preserving explicit pauses. Deselecting or pausing
+a chat stops both import and sync. Resume continues from the saved position.
+Edits and deletions of previously imported messages are not tracked; inaccessible
+Telegram content cannot be recovered. Busy queues and flood waits delay polling.
 
 The server schedules selected chats fairly, enforces private storage quotas, and
 shows explicit pauses for quota, peer access and large-message problems. Flood
@@ -193,3 +199,15 @@ inline/env credentials still work; if supplied together with the paired file,
 identities must match. Pairing does not start this connector or authenticate
 Telegram. See `../worker-pairing/README.md` for the hidden invitation prompt and
 restart-safe enrollment workflow.
+
+## Continuous sync rollout
+
+Update this Mac connector before deploying the continuous-sync migration. Older
+connectors do not understand the new bounded sync cursor. Apply
+`20261002230000_telegram_continuous_sync.sql` with the normal migration operator,
+then deploy the hosted application. Already imported selected chats start syncing
+on the next worker claim. No new credentials are required. Automatic extraction
+remains a per-chat choice; enable it to send new text and attachment suggestions
+through the existing private draft review pipeline. CV retrieval still requires
+the recruiter to select an attachment. Verify a new message and CV suggestion,
+then stop/restart the Mac and verify missed messages reach review once.
