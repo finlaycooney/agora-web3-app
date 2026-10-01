@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, FileText, Lock } from 'lucide-react';
+import { ArrowLeft, Lock } from 'lucide-react';
 
 import { Badge } from '@/components/staff-ui/badge';
 import { Button } from '@/components/staff-ui/button';
@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/staff-ui/tabs';
 import { Textarea } from '@/components/staff-ui/textarea';
 import { cn } from '@/lib/utils';
+import { RealCandidateDocuments } from '@/components/staff-preview/real-candidate-documents';
 import {
     EditCandidateProfileButton,
     type CandidateProfileOptions,
@@ -497,46 +498,8 @@ export function CandidateDetail({
                 </TabsContent>
 
                 <TabsContent value="documents" className="flex flex-col gap-3 pt-4">
-                    {documents.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No documents on file.</p>
-                    ) : (
-                        documents.map((document) => (
-                            <div
-                                key={document.documentId}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <FileText
-                                        className="h-4 w-4 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium text-foreground">
-                                            {document.filename}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground">
-                                            {document.purpose.toUpperCase()} ·{' '}
-                                            {formatDate(document.receivedAt)} ·{' '}
-                                            {Math.round(document.sizeBytes / 1024)} KB
-                                            {document.scanState !== 'clean'
-                                                ? ` · scan: ${document.scanState}`
-                                                : ''}
-                                        </span>
-                                    </div>
-                                </div>
-                                {capabilities.downloadDocuments
-                                    && document.lifecycle === 'active' ? (
-                                    <Button variant="outline" size="sm" asChild>
-                                        <a
-                                            href={`/api/staff/documents/${document.documentId}`}
-                                        >
-                                            Download
-                                        </a>
-                                    </Button>
-                                ) : null}
-                            </div>
-                        ))
-                    )}
+                    <RealCandidateDocuments documents={documents}
+                        canView={capabilities.downloadDocuments} />
                 </TabsContent>
 
                 <TabsContent value="notes" className="flex flex-col gap-4 pt-4">

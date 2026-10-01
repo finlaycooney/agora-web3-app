@@ -1185,7 +1185,42 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await gotoStaff(page, `${baseURL}/staff`);
         await page.locator('#review-queue')
             .getByRole('link', { name: 'Synthetic Candidate B' }).click();
+        await expect(page).toHaveURL(`${baseURL}/staff`);
+        const preview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
+        await expect(preview).toBeVisible({ timeout: 20_000 });
+        await expect(preview.getByRole('tab', { name: /Applications/ })).toBeVisible();
+        await preview.getByRole('link', { name: 'Open full candidate' }).click();
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/);
+    });
+
+    await runCase('candidate and job previews keep list filters and scroll position', async () => {
+        await gotoStaff(page, `${baseURL}/staff/candidates?q=Synthetic`);
+        const candidateLink = page.getByRole('main')
+            .getByRole('link', { name: 'Synthetic Candidate B' }).first();
+        const candidateListUrl = page.url();
+        const scrollBefore = await page.evaluate(() => window.scrollY);
+        await candidateLink.click();
+        const candidatePreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
+        await expect(candidatePreview).toBeVisible();
+        await expect(page).toHaveURL(candidateListUrl);
+        await candidatePreview.getByRole('tab', { name: /Documents/ }).click();
+        await expect(candidatePreview.getByText('No documents on file.')).toBeVisible();
+        await candidatePreview.getByRole('button', { name: 'Close' }).click();
+        await expect(candidatePreview).toHaveCount(0);
+        assert.equal(await page.evaluate(() => window.scrollY), scrollBefore);
+        await expect(candidateLink).toBeFocused();
+
+        await gotoStaff(page, `${baseURL}/staff/jobs?q=Legacy`);
+        const jobLink = page.getByRole('main')
+            .getByRole('link', { name: 'Legacy Synthetic Job' }).first();
+        const jobListUrl = page.url();
+        await jobLink.click();
+        const jobPreview = page.getByRole('dialog', { name: 'Legacy Synthetic Job' });
+        await expect(jobPreview).toBeVisible({ timeout: 20_000 });
+        await expect(page).toHaveURL(jobListUrl);
+        await expect(jobPreview.getByRole('link', { name: 'Open full job' })).toBeVisible();
+        await jobPreview.getByRole('button', { name: 'Close' }).click();
+        await expect(jobLink).toBeFocused();
     });
 
     await runCase('applications ?review=1 filters to the initial stage', async () => {

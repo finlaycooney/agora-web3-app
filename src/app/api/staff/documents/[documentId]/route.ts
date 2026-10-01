@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import mammoth from 'mammoth';
 import { getDocumentDownload } from '@/lib/pipeline-operations';
 import {
     staffApiContext,
@@ -9,11 +10,13 @@ import {
 export const runtime = 'nodejs';
 
 const SIGNED_URL_TTL_SECONDS = 60;
+const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 // Issues a short-lived signed URL for a verified blob location. The procedure
 // resolves coordinates under documents.download; the route signs and redirects.
 export async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ documentId: string }> },
 ) {
     const context = await staffApiContext();
@@ -27,6 +30,10 @@ export async function GET(
         return Response.json({ error: 'storage is not configured' }, { status: 503 });
     }
     const { documentId } = await params;
+    const view = new URL(request.url).searchParams.get('view');
+    if (view !== null && view !== 'inline' && view !== 'text' && view !== 'bytes') {
+        return Response.json({ error: 'unsupported view' }, { status: 400 });
+    }
     try {
         const document = await getDocumentDownload(
             context.pool, context.identity, context.organizationId,
@@ -38,15 +45,61 @@ export async function GET(
         const supabase = createClient(supabaseUrl, serviceRoleKey, {
             auth: { persistSession: false, autoRefreshToken: false },
         });
+        if (view === 'text' || view === 'bytes') {
+            if ((view === 'text' && document.mimeType !== DOCX_MIME)
+                || (view === 'bytes' && document.mimeType !== 'application/pdf')) {
+                return Response.json({ error: 'preview is unavailable for this file type' }, {
+                    status: 415,
+                    headers: { 'cache-control': 'private, no-store' },
+                });
+            }
+            const { data: file, error: downloadError } = await supabase.storage
+                .from(document.bucket).download(document.objectKey);
+            if (downloadError || !file) {
+                return Response.json({ error: 'document unavailable' }, { status: 404 });
+            }
+            if (file.size > MAX_PREVIEW_BYTES) {
+                return Response.json({ error: 'document is too large to preview' }, { status: 413 });
+            }
+            const buffer = Buffer.from(await file.arrayBuffer());
+            if (view === 'bytes') {
+                return new Response(buffer, {
+                    headers: {
+                        'content-type': 'application/pdf',
+                        'content-disposition': 'inline',
+                        'cache-control': 'private, no-store',
+                        'x-content-type-options': 'nosniff',
+                    },
+                });
+            }
+            const { value } = await mammoth.extractRawText({ buffer });
+            return Response.json({ text: value.slice(0, 200_000) }, {
+                headers: {
+                    'cache-control': 'private, no-store',
+                    'x-content-type-options': 'nosniff',
+                },
+            });
+        }
+        if (view === 'inline' && document.mimeType !== 'application/pdf') {
+            return Response.json({ error: 'inline preview is unavailable for this file type' }, {
+                status: 415,
+            });
+        }
         const { data, error } = await supabase.storage
             .from(document.bucket)
-            .createSignedUrl(document.objectKey, SIGNED_URL_TTL_SECONDS, {
-                download: document.filename,
-            });
+            .createSignedUrl(document.objectKey, SIGNED_URL_TTL_SECONDS,
+                view === 'inline' ? undefined : { download: document.filename });
         if (error || !data?.signedUrl) {
             return Response.json({ error: 'document unavailable' }, { status: 404 });
         }
-        return Response.redirect(data.signedUrl, 302);
+        return new Response(null, {
+            status: 302,
+            headers: {
+                location: data.signedUrl,
+                'cache-control': 'private, no-store',
+                'referrer-policy': 'no-referrer',
+            },
+        });
     } catch (error) {
         return staffErrorResponse(error);
     }

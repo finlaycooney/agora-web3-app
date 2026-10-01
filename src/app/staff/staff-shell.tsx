@@ -27,6 +27,7 @@ import { Separator } from '@/components/staff-ui/separator';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/staff-ui/sheet';
 import type { StaffWorkspaceSummary } from '@/lib/workspace-types';
 import { cn } from '@/lib/utils';
+import { RecordPreview } from './record-preview';
 
 const NAV_ITEMS = [
     { href: '/staff', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -502,7 +503,7 @@ export function StaffShell({
                     </div>
                 </header>
 
-                <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+                <RecordPreview key={pathname}>{children}</RecordPreview>
             </div>
         </div>
     );

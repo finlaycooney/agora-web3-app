@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Download, ExternalLink } from 'lucide-react';
+import { Download, UserRound } from 'lucide-react';
 
 export interface CandidateProfile {
     candidate: {
@@ -82,9 +82,8 @@ function Profile({
             {candidate.headline ? <p className="text-sm">{candidate.headline}</p> : null}
             {candidate.location ? <p className="text-sm text-muted-foreground">{candidate.location}</p> : null}
             {!demo ? <Link href={`/staff/candidates/${candidate.candidateId}`}
-                target="_blank" rel="noopener"
                 className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4">
-                Full profile <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                View profile <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
             </Link> : null}
         </div>
         <dl className="space-y-3 text-sm">
