@@ -20,7 +20,10 @@ Extraction uses already imported text and does not require Telegram to remain
 connected. The queue consumes bounded immutable batches and continues through
 currently unprocessed imported rows. Press Extract again for rows imported after
 that queue has finished. Provider outages or invalid results leave work visibly
-retryable; they do not mark messages successfully extracted.
+retryable; they do not mark messages successfully extracted. A single history record larger
+than the extraction input bound pauses that chat with `INPUT_TOO_LARGE`; it is
+never silently skipped. Supporting that maximum-size edge requires bounded
+splitting or a larger single-message allowance before broad release.
 
 ## Review and identity
 
@@ -29,7 +32,10 @@ quote-supported email addresses can bind a private subject to its draft. The
 model must distinguish the sender from the person being discussed, especially in
 referrals and forwarded conversations. Ambiguous subjects remain separate drafts.
 Source quotes establish where a suggestion came from; they do not prove the
-model's interpretation is correct.
+model's interpretation is correct. The first contract accepts one strong identity
+per extracted subject. Switching between email and Telegram identity across
+batches can produce separate drafts; existing duplicate checks remain required
+at approval.
 
 Manual edits, including clearing a field, are protected. Conflicting extracted
 values become suggestions for explicit application or dismissal. Resolve pending
