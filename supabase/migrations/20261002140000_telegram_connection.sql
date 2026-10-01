@@ -61,7 +61,7 @@ returns jsonb language sql stable set search_path=pg_catalog,app,pg_temp as $$
     select jsonb_build_object('id',c.id,'workerId',c.worker_id,'generation',c.generation,'status',c.status,'challengeId',c.challenge_id,
       'qrLoginUrl',case when c.qr_expires_at>now() then c.qr_login_url end,'qrExpiresAt',c.qr_expires_at,
       'passwordHint',c.password_hint,'passwordPending',c.password_ciphertext is not null and c.password_expires_at>now(),
-      'errorCode',c.error_code,'cancelledBeforeStart',c.cancelled_before_start,'profile',c.profile,'updatedAt',c.updated_at);
+      'errorCode',c.error_code,'cancelledBeforeStart',c.cancelled_before_start,'workerPinned',c.ever_leased,'profile',c.profile,'updatedAt',c.updated_at);
 $$;
 create function app.telegram_connection_status_v1()
 returns jsonb language plpgsql volatile security definer set search_path=pg_catalog,app,pg_temp as $$
@@ -82,6 +82,7 @@ declare c app.telegram_connections; w app.telegram_workers; begin
     if not found or not exists(select 1 from app.telegram_connector_workers where id=p_worker and last_seen_at>clock_timestamp()-interval '90 seconds') then raise exception 'Connector unavailable' using errcode='40001'; end if;
     perform app.telegram_connection_expire_v1();
     select * into c from app.telegram_connections for update;
+    if found and c.worker_id<>p_worker and c.ever_leased then raise exception 'Disconnect before changing connector' using errcode='40001'; end if;
     if found and c.status not in ('failed','disconnected') then
         if c.worker_id<>p_worker then raise exception 'Connection active' using errcode='40001'; end if;
         return app.telegram_connection_status_v1();

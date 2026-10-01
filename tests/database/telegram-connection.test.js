@@ -142,6 +142,28 @@ test('private Telegram QR connection, ciphertext handoff and generation fencing'
         assert.equal((await call('claim')).status, 'disconnecting');
         assert.equal(scalar(`select password_ciphertext is null and qr_login_url is null from app.telegram_connections where id='${lease.id}'`), 't');
     });
+    await t.test('failed leased connections cannot change worker until acknowledged remote logout', async () => {
+        lease = await call('claim');
+        await report({ status: 'disconnected' });
+        const replacementToken = randomBytes(48).toString('base64url');
+        const replacementWorker = await staff('select app.telegram_register_worker_v1($1,$2) as result', ['Replacement connector', replacementToken]);
+        await call('heartbeat', { publicKeySpki: key() }, replacementToken);
+        connection = (await action({ action: 'connect', workerId: worker.id })).connection;
+        lease = await call('claim');
+        await report({ status: 'failed', errorCode: 'TELEGRAM_UNAVAILABLE' });
+        assert.equal((await status()).connection.workerPinned, true);
+        await assert.rejects(action({ action: 'connect', workerId: replacementWorker.id }), { code: '40001' });
+        assert.equal((await status()).connection.workerId, worker.id);
+        assert.equal((await call('claim')).status, 'failed', 'original connector remains responsible for session cleanup');
+        connection = (await action({ action: 'disconnect', connectionId: lease.id, generation: lease.generation })).connection;
+        lease = await call('claim');
+        await report({ status: 'disconnected' });
+        assert.equal((await status()).connection.workerPinned, false);
+        connection = (await action({ action: 'connect', workerId: replacementWorker.id })).connection;
+        assert.equal(connection.workerId, replacementWorker.id);
+        assert.equal(await call('claim'), null);
+        await staff('select app.telegram_revoke_worker_v1($1) as result', [replacementWorker.id]);
+    });
     await t.test('revocation and membership loss deny future connector calls', async () => {
         await staff('select app.telegram_revoke_worker_v1($1) as result', [worker.id]);
         await assert.rejects(call('claim'), { code: '42501' });
