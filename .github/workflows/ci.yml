@@ -277,3 +277,22 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify private selection and resumable history import
         run: npm run test:telegram-history
+
+  telegram-extraction:
+    name: Telegram candidate extraction
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify extraction, retries and private candidate review
+        run: npm run test:telegram-extraction
