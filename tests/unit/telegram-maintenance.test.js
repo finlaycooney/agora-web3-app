@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { handleTelegramMaintenance, runTelegramMaintenance } from '../../src/lib/telegram-maintenance.js';
+import { drainMaintenance, requestMaintenance } from '../../scripts/run-telegram-maintenance.mjs';
+
+const secret = 'a'.repeat(43);
+const counts = { ownersProcessed: 1, batchesPurged: 2, messagesPurged: 40, bytesFreed: 5120, queriesExpired: 3, queryResultRowsDeleted: 100, remainingWork: false };
+const request = (headers = {}, path = '', method = 'GET') => new Request(`https://synthetic.invalid/api/telegram-maintenance${path}`, { method, headers });
+
+test('maintenance authenticates before opening a database pool and rejects browser and parameterized requests', async () => {
+    let opened = 0;
+    const options = { secret, getPool: () => { opened++; return {}; }, run: async () => counts };
+    for (const header of [undefined, 'Bearer bad', `Bearer ${'b'.repeat(43)}`, `Basic ${secret}`]) {
+        const result = await handleTelegramMaintenance(request(header ? { authorization: header } : {}), options);
+        assert.equal(result.status, 401);
+    }
+    assert.equal((await handleTelegramMaintenance(request({ origin: 'https://synthetic.invalid', authorization: `Bearer ${secret}` }), options)).status, 403);
+    assert.equal((await handleTelegramMaintenance(request({ authorization: `Bearer ${secret}` }, '?owner=arbitrary'), options)).status, 400);
+    assert.equal((await handleTelegramMaintenance(request({}, '', 'POST'), options)).status, 405);
+    assert.equal(opened, 0);
+    const result = await handleTelegramMaintenance(request({ authorization: `Bearer ${secret}` }), options);
+    assert.equal(result.status, 200); assert.equal(result.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(await result.json(), { ok: true, ...counts }); assert.equal(opened, 1);
+});
+
+test('maintenance fails closed and never returns secrets, database errors or extra record fields', async () => {
+    const req = request({ authorization: `Bearer ${secret}` });
+    const unopened = () => { assert.fail('Unconfigured route must not open pool'); };
+    assert.equal((await handleTelegramMaintenance(req, { secret: '', getPool: unopened })).status, 503);
+    assert.equal((await handleTelegramMaintenance(req, { secret, getPool: () => null })).status, 503);
+    const fail = await handleTelegramMaintenance(req, { secret, getPool: () => ({}), run: async () => { throw new Error(`private source ${secret}`); } });
+    assert.equal(fail.status, 503); assert.doesNotMatch(await fail.text(), /private source|aaa/);
+    const success = await handleTelegramMaintenance(req, { secret, getPool: () => ({}), run: async () => ({ ...counts, source: 'private conversation' }) });
+    assert.deepEqual(await success.json(), { ok: true, ...counts });
+    const invalid = await handleTelegramMaintenance(req, { secret, getPool: () => ({}), run: async () => ({ ...counts, bytesFreed: 'private data' }) });
+    assert.equal(invalid.status, 503);
+});
+
+test('maintenance uses the restricted role and rolls back and releases failed transactions', async () => {
+    for (const failed of [false, true]) {
+        const calls = []; let released = false;
+        const client = { query: async sql => { calls.push(sql); if (sql.startsWith('select') && failed) throw new Error('SYNTHETIC_FAILURE'); return { rows: [{ result: counts }] }; }, release: () => { released = true; } };
+        const result = runTelegramMaintenance({ connect: async () => client });
+        if (failed) await assert.rejects(result, /SYNTHETIC_FAILURE/); else assert.deepEqual(await result, counts);
+        assert.match(calls[0], /set local role app_telegram_maintenance/); assert.match(calls[0], /statement_timeout='10s'/);
+        assert.equal(calls[1], 'select app.telegram_maintenance_v1() as result');
+        assert.equal(calls[2], failed ? 'rollback' : 'commit'); assert.equal(released, true);
+    }
+});
+
+test('scheduler targets the configured HTTPS endpoint without redirects and prints aggregate counts only', async () => {
+    let requests = 0;
+    const fetchImpl = async (url, options) => {
+        requests++; assert.equal(url.href, 'https://synthetic.invalid/api/telegram-maintenance');
+        assert.equal(options.redirect, 'error'); assert.equal(options.headers.authorization, `Bearer ${secret}`);
+        assert.ok(options.signal instanceof AbortSignal);
+        return Response.json({ ok: true, ...counts, source: 'do not print this' });
+    };
+    assert.deepEqual(await requestMaintenance({ url: 'https://synthetic.invalid/api/telegram-maintenance', secret, fetchImpl }), counts);
+    assert.equal(requests, 1);
+    for (const url of ['http://synthetic.invalid/api/telegram-maintenance', 'https://u:p@synthetic.invalid/api/telegram-maintenance', 'https://synthetic.invalid/api/telegram-maintenance?owner=1', 'https://synthetic.invalid/other']) {
+        await assert.rejects(requestMaintenance({ url, secret, fetchImpl }), /Invalid maintenance URL/);
+    }
+    await assert.rejects(requestMaintenance({ url: 'https://synthetic.invalid/api/telegram-maintenance', secret: 'short', fetchImpl }), /credential/);
+    assert.equal(requests, 1);
+    await assert.rejects(requestMaintenance({ url: 'https://synthetic.invalid/api/telegram-maintenance', secret, fetchImpl: async () => new Response('secret failure', { status: 503 }) }), /HTTP 503/);
+    await assert.rejects(requestMaintenance({ url: 'https://synthetic.invalid/api/telegram-maintenance', secret, fetchImpl: async () => new Response('x'.repeat(5000)) }), /Invalid maintenance response/);
+});
+
+test('scheduler drains bounded pages and yields when consumers still hold sources', async () => {
+    const busy = await drainMaintenance({}, async () => ({ ...counts, remainingWork: true }));
+    assert.equal(busy.runs, 8); assert.equal(busy.queryResultRowsDeleted, 800); assert.equal(busy.remainingWork, true);
+    const held = await drainMaintenance({}, async () => ({ ...counts, batchesPurged: 0, queriesExpired: 0, queryResultRowsDeleted: 0, remainingWork: true }));
+    assert.equal(held.runs, 1);
+    const empty = await drainMaintenance({}, async () => counts); assert.equal(empty.runs, 1);
+});
