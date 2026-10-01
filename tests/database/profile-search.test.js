@@ -150,6 +150,60 @@ test('profile search current authorization, complete chunks and durable query ra
         psql(db, `update app.profile_search_queries set available_at=now() where id='${q.queryId}'`); await finish((await call('claim')).job);
         assert.equal((await profileSearchStatus(pool, owner, ORG_B, { queryId: q.queryId })).errorCode, null);
     });
+    await t.test('bounded recruiter retry resumes valid chunks and cannot touch other owners or structural failures', async () => {
+        await drain();
+        const partial = await createTelegramDraft(pool, owner, ORG_B, { fields: { firstName: 'Partial', lastName: 'Resume', professionalSummary: 'Searchable complete profile '.repeat(20) }, sourceTitle: 'Synthetic retry' });
+        const j = (await call('claim')).job; assert.equal(j.source.sourceId, partial.id);
+        const bytes = Buffer.from(j.source.text); const chunks = Array.from({ length: 10 }, (_, ordinal) => {
+            const startByte = Math.floor(ordinal * bytes.length / 10); const endByte = Math.floor((ordinal + 1) * bytes.length / 10);
+            return { ordinal, startByte, endByte, sha256: sha(bytes.subarray(startByte, endByte)), tokenCount: 40 };
+        });
+        await call('complete', { ...complete(j), sourceRevision: j.source.revision, sourceSha256: j.source.sha256, result: { byteLength: bytes.length, chunks } });
+        const first = (await call('claim')).job; assert.equal(first.chunks.length, 8); await finish(first);
+        let last;
+        for (let n = 0; n < 5; n++) {
+            last = (await call('claim')).job; assert.deepEqual(last.chunks.map(c => c.ordinal), [8, 9]);
+            await call('fail', { jobId: last.id, leaseToken: last.leaseToken, kind: 'embed', code: 'WORKER_ERROR', retryAfterSeconds: 1 });
+            psql(db, `update app.profile_search_sources set available_at=now() where id='${last.id}'`);
+        }
+        const privateOther = await createTelegramDraft(pool, other, ORG_B, { fields: { firstName: 'Private', lastName: 'OtherRetry' }, sourceTitle: 'Other owner' });
+        const structural = await createTelegramDraft(pool, owner, ORG_B, { fields: { firstName: 'Structural', lastName: 'Failure' }, sourceTitle: 'Needs attention' });
+        psql(db, `update app.profile_search_sources set status='failed',error_code='WORKER_ERROR' where source_id='${privateOther.id}'; update app.profile_search_sources set status='failed',error_code='INVALID_RESULT' where source_id='${structural.id}'`);
+        const before = await query('my_drafts'); assert.equal(before.coverage.retryable, 1);
+        assert.equal((await profileSearchAction(pool, owner, ORG_B, { action: 'retryIndex', scope: 'my_drafts', readyOnly: true })).retried, 0, 'readiness applies to retries too');
+        assert.equal((await profileSearchAction(pool, owner, ORG_B, { action: 'retryIndex', scope: 'approved', readyOnly: false })).retried, 0);
+        const receipt = await profileSearchAction(pool, owner, ORG_B, { action: 'retryIndex', scope: 'my_drafts', readyOnly: false }); assert.deepEqual(receipt, { ok: true, retried: 1, remainingFailed: 0 });
+        assert.equal((await profileSearchStatus(pool, owner, ORG_B, { queryId: before.queryId })).coverage.retryable, 0, 'query snapshots expose a live retryable count');
+        assert.equal(psql(db, `select count(*) from app.profile_search_chunks where source_id='${j.id}' and embedding is not null`).trim(), '8');
+        const resumed = (await call('claim')).job; assert.equal(resumed.source.revision, j.source.revision); assert.deepEqual(resumed.chunks.map(c => c.ordinal), [8, 9]); await finish(resumed);
+        assert.equal(psql(db, `select status from app.profile_search_sources where source_id='${privateOther.id}'`).trim(), 'failed');
+        assert.equal(psql(db, `select status from app.profile_search_sources where source_id='${structural.id}'`).trim(), 'failed');
+        assert((await query('my_drafts')).results.some(r => r.sourceId === partial.id));
+        // Bounded batches remain usable for a large failure backlog.
+        const ids = Array.from({ length: 103 }, () => randomUUID());
+        psql(db, `insert into app.candidates(id,organization_id,full_name,identity_state,lifecycle) values ${ids.map(id => `('${id}','${ORG_B}','Retry volume','established','active')`).join(',')}; update app.profile_search_sources set status='failed',error_code='ATTEMPTS_EXHAUSTED' where source_id in(${ids.map(id => `'${id}'`).join(',')})`);
+        assert.deepEqual(await profileSearchAction(pool, owner, ORG_B, { action: 'retryIndex', scope: 'approved', readyOnly: false }), { ok: true, retried: 100, remainingFailed: 3 });
+        assert.deepEqual(await profileSearchAction(pool, owner, ORG_B, { action: 'retryIndex', scope: 'approved', readyOnly: false }), { ok: true, retried: 3, remainingFailed: 0 });
+    });
+    await t.test('private edit and index completion use consistent epoch-before-source locks', async () => {
+        await drain(); const d = await createTelegramDraft(pool, owner, ORG_B, { fields: { firstName: 'Concurrent', lastName: 'IndexEdit' }, sourceTitle: 'Synthetic lock order' });
+        await finish((await call('claim')).job); const j = (await call('claim')).job; assert.equal(j.kind, 'embed');
+        const a = await admin.connect();
+        try {
+            await a.query('begin');
+            await a.query('select e.* from app.profile_search_epochs e join app.telegram_drafts d on d.organization_id=e.organization_id and d.owner_user_id=e.owner_user_id where d.id=$1 for update of e', [d.id]);
+            const writing = finish(j).then(value => ({ value }), error => ({ error }));
+            let blocked = false;
+            for (let i = 0; i < 100 && !blocked; i++) {
+                const state = await admin.query("select exists(select 1 from pg_stat_activity where usename='search_test' and wait_event_type='Lock') blocked"); blocked = state.rows[0].blocked;
+                if (!blocked) await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            assert(blocked, 'index acknowledgement reaches a real epoch lock boundary');
+            await a.query("set local statement_timeout='3s'");
+            await a.query(`update app.telegram_drafts set fields=fields||'{"headline":"Edited concurrently"}'::jsonb where id=$1`, [d.id]);
+            await a.query('commit'); const outcome = await writing; assert.equal(outcome.error?.code, '40001', 'stale result is fenced rather than deadlocked');
+        } finally { await a.query('rollback').catch(() => {}); a.release(); }
+    });
     await t.test('actual database scoring timeout rolls back every result and persists terminal acknowledgement', async () => {
         const q = await profileSearchAction(pool, owner, ORG_B, { action: 'search', operationId: randomUUID(), query: 'force bounded timeout', scope: 'approved', readyOnly: false });
         const j = (await call('claim')).job;

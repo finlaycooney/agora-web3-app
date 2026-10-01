@@ -12,6 +12,11 @@ export function profileSearchScope(scope = 'approved') { if (!['approved', 'my_d
 export function profileSearchStaffInput(input) {
     object(input, ['action', 'operationId', 'query', 'scope', 'readyOnly', 'queryId']);
     if (input.action === 'cancel') return { action: 'cancel', queryId: assertUuid(input.queryId, 'queryId') };
+    if (input.action === 'retryIndex') {
+        object(input, ['action', 'scope', 'readyOnly']);
+        if (input.readyOnly != null && typeof input.readyOnly !== 'boolean') bad('readyOnly');
+        return { action: 'retryIndex', scope: profileSearchScope(input.scope), readyOnly: input.readyOnly ?? false };
+    }
     if (input.action !== 'search') bad('action');
     const query = typeof input.query === 'string' ? input.query.trim() : '';
     if (!query || !query.isWellFormed() || query.length > 2000 || Buffer.byteLength(query) > 8000 || /[\u0000]/u.test(query)) bad('query');

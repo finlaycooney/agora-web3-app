@@ -15,6 +15,7 @@ create table app.profile_search_sources (
 );
 create index profile_search_source_claim_idx on app.profile_search_sources(organization_id,owner_user_id,served_at,id) where status in('queued','planning','embedding');
 create index profile_search_source_exhausted_idx on app.profile_search_sources(organization_id,lease_expires_at) where attempts>=5 and status in('queued','planning','embedding');
+create index profile_search_source_retry_idx on app.profile_search_sources(organization_id,owner_user_id,id) where status='failed' and error_code in('EMBEDDING_UNAVAILABLE','WORKER_ERROR','ATTEMPTS_EXHAUSTED');
 create index profile_search_source_owner_idx on app.profile_search_sources(organization_id,owner_user_id,source_type,status);
 create table app.profile_search_chunks (
  source_id uuid not null references app.profile_search_sources(id) on delete cascade, ordinal integer not null check(ordinal between 0 and 255),
@@ -63,6 +64,13 @@ $$;
 create function app.profile_search_epoch_v1(p_org uuid,p_owner uuid) returns void language sql volatile set search_path=pg_catalog,app,pg_temp as $$
  insert into app.profile_search_epochs(organization_id,owner_user_id) values(p_org,p_owner) on conflict(organization_id,owner_user_id) do update set revision=app.profile_search_epochs.revision+1
 $$;
+-- Every index writer takes epoch locks before source locks, matching source
+-- triggers. Shared first, then the private owner: inference and exact ranking
+-- happen outside these short write-lock sections.
+create function app.profile_search_lock_v1() returns void language plpgsql volatile set search_path=pg_catalog,app,pg_temp as $$ begin
+ insert into app.profile_search_epochs(organization_id,owner_user_id) values(app.context_uuid_v1('app.organization_id'),null),(app.context_uuid_v1('app.organization_id'),app.context_uuid_v1('app.actor_id')) on conflict do nothing;
+ perform 1 from app.profile_search_epochs order by owner_user_id nulls first for update;
+end $$;
 create function app.profile_search_revision_v1(p_scope text) returns bigint language sql stable set search_path=pg_catalog,app,pg_temp as $$
  select coalesce(sum(revision),0)::bigint from app.profile_search_epochs where (p_scope<>'my_drafts' and owner_user_id is null) or (p_scope<>'approved' and owner_user_id=app.context_uuid_v1('app.actor_id'))
 $$;
@@ -137,19 +145,31 @@ create function app.profile_search_eligible_v1(p_scope text,p_ready boolean) ret
  select s.* from app.profile_search_sources s where s.status<>'retired' and ((s.source_type='candidate' and p_scope<>'my_drafts') or (s.source_type='draft' and p_scope<>'approved' and exists(select 1 from app.telegram_drafts d where d.id=s.source_id and d.status in('pending','snoozed','duplicate') and (not p_ready or (cardinality(app.telegram_missing_v1(d.fields,d.document))=0 and not exists(select 1 from app.telegram_extraction_proposals p where p.draft_id=d.id and p.status='pending'))))))
 $$;
 create function app.profile_search_coverage_v1(p_scope text,p_ready boolean) returns jsonb language sql stable set search_path=pg_catalog,app,pg_temp as $$
- select jsonb_build_object('eligible',count(*),'indexed',count(*) filter(where status='ready'),'pending',count(*) filter(where status in('queued','planning','embedding')),'failed',count(*) filter(where status='failed'),'corpusChanged',false) from app.profile_search_eligible_v1(p_scope,p_ready)
+ select jsonb_build_object('eligible',count(*),'indexed',count(*) filter(where status='ready'),'pending',count(*) filter(where status in('queued','planning','embedding')),'failed',count(*) filter(where status='failed'),'retryable',count(*) filter(where status='failed' and error_code in('EMBEDDING_UNAVAILABLE','WORKER_ERROR','ATTEMPTS_EXHAUSTED')),'corpusChanged',false) from app.profile_search_eligible_v1(p_scope,p_ready)
 $$;
 create function app.profile_search_expire_v1() returns void language plpgsql volatile set search_path=pg_catalog,app,pg_temp as $$ begin
  with expired as(update app.profile_search_queries set status='expired',query_text=null,embedding=null,receipt=null,receipt_digest=null,lease_token=null where expires_at<=now() and status<>'expired' returning id)
  delete from app.profile_search_results r using expired q where r.query_id=q.id;
 end $$;
 create function app.profile_search_action_v1(p jsonb) returns jsonb language plpgsql volatile security definer set search_path=pg_catalog,app,pg_temp as $$
-declare q app.profile_search_queries; digest bytea; org uuid:=app.context_uuid_v1('app.organization_id'); actor uuid:=app.context_uuid_v1('app.actor_id');
+declare q app.profile_search_queries; digest bytea; org uuid:=app.context_uuid_v1('app.organization_id'); actor uuid:=app.context_uuid_v1('app.actor_id'); retried integer:=0; remaining integer; source app.profile_search_sources;
 begin
  perform app.recruitment_actor_v1(array['candidates.read','candidates.write'],null,null,false);
  -- Owner row serializes replacement and idempotent submission, without an org UPDATE lock.
  perform 1 from app.organization_memberships where organization_id=org and user_id=actor for update;
  perform app.profile_search_expire_v1();
+ if p->>'action'='retryIndex' then
+ if coalesce(p->>'scope','') not in('approved','my_drafts','all') or jsonb_typeof(p->'readyOnly') is distinct from 'boolean' then raise exception 'Invalid retry scope' using errcode='22023'; end if;
+ perform app.profile_search_lock_v1();
+ -- Select the current eligible revision under its source lock; partial manifest
+ -- and vectors are durable and need not be regenerated after a temporary outage.
+ for source in select s.* from app.profile_search_sources s where s.status='failed' and s.error_code in('EMBEDDING_UNAVAILABLE','WORKER_ERROR','ATTEMPTS_EXHAUSTED') and s.id in(select e.id from app.profile_search_eligible_v1(p->>'scope',(p->>'readyOnly')::boolean)e) order by s.id for update skip locked limit 100 loop
+ update app.profile_search_sources set status=case when manifest_sha256 is null then 'queued' else 'embedding' end,attempts=0,error_code=null,lease_token=null,lease_worker_id=null,lease_expires_at=null,lease_kind=null,lease_ordinals=null,receipt_token=null,receipt_digest=null,receipt=null,available_at=now(),served_at=now() where id=source.id;
+ perform app.profile_search_epoch_v1(source.organization_id,source.owner_user_id); retried:=retried+1;
+ end loop;
+ select count(*) into remaining from app.profile_search_eligible_v1(p->>'scope',(p->>'readyOnly')::boolean) where status='failed' and error_code in('EMBEDDING_UNAVAILABLE','WORKER_ERROR','ATTEMPTS_EXHAUSTED');
+ return jsonb_build_object('ok',true,'retried',retried,'remainingFailed',remaining);
+ end if;
  if p->>'action'='cancel' then
  select * into q from app.profile_search_queries where id=(p->>'queryId')::uuid for update; if not found then raise exception 'Query unavailable' using errcode='P0002'; end if;
  update app.profile_search_queries set status='cancelled',embedding=null,lease_token=null where id=q.id and status in('queued','running'); return jsonb_build_object('ok',true);
@@ -172,7 +192,7 @@ begin
  if p_query is null then return app.profile_search_versions_v1()||jsonb_build_object('coverage',app.profile_search_coverage_v1(p_scope,p_ready),'workerAvailable',available); end if;
  select * into q from app.profile_search_queries where id=p_query; if not found then raise exception 'Query unavailable' using errcode='P0002'; end if;
  cv:=coalesce(q.coverage,app.profile_search_coverage_v1(q.scope,q.ready_only));
- cv:=cv||jsonb_build_object('corpusChanged',q.corpus_revision is not null and q.corpus_revision<>app.profile_search_revision_v1(q.scope));
+ cv:=cv||jsonb_build_object('corpusChanged',q.corpus_revision is not null and q.corpus_revision<>app.profile_search_revision_v1(q.scope),'retryable',(select count(*) from app.profile_search_eligible_v1(q.scope,q.ready_only) where status='failed' and error_code in('EMBEDDING_UNAVAILABLE','WORKER_ERROR','ATTEMPTS_EXHAUSTED')));
  records:='[]'; cursor:=null;
  if q.status='completed' then
  -- Paginate ranks before reading contact identifiers or constructing profile
@@ -200,7 +220,8 @@ begin
  update app.profile_search_queries set status='running',lease_token=q.lease_token,lease_worker_id=w,lease_expires_at=now()+interval '120 seconds',attempts=q.attempts where id=q.id returning * into q;
  return jsonb_build_object('job',app.profile_search_versions_v1()||jsonb_build_object('id',q.id,'kind','query','leaseToken',q.lease_token,'leaseExpiresAt',q.lease_expires_at,'query',q.query_text,'querySha256',q.query_sha256));
  end if;
- update app.profile_search_sources set status='failed',error_code='ATTEMPTS_EXHAUSTED',lease_token=null where status in('queued','planning','embedding') and attempts>=5 and (lease_expires_at is null or lease_expires_at<=now());
+ perform app.profile_search_lock_v1();
+ for s in update app.profile_search_sources set status='failed',error_code='ATTEMPTS_EXHAUSTED',lease_token=null where status in('queued','planning','embedding') and attempts>=5 and (lease_expires_at is null or lease_expires_at<=now()) returning * loop perform app.profile_search_epoch_v1(s.organization_id,s.owner_user_id); end loop;
  -- Bounded scan handles retired/missing legacy rows without holding an unbounded transaction.
  for attempt in 1..16 loop
  with shared as materialized(select id,served_at from app.profile_search_sources where owner_user_id is null and status in('queued','planning','embedding') and available_at<=now() and (lease_expires_at is null or lease_expires_at<=now() or lease_worker_id=w) order by served_at,id for update skip locked limit 1),
@@ -209,7 +230,7 @@ begin
  select source.* into s from app.profile_search_sources source join picks on picks.id=source.id order by picks.served_at,picks.id limit 1;
  if not found then return jsonb_build_object('job',null); end if;
  profile:=app.profile_search_profile_v1(s);
- if profile is null then update app.profile_search_sources set status='retired',projection_text=null,lease_token=null where id=s.id; delete from app.profile_search_chunks where source_id=s.id; continue; end if;
+ if profile is null then update app.profile_search_sources set status='retired',projection_text=null,lease_token=null where id=s.id; delete from app.profile_search_chunks where source_id=s.id; perform app.profile_search_epoch_v1(s.organization_id,s.owner_user_id); continue; end if;
  if s.projection_text is null then
  txt:=app.profile_search_text_v1(profile->'fields');
  if octet_length(txt)>65536 then update app.profile_search_sources set status='failed',error_code='SOURCE_TOO_LARGE' where id=s.id; perform app.profile_search_epoch_v1(s.organization_id,s.owner_user_id); continue; end if;
@@ -258,6 +279,7 @@ begin
  return jsonb_build_object('ok',true,'status','scoring');
  end if;
  if p->>'kind' not in('plan','embed') then raise exception 'Invalid kind' using errcode='22023'; end if;
+ perform app.profile_search_lock_v1();
  select * into s from app.profile_search_sources where id=(p->>'jobId')::uuid for update;
  if not found then raise exception 'Source unavailable' using errcode='P0002'; end if;
  if s.revision is distinct from (p->>'sourceRevision')::bigint or s.source_sha256 is distinct from p->>'sourceSha256' or s.status='retired' then raise exception 'Source changed' using errcode='40001'; end if;
@@ -329,6 +351,7 @@ begin
  terminal:=terminal or q.attempts>=5;
  update app.profile_search_queries set status=case when terminal then 'failed' else 'queued' end,error_code=code,lease_token=null,lease_expires_at=null,available_at=now()+make_interval(secs=>delay) where id=q.id;
  else
+ perform app.profile_search_lock_v1();
  select * into s from app.profile_search_sources where id=(p->>'jobId')::uuid for update;
  if not found or s.lease_kind is distinct from p->>'kind' or s.lease_token is distinct from (p->>'leaseToken')::uuid or s.lease_worker_id<>w or s.lease_expires_at<=now() then raise exception 'Source changed' using errcode='40001'; end if;
  terminal:=terminal or s.attempts>=5;

@@ -29,3 +29,9 @@ test('normalized vector shape, staged batch identity and query-bound pagination 
     const c = { queryId: randomUUID(), score: 0.7, sourceType: 'candidate', sourceId: randomUUID() }; const cursor = Buffer.from(JSON.stringify(c)).toString('base64url');
     assert.deepEqual(profileSearchCursor(cursor, c.queryId), c); assert.throws(() => profileSearchCursor(cursor, randomUUID()));
 });
+
+test('index retry accepts only explicit scope and readiness fields', () => {
+    assert.deepEqual(profileSearchStaffInput({ action: 'retryIndex', scope: 'my_drafts', readyOnly: true }), { action: 'retryIndex', scope: 'my_drafts', readyOnly: true });
+    assert.throws(() => profileSearchStaffInput({ action: 'retryIndex', scope: 'all', ownerUserId: randomUUID() }));
+    assert.throws(() => profileSearchStaffInput({ action: 'retryIndex', readyOnly: 'true' }));
+});
