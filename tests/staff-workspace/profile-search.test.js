@@ -147,6 +147,7 @@ test('Profile search separates keyword lookup, private scopes and asynchronous r
     const otherRegistered = (await otherRegisteredResponse.json()).result;
     const vector = first => [first, Math.sqrt(1 - first * first), ...Array(382).fill(0)];
     async function worker(action, data = {}, token = registered.token, expectedStatus = 200) {
+        if (action === 'claim') data = { capabilities: ['minilm-v1'], ...data };
         const response = await fetch(`${baseURL}/api/profile-search/worker/${action}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(data) });
         assert.equal(response.status, expectedStatus, await response.clone().text()); return response.json();
     }
@@ -182,6 +183,8 @@ test('Profile search separates keyword lookup, private scopes and asynchronous r
         await expect(page.getByLabel('Name/email lookup', { exact: true })).toBeVisible();
         await expect(page.getByRole('link', { name: 'Telegram intake', exact: true })).toBeVisible();
         await page.getByRole('link', { name: 'Search by meaning', exact: true }).click();
+        await expect(page.getByLabel('Include approved CV text', { exact: true })).toBeChecked();
+        await page.getByLabel('Include approved CV text', { exact: true }).uncheck();
         await expect(page.getByText(/The Mac search worker has not checked in recently/)).toBeVisible();
         await expect(page.getByText(/Coverage is incomplete/)).toBeVisible();
         const cancelled = await search('Private first query Solidity experience');

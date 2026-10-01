@@ -1482,16 +1482,12 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             (response) => response.url().includes('/api/staff/members')
                 && response.request().method() === 'POST' && response.ok(),
         );
-        // The success message appears before router.refresh() has finished its RSC
-        // response. Await that request too before handing the shared page to another case.
-        const directoryRefresh = page.waitForResponse(response =>
-            new URL(response.url()).pathname === '/staff/members'
-            && response.request().resourceType() === 'fetch' && response.ok());
         await page.getByRole('button', { name: 'Record invitation' }).click();
         await invited;
-        await directoryRefresh;
         await page.getByText(/Invitation recorded/).waitFor();
-        await page.getByText('Invited Synthetic').waitFor();
+        // Assert the refreshed directory instead of a particular RSC transport
+        // response. This row comes from server-loaded data, not an optimistic insert.
+        await expect(page.getByRole('row', { name: /Invited Synthetic/ })).toBeVisible();
         await page.waitForLoadState('networkidle');
         const directory = await page.getByRole('main').last().innerText();
         assert.doesNotMatch(directory, /email sent|invitation sent/i);

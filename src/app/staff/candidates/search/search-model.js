@@ -6,13 +6,17 @@ export function searchStatusLabel(status, workerAvailable) {
 }
 export function searchGuidance(code) {
     return ({
+        INDEX_CHANGED: 'Our search index was updated. Run this search again.',
+        CV_ACCESS_CHANGED: 'Your access to CV text changed. Previous results were cleared. Search profiles only, or start a new CV search after access is restored.',
+        CV_RESULTS_CHANGED: 'A CV used by this search changed or became unavailable. Previous results were cleared. Run the search again for current results.',
+        SEARCH_CAPACITY: 'CV search exceeds the supported search capacity. Search profiles only, or ask your administrator to review capacity.',
         WORKER_UNAVAILABLE: 'Keep the Mac search worker online, then retry this search.',
         EMBEDDING_UNAVAILABLE: 'The embedding service is unavailable. Check the Mac search worker before retrying.',
         INVALID_RESULT: 'The search worker returned an invalid result. Check the worker configuration before retrying.',
         INDEX_VERSION_MISMATCH: 'The search model and index versions do not match. Ask your administrator to finish reindexing.',
         ATTEMPTS_EXHAUSTED: 'The search stopped after repeated attempts. Check the Mac search worker, then retry.',
         SEARCH_TIMEOUT: 'The search exceeded its time limit. Try a narrower scope or contact your workspace administrator.',
-        SOURCE_TOO_LARGE: 'A profile exceeds the indexing limit. Ask your workspace administrator to review it.',
+        SOURCE_TOO_LARGE: 'A profile or CV exceeds the indexing limit. Ask your workspace administrator to review it.',
         WORKER_ERROR: 'The search worker could not finish this request. Check the Mac worker, then retry.',
         INPUT_TOO_LONG: 'Shorten the search description and try again.',
     })[code] || (code ? 'The search could not finish. Refresh its status or try again after checking the Mac search worker.' : '');
@@ -25,5 +29,11 @@ export function validResultHref(result) {
     return null;
 }
 export function hasIncompleteCoverage(coverage) {
-    return coverage.pending > 0 || coverage.failed > 0 || coverage.indexed < coverage.eligible;
+    return coverage.pending > 0 || coverage.failed > 0 || (coverage.fullyIndexed ?? coverage.indexed) < coverage.eligible;
 }
+export const searchInvalidated = code => ['CV_ACCESS_CHANGED', 'CV_RESULTS_CHANGED', 'INDEX_CHANGED'].includes(code);
+export function safeSearchSnapshot(snapshot) {
+    if (!searchInvalidated(snapshot.errorCode)) return snapshot;
+    return { ...snapshot, status: 'failed', results: [], nextAfter: null, capacity: null, coverage: { ...snapshot.coverage, cv: null } };
+}
+export function searchCvMode(scope, includeCv) { return scope !== 'my_drafts' && includeCv === true; }
