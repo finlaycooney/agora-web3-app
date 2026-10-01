@@ -223,14 +223,17 @@ test('staff can reject a match or merge candidates through the review page', asy
             .getByText('Shared email')).toBeVisible();
         await expect(page.getByRole('region', { name: 'Candidate B profile' })
             .getByText('Shared email')).toBeVisible();
+        const profileLink = page.getByRole('region', { name: 'Candidate A profile' })
+            .getByRole('link', { name: 'View profile' });
+        const profileHref = await profileLink.getAttribute('href');
         assert.ok([
             `/staff/candidates/${candidateA}`,
             `/staff/candidates/${candidateB}`,
-        ].includes(await page.getByRole('region', { name: 'Candidate A profile' })
-            .getByRole('link', { name: 'View profile' }).getAttribute('href')));
-        await page.getByRole('region', { name: 'Candidate A profile' })
-            .getByRole('link', { name: 'View profile' }).click();
-        await expect(page.getByRole('dialog', { name: 'Review Candidate One' }))
+        ].includes(profileHref));
+        await profileLink.click();
+        const profileName = profileHref === `/staff/candidates/${candidateA}`
+            ? 'Review Candidate One' : 'Review Candidate Two';
+        await expect(page.getByRole('dialog', { name: profileName }))
             .toBeVisible({ timeout: 20_000 });
         await expect(page).toHaveURL(`${baseURL}/staff/candidates/duplicates`);
         await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
