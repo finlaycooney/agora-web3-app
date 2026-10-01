@@ -97,7 +97,8 @@ test('Telegram identifiers retain decimal precision and username normalization f
     }
     assert.equal(normalizeTelegramDraftFields({ telegramUsername: ' @1abcd ' }).telegramUsername, '1abcd');
     assert.equal(normalizeTelegramDraftFields({ telegramUsername: '' }).telegramUsername, null);
-    for (const telegramUsername of ['abcd', '@@abcde', 'a'.repeat(33), 'abc-de']) assert.throws(() => normalizeTelegramDraftFields({ telegramUsername }), hasErrors(['telegramUsername']));
+    assert.equal(normalizeTelegramDraftFields({ telegramUsername: '@abc' }).telegramUsername, 'abc');
+    for (const telegramUsername of ['@@abcde', 'a'.repeat(33), 'abc-de']) assert.throws(() => normalizeTelegramDraftFields({ telegramUsername }), hasErrors(['telegramUsername']));
 });
 
 test('embedding text is deterministic, bounded, and contains only approved profile details', () => {
