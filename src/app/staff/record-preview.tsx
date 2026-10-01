@@ -78,12 +78,15 @@ const displayLabel = (value: string) => jobFieldLabels[value]
 
 function CandidatePreview({ record }: { record: CandidateRecord }) {
     const { candidate, applications, documents, notes, capabilities } = record;
+    const hasViewableDocument = capabilities.downloadDocuments && documents.some((document) =>
+        document.lifecycle === 'active' && document.scanState !== 'infected'
+        && /\.(pdf|docx)$/i.test(document.filename));
     const email = candidate.email ?? record.identifiers.find((item) => item.kind === 'email')?.value;
     const professionalUrl = candidate.professionalUrl
         ?? record.identifiers.find((item) => item.kind === 'professional_url')?.value;
     const otherEmails = record.identifiers.filter((item) => item.kind === 'email'
         && item.value.toLowerCase() !== email?.toLowerCase());
-    return <Tabs defaultValue="overview" className="space-y-4">
+    return <Tabs defaultValue={hasViewableDocument ? 'documents' : 'overview'} className="space-y-4">
         <TabsList aria-label="Candidate preview sections" className="flex flex-wrap">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="applications">Applications <Badge variant="secondary">{applications.length}</Badge></TabsTrigger>

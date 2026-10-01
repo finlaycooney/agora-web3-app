@@ -147,6 +147,11 @@ test('staff previews records in place and opens CV content', async (t) => {
             const response = await route.fetch();
             const payload = await response.json();
             payload.result.documents.push({
+                documentId: 'aaaa1111-2222-4222-8222-222222222222',
+                filename: 'Supporting.pdf', purpose: 'other', lifecycle: 'active',
+                scanState: 'clean', sizeBytes: 256, receivedAt: new Date().toISOString(),
+            });
+            payload.result.documents.push({
                 documentId: 'bbbbbbbb-2222-4222-8222-222222222222',
                 filename: 'Synthetic.docx', purpose: 'cv', lifecycle: 'active',
                 scanState: 'clean', sizeBytes: 256, receivedAt: new Date().toISOString(),
@@ -169,8 +174,10 @@ test('staff previews records in place and opens CV content', async (t) => {
         });
         await candidateLink.click();
         const documentPreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
-        await documentPreview.getByRole('tab', { name: /Documents/ }).click();
-        await documentPreview.getByRole('button', { name: 'Synthetic.docx' }).click();
+        await expect(documentPreview.getByRole('tab', { name: /Documents/ }))
+            .toHaveAttribute('data-state', 'active');
+        await expect(documentPreview.getByRole('button', { name: 'Synthetic.docx' }))
+            .toHaveAttribute('aria-pressed', 'true');
         await expect(documentPreview.getByText('Synthetic extracted resume text'))
             .toBeVisible({ timeout: 20_000 });
         await documentPreview.getByRole('button', { name: 'Synthetic.pdf' }).click();
