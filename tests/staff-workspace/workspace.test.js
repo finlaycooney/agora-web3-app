@@ -103,14 +103,8 @@ const relativeLuminance = ({ r, g, b }) =>
     0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
 
 const gotoStaff = async (page, url) => {
-    const summaryFetch = page.waitForResponse(
-        (response) => response.url().includes('/api/staff/workspace')
-            && response.request().method() === 'GET',
-        { timeout: 90_000 },
-    );
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    const summary = await summaryFetch;
-    assert.equal(summary.status(), 200, 'Workspace summary request failed');
+    await page.getByRole('main').last().waitFor();
     await page.waitForLoadState('networkidle');
 };
 
@@ -397,7 +391,20 @@ test('staff workspace end-to-end in a real browser', async (t) => {
     page.setDefaultTimeout(90_000);
 
     await runCase('overview renders live metrics, tasks, review queue and clients hiring', async () => {
-        await gotoStaff(page, `${baseURL}/staff`);
+        const summaryRequests = [];
+        const trackSummary = (request) => {
+            if (new URL(request.url()).pathname === '/api/staff/workspace') {
+                summaryRequests.push(request.url());
+            }
+        };
+        page.on('request', trackSummary);
+        try {
+            await gotoStaff(page, `${baseURL}/staff`);
+            assert.equal(summaryRequests.length, 0,
+                'fresh server summary must not be fetched again during hydration');
+        } finally {
+            page.off('request', trackSummary);
+        }
         await page.getByRole('heading', { name: 'Overview', level: 1 }).waitFor();
 
         await page.getByRole('link', { name: /^Candidates 1$/ }).waitFor();
@@ -440,12 +447,30 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 && response.request().method() === 'POST'
                 && response.ok(),
         );
+        await page.waitForLoadState('networkidle');
+        const redundantReads = [];
+        const trackCompletion = (request) => {
+            const url = new URL(request.url());
+            if (request.method() === 'GET' && (
+                url.pathname === '/api/staff/tasks'
+                || url.pathname === '/api/staff/recruitment/context'
+                || (url.pathname === '/staff' && url.searchParams.has('_rsc'))
+            )) redundantReads.push(request.url());
+        };
+        page.on('request', trackCompletion);
         let posted = taskPosts();
-        await todo.getByRole('checkbox', {
-            name: 'Mark Synthetic browser task complete',
-        }).click();
-        await posted;
-        await todo.getByText('Synthetic browser task').waitFor({ state: 'detached' });
+        try {
+            await todo.getByRole('checkbox', {
+                name: 'Mark Synthetic browser task complete',
+            }).click();
+            await posted;
+            await todo.getByText('Synthetic browser task').waitFor({ state: 'detached' });
+            await page.waitForLoadState('networkidle');
+            assert.deepEqual(redundantReads, [],
+                'task completion must not reload tasks, recruitment context or the page');
+        } finally {
+            page.off('request', trackCompletion);
+        }
 
         let reloadFetch = page.waitForResponse(
             (response) => response.url().includes('/api/staff/tasks?')
@@ -495,6 +520,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await page.goto(`${baseURL}/staff/jobs`, {
                 waitUntil: 'domcontentloaded',
             });
+            await page.waitForLoadState('networkidle');
+            await page.evaluate(() => window.dispatchEvent(new Event('focus')));
             await failedRefresh;
             await page.getByRole('button', {
                 name: 'Workspace updates unavailable',
@@ -662,11 +689,10 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByText('Synthetic Browser Client').first().waitFor();
 
         await page.reload({ waitUntil: 'domcontentloaded' });
-        const body = await page.getByRole('main').last().innerText();
-        assert.match(body, /Synthetic Browser Client/);
-        assert.match(body, /Casey Example/);
-        await expect(page.getByRole('list', { name: 'Client social links' }).getByRole('link'))
-            .toHaveAttribute('href', 'https://linkedin.com/company/synthetic');
+        const body = page.getByRole('main').last();
+        await expect(body).toContainText('Synthetic Browser Client');
+        await expect(body).toContainText('Casey Example');
+        await expect(body).toContainText('LinkedIn · https://linkedin.com/company/synthetic');
         await expect(page.getByRole('combobox', { name: 'Social link 1 platform' }))
             .toContainText('LinkedIn');
         await expect(page.locator('#social-url-0'))
@@ -1279,12 +1305,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await option.click();
         await stagePosted;
-        const stageFetch = page.waitForResponse(
-            (response) => response.url().includes('/api/staff/workspace')
-                && response.request().method() === 'GET',
-        );
         await page.reload({ waitUntil: 'domcontentloaded' });
-        await stageFetch;
         const reloaded = page.getByRole('combobox', {
             name: 'Stage for application AG-AAAA00000001',
         });
@@ -1546,7 +1567,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await context.addCookies(sessionOnlyCookies);
             const pending = await context.newPage();
             const response = await pending.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
-            assert.match(pending.url(), /\/staff\/mfa\/verify/);
+            await expect(pending).toHaveURL(/\/staff\/mfa\/verify/);
             assert.ok(response === null || response.status() < 400);
         } finally {
             await context.close();
@@ -2340,7 +2361,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await context.addCookies(staffCookies);
             const denied = await context.newPage();
             await denied.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
-            assert.match(denied.url(), /\/staff\/(no-access|signin)/);
+            await expect(denied).toHaveURL(/\/staff\/(no-access|sign-in)/);
         } finally {
             await context.close();
         }
