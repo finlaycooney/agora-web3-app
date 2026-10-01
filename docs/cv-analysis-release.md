@@ -13,7 +13,8 @@ apply. Human edits, including cleared fields, are protected from late results.
 
 ## Review and privacy
 
-Analysis and its evidence remain private to the connecting recruiter. Unfinished requested analysis and pending field suggestions block approval on
+Analysis and its evidence remain private to the connecting recruiter. Unfinished
+requested analysis and pending field suggestions block approval on
 the server as well as in the interface. Recruiters can cancel unfinished analysis
 and resolve field suggestions. Complete drafts use ordinary candidate approval;
 there is no second mandatory confirmation for extracted text.
