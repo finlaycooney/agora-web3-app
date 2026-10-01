@@ -92,7 +92,12 @@ export function PdfDocumentPreview({
         }).then(async (response) => {
             if (!response.ok) throw new Error('This PDF could not be previewed.');
             const data = new Uint8Array(await response.arrayBuffer());
-            const pdfjs = await import('pdfjs-dist/webpack.mjs');
+            const pdfjs = await import('pdfjs-dist');
+            // Let PDF.js own the worker and complete its readiness handshake.
+            // The webpack helper supplies a shared port and skips that handshake.
+            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+                'pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url,
+            ).toString();
             if (controller.signal.aborted) return;
             loadingTask = pdfjs.getDocument({ data });
             const loaded = await loadingTask.promise;
