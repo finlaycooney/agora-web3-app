@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { candidateUploadReferenced } from './candidate-upload-operations.js';
 export const CANDIDATE_CV_BUCKET = 'cv-submissions';
-export function createCandidateUploadStorage() {
+export function createCandidateUploadStorage({ fetch: fetchOverride } = {}) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+    return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, ...(fetchOverride ? { global: { fetch: fetchOverride } } : {}) }) : null;
 }
 export function candidateCvObjectKey(organizationId, candidateId, extension) {
     return `staff/${organizationId}/${candidateId}/${randomUUID()}.${extension}`;
