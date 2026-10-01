@@ -1,4 +1,4 @@
-export const historyViews = { all: 'All chats', selected: 'Selected', active: 'Importing', paused: 'Needs attention' };
+export const historyViews = { all: 'All chats', selected: 'Selected', active: 'Importing / syncing', paused: 'Needs attention' };
 const activeStatuses = new Set(['queued', 'leased', 'waiting']);
 const pausedStatuses = new Set(['paused', 'capacity_paused', 'failed']);
 
@@ -23,6 +23,7 @@ export function importGuidance(job) {
 export function importActions(chat) {
     const status = chat.import?.status;
     if (!status) return [{ action: 'select', selected: true, label: 'Import full history' }];
+    if (chat.sync?.enabled && status === 'completed') return [{ action: 'pause', label: 'Pause sync' }, { action: 'cancel', label: 'Deselect chat' }];
     if (activeStatuses.has(status)) return [{ action: 'pause', label: 'Pause' }, { action: 'cancel', label: 'Cancel import' }];
     if (pausedStatuses.has(status) || status === 'cancelled') return [
         { action: 'resume', label: 'Resume import' },
@@ -45,4 +46,9 @@ export function historyPollingDelay(snapshot) {
 export function byteLabel(bytes) {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${Math.ceil(bytes / 1024)} KB`;
+}
+
+export function syncStatus(sync) {
+    if (!sync) return '';
+    return ({ off: 'Sync off', waiting_for_history: 'Sync starts after history import', reconnect_required: 'Reconnect Telegram to sync', worker_offline: 'Mac offline · Sync resumes when it returns', up_to_date: 'Sync up to date', queued: 'Sync queued', syncing: 'Syncing new messages', waiting: 'Sync waiting', paused: 'Sync paused', failed: 'Sync needs attention', capacity_paused: 'Sync capacity reached' })[sync.status] || 'Sync needs attention';
 }

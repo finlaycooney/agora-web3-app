@@ -263,3 +263,23 @@ test('completion 5xx remains uncertain and never drops or defers its pending pag
   assert.equal(f.vault.loadHistory(connectionId, f.context.accountUserId, 'pending-page').rejectionCode, undefined);
   assert.equal(f.calls.filter((call) => call.action === 'defer').length, 0);
 });
+
+test('incremental SDK reads preserve an exclusive checkpoint and a frozen upper bound', async () => {
+  const f = sdkFixture();
+  const cursor = { beforeMessageId: null, upperMessageId: null, afterMessageId: '10' };
+  const response = ids => ({ users: [], chats: [], messages: ids.map(id => ({ id, className: 'Message', date: 1700000000, peerId: { chatId: 5n }, message: `New message ${id}` })) });
+  f.queue.push(response([14, 13]));
+  const first = await f.adapter.history({ ...f.common, peer: { kind: 'chat', id: '5' }, cursor });
+  assert.equal(f.calls[0].request.minId, 10); assert.equal(f.calls[0].request.maxId, 0);
+  assert.deepEqual(first.nextCursor, { beforeMessageId: '13', upperMessageId: '14', afterMessageId: '10' });
+  f.queue.push(response([12, 11]));
+  const second = await f.adapter.history({ ...f.common, peer: { kind: 'chat', id: '5' }, cursor: first.nextCursor });
+  assert.equal(f.calls[1].request.offsetId, 13); assert.equal(f.calls[1].request.maxId, 15); assert.equal(f.calls[1].request.minId, 10);
+  assert.equal(second.nextCursor.upperMessageId, '14');
+  f.queue.push(response([]));
+  assert.deepEqual(await f.adapter.history({ ...f.common, peer: { kind: 'chat', id: '5' }, cursor: second.nextCursor }), { records: [], nextCursor: second.nextCursor, done: true });
+  for (const ids of [[10], [15]]) {
+    f.queue.push(response(ids));
+    await assert.rejects(f.adapter.history({ ...f.common, peer: { kind: 'chat', id: '5' }, cursor: { beforeMessageId: null, upperMessageId: '14', afterMessageId: '10' } }), { code: 'PEER_UNAVAILABLE' });
+  }
+});

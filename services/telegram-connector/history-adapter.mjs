@@ -114,14 +114,16 @@ export function createHistoryAdapter({ client, Api }) {
       return { records, nextCursor: boundary, done: false };
     },
     async history({ peer, cursor, limit, readPeer, cachePeer, accountUserId, signal }) {
-      const response = await invoke(new Api.messages.GetHistory({ peer: inputPeer(peer, readPeer), offsetId: cursor.beforeMessageId == null ? 0 : Number(cursor.beforeMessageId), offsetDate: 0, addOffset: 0, limit, maxId: 0, minId: 0, hash: 0n }), signal);
+      // Exclusive ID bounds: https://core.telegram.org/method/messages.getHistory
+      // The first page freezes the upper ID; arrivals during paging wait for the next pass.
+      const response = await invoke(new Api.messages.GetHistory({ peer: inputPeer(peer, readPeer), offsetId: cursor.beforeMessageId == null ? 0 : Number(cursor.beforeMessageId), offsetDate: 0, addOffset: 0, limit, maxId: cursor.afterMessageId != null && cursor.upperMessageId != null && Number(cursor.upperMessageId) < 2147483647 ? Number(cursor.upperMessageId) + 1 : 0, minId: Number(cursor.afterMessageId ?? 0), hash: 0n }), signal);
       if (!Array.isArray(response.messages)) throw new HistoryReadError('TELEGRAM_UNAVAILABLE');
       const entities = entitiesOf(response, cachePeer, new Set([peerKey(peer)]));
       if (!response.messages.length) return { records: [], nextCursor: cursor, done: true };
       const records = response.messages.map((message) => messageRecord(message, entities, accountUserId));
       const ids = records.map((record) => Number(record.messageId));
-      if (new Set(ids).size !== ids.length || ids.some((id) => cursor.beforeMessageId != null && id >= Number(cursor.beforeMessageId))) throw new HistoryReadError('PEER_UNAVAILABLE');
-      return { records, nextCursor: { beforeMessageId: String(Math.min(...ids)), upperMessageId: cursor.upperMessageId ?? String(Math.max(...ids)) }, done: false };
+      if (new Set(ids).size !== ids.length || ids.some((id) => (cursor.beforeMessageId != null && id >= Number(cursor.beforeMessageId)) || (cursor.afterMessageId != null && (id <= Number(cursor.afterMessageId) || (cursor.upperMessageId != null && id > Number(cursor.upperMessageId)))))) throw new HistoryReadError('PEER_UNAVAILABLE');
+      return { records, nextCursor: { ...(cursor.afterMessageId == null ? {} : { afterMessageId: cursor.afterMessageId }), beforeMessageId: String(Math.min(...ids)), upperMessageId: cursor.upperMessageId ?? String(Math.max(...ids)) }, done: false };
     },
   };
 }

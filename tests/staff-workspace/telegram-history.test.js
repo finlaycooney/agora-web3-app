@@ -232,6 +232,22 @@ test('Telegram history UI discovers, selects and resumes private full-history im
         await refresh();
         await expect(page.getByText('History imported', { exact: true })).toBeVisible();
         await expect(page.getByText(/CV files are not downloaded or validated/)).toBeVisible();
+        await expect(page.getByText('Sync up to date', { exact: true })).toBeVisible();
+        job = (await historyWorker('claim')).job;
+        assert.deepEqual(job.cursor, { beforeMessageId: null, upperMessageId: null, afterMessageId: '3' });
+        await completePage(job, [{ ...records[0], messageId: '4', text: 'New message after history' }], { beforeMessageId: '4', upperMessageId: '4', afterMessageId: '3' });
+        job = (await historyWorker('claim')).job;
+        await completePage(job, [], job.cursor, true);
+        await refresh();
+        await expect(page.getByText('4 messages stored', { exact: true })).toBeVisible();
+        await expect(page.getByText(/Last synced:/)).toBeVisible();
+        await clickAction(page.getByRole('button', { name: 'Pause sync', exact: true }));
+        await expect(page.getByText('Sync paused', { exact: true })).toBeVisible();
+        await clickAction(page.getByRole('button', { name: 'Resume import', exact: true }));
+        job = (await historyWorker('claim')).job;
+        await completePage(job, [], job.cursor, true);
+        await refresh();
+
 
         mkdirSync(join(root, 'test-results'), { recursive: true });
         await page.screenshot({ path: join(root, 'test-results/staff-workspace-telegram-history-imported.png'), fullPage: true });
@@ -243,12 +259,12 @@ test('Telegram history UI discovers, selects and resumes private full-history im
         await disconnectAccount();
         await refresh();
         await expect(page.getByRole('heading', { name: 'Connect Telegram to import chats' })).toBeVisible();
-        await expect(page.getByText('3 messages stored', { exact: true })).toBeVisible();
+        await expect(page.getByText('4 messages stored', { exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Deselect chat', exact: true })).toBeDisabled();
         accountUserId = '987654321';
         await connectAccount();
         await refresh();
-        await expect(page.getByText('3 messages stored', { exact: true })).toBeVisible();
+        await expect(page.getByText('4 messages stored', { exact: true })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Private storage across your accounts' })).toBeVisible();
         await expect(page.locator('tbody tr')).toHaveCount(0);
         await expect(page.getByText('Synthetic chat 01', { exact: true })).toHaveCount(0);
