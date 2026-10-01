@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -15,6 +15,8 @@ import { telegramConnectionAction, telegramConnectorOperation } from '../../src/
 import { telegramHistoryAction, telegramHistoryStatus, telegramHistoryWorkerOperation } from '../../src/lib/telegram-history-operations.js';
 import { telegramExtractionAction, telegramExtractionStatus, telegramExtractionWorkerOperation } from '../../src/lib/telegram-extraction-operations.js';
 import { getTelegramDraft, decideTelegramDraft } from '../../src/lib/telegram-intake-operations.js';
+import { telegramCvAction, telegramCvWorkerOperation, uploadTelegramCv } from '../../src/lib/telegram-cv-operations.js';
+import { createSyntheticPdf } from '../support/cv-fixtures.js';
 import { createProvider } from '../../services/telegram-extraction-worker/provider.mjs';
 import { createExtractionWorker } from '../../services/telegram-extraction-worker/worker.mjs';
 import { createPendingStore } from '../../services/telegram-extraction-worker/store.mjs';
@@ -71,8 +73,10 @@ test('full history catch-up and reviewed cleanup preserve encrypted completion r
   await telegramHistoryAction(pool, owner, org, { action: 'select', chatId: chat.id, expectedVersion: chat.version, selected: true });
   const importJob = (await history('claim')).job;
   const largeMessage = message(3);
+  const cvBytes = createSyntheticPdf();
   largeMessage.text = 'I am Synthetic Candidate. My email is synthetic@example.test. ' + '\u0001'.repeat(32000) + ' résumé 中文 🚀';
   largeMessage.attachments = Array.from({ length: 16 }, (_, i) => ({ id: String(i + 1), kind: 'document', filename: `${'履'.repeat(190)}-${i}.pdf`, mimeType: 'application/pdf', sizeBytes: 100 }));
+  largeMessage.attachments[0] = { ...largeMessage.attachments[0], filename: 'Synthetic CV.pdf', sizeBytes: cvBytes.length };
   const firstPage = { jobId: importJob.id, jobLeaseToken: importJob.leaseToken, pageId: randomUUID(), fromCursor: importJob.cursor,
     nextCursor: { beforeMessageId: '3', upperMessageId: '3' }, done: false, records: [largeMessage] };
   await history('complete', firstPage);
@@ -101,7 +105,7 @@ test('full history catch-up and reviewed cleanup preserve encrypted completion r
       const first = source.messages[0]; const quote = 'I am Synthetic Candidate. My email is synthetic@example.test.';
       const fact = (field, value) => ({ field, value, evidence: [{ messageId: first.messageId, quote }] });
       const result = { subjects: providerCalls === 1 ? [{ key: 'candidate', identity: { kind: 'telegram_sender', messageId: first.messageId, quote },
-        facts: [fact('firstName', 'Synthetic'), fact('lastName', 'Candidate'), fact('primaryEmail', 'synthetic@example.test')], attachments: [] }] : [] };
+        facts: [fact('firstName', 'Synthetic'), fact('lastName', 'Candidate'), fact('primaryEmail', 'synthetic@example.test')], attachments: [{ messageId: first.messageId, attachmentIndex: 0 }] }] : [] };
       response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }] }));
     } catch { response.writeHead(500); response.end('Synthetic provider assertion failed'); }
   });
@@ -128,13 +132,27 @@ test('full history catch-up and reviewed cleanup preserve encrypted completion r
   assert.equal((await maintenance()).batchesPurged, 0, 'Source context is retained without a release decision');
   await telegramExtractionAction(pool, owner, org, { action: 'sourceRetention', jobId, expectedSourceVersion: batch.sourceRetention.version, mode: 'release_after_review' });
   assert.equal((await maintenance()).batchesPurged, 0, 'An unresolved draft holds released sources');
-  const draft = await getTelegramDraft(pool, owner, org, committed.draftIds[0]);
-  await decideTelegramDraft(pool, owner, org, draft.id, { action: 'discard', expectedVersion: draft.version, operationId: randomUUID() });
+  let draft = await getTelegramDraft(pool, owner, org, committed.draftIds[0]);
+  assert.equal(draft.fields.secondaryEmails, undefined, 'This profile reaches approval without a human edit that normalizes optional fields');
+  await telegramCvAction(pool, owner, org, { action: 'retrieve', draftId: draft.id, expectedDocumentRevision: draft.documentRevision, extractionJobId: jobId, messageId: '3', attachmentIndex: 0 });
+  const cvJob = (await telegramCvWorkerOperation(workerPool, token, 'claim', proof)).job;
+  const uploadProof = { ...proof, jobId: cvJob.id, jobLeaseToken: cvJob.leaseToken, sourceDigest: cvJob.sourceDigest, sha256: createHash('sha256').update(cvBytes).digest('hex'), sizeBytes: cvBytes.length };
+  let uploads = 0; const objects = new Map();
+  const storage = { storage: { from: () => ({ upload: async (key, bytes) => { uploads++; objects.set(key, Buffer.from(bytes)); return { data: { path: key } }; } }) } };
+  const cvReceipt = await uploadTelegramCv(workerPool, token, uploadProof, async () => cvBytes, storage);
+  draft = await getTelegramDraft(pool, owner, org, draft.id);
+  const approved = await decideTelegramDraft(pool, owner, org, draft.id, { action: 'approve', expectedVersion: draft.version, operationId: randomUUID() });
+  assert.equal(approved.status, 'approved');
   const purged = await maintenance(); assert.equal(purged.batchesPurged, 1); assert.equal(purged.messagesPurged, 1); assert.ok(purged.bytesFreed > 49152);
   batch = await telegramExtractionStatus(pool, owner, org, { jobId });
   assert.equal(batch.source, null); assert.equal(batch.sourceRetention.state, 'purged');
   assert.equal((await maintenance()).bytesFreed, 0, 'Repeated cleanup cannot free quota twice');
-  assert.equal((await getTelegramDraft(pool, owner, org, draft.id)).fields.primaryEmail, 'synthetic@example.test');
+  const closed = await getTelegramDraft(pool, owner, org, draft.id);
+  assert.equal(closed.status, 'approved'); assert.deepEqual(closed.fields, {});
+  assert.equal(psql(db, `select contact_email from app.candidates where id='${approved.candidateId}'`).trim(), 'synthetic@example.test');
+  assert.equal(objects.size, 1, 'Approved CV bytes survive raw conversation cleanup');
+  assert.deepEqual(await uploadTelegramCv(workerPool, token, uploadProof, async () => { throw new Error('Completed CV replay must not reread bytes after purge'); }, storage), cvReceipt);
+  assert.equal(uploads, 1);
 
   // The Mac restarts after host cleanup, still carrying the encrypted completion
   // whose acknowledgement was lost. It must replay without re-reading the model.
