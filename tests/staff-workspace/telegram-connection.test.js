@@ -133,9 +133,11 @@ test('Telegram browser connects with QR and encrypted 2FA, waits for logout ackn
         const password = page.getByLabel('Telegram two-step verification password', { exact: true });
         await expect(password).toBeVisible();
         await password.fill('synthetic browser secret 🔒');
-        const submission = page.waitForRequest(request => request.url() === connectionURL && request.method() === 'POST' && request.postDataJSON()?.action === 'password');
+        const submission = page.waitForResponse(response => response.url() === connectionURL && response.request().postDataJSON()?.action === 'password');
         await page.getByRole('button', { name: 'Continue securely' }).click();
-        const submitted = (await submission).postDataJSON();
+        const submissionResponse = await submission;
+        assert.equal(submissionResponse.status(), 200);
+        const submitted = submissionResponse.request().postDataJSON();
         assert.deepEqual(Object.keys(submitted).sort(), ['action', 'challengeId', 'ciphertext', 'connectionId', 'generation']);
         assert.equal(JSON.stringify(submitted).includes('synthetic browser secret'), false);
         assert.equal(Buffer.from(submitted.ciphertext, 'base64').length, 256);
