@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
@@ -23,6 +24,8 @@ import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
  *   | StaffGateResolved} StaffGateResult
  */
 
+// React cache shares this result only within one server render. API mutations
+// continue using their uncached staffApiContext and fresh transaction checks.
 // One server-side gate for every staff surface. Stages:
 //   signed-out   → no session or non-Google provider
 //   unresolved   → Google identity with no active staff membership
@@ -30,7 +33,7 @@ import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 //   mfa-pending  → active credential without a valid staff_mfa proof
 //   verified     → full gate satisfied (session + principal + MFA proof)
 /** @returns {Promise<StaffGateResult>} */
-export async function staffGate() {
+async function resolveStaffGate() {
     const session = await getServerSession(authOptions);
     const identity = staffIdentityFromSession(session);
     if (!identity) {
@@ -82,6 +85,8 @@ export async function staffGate() {
     );
     return { stage: proof ? 'verified' : 'mfa-pending', ...base };
 }
+
+export const staffGate = cache(resolveStaffGate);
 
 // Enforces the full gate for data-bearing staff pages; throws redirect() for
 // any stage that is not 'verified'.
