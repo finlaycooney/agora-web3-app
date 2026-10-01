@@ -13,7 +13,7 @@ import { withStaffTransaction } from '../../src/lib/staff-authorization.js';
 import { telegramExtractionAction, telegramExtractionStatus, telegramExtractionWorkerOperation } from '../../src/lib/telegram-extraction-operations.js';
 import { getTelegramDraft, decideTelegramDraft } from '../../src/lib/telegram-intake-operations.js';
 const dir = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
-const migrations = readdirSync(dir).filter(f => f >= '20260922090000_foundation_roles.sql' && f <= '20261002190000_telegram_retention.sql' && f.endsWith('.sql')).sort();
+const migrations = readdirSync(dir).filter(f => f >= '20260922090000_foundation_roles.sql' && f <= '20261002210000_cv_search.sql' && f.endsWith('.sql')).sort();
 const identity = subject => ({ provider: 'google', issuer: 'https://accounts.google.com', subject });
 const quoteSql = text => `'${String(text).replaceAll("'", "''")}'`;
 const message = (id, text, extra = {}) => ({ messageId: String(id), kind: 'message', sentAt: '2026-01-01T00:00:00.000Z', editedAt: null, sender: { peer: { kind: 'user', id: '777' }, username: 'ali', displayName: 'Alice Smith' }, replyToMessageId: null, forwardedFrom: null, text, attachments: [], ...extra });
