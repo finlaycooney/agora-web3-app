@@ -10,13 +10,13 @@ import { Button } from '@/components/staff-ui/button';
 import { Card } from '@/components/staff-ui/card';
 import { Input } from '@/components/staff-ui/input';
 import { Label } from '@/components/staff-ui/label';
-import { connectionError, encryptTelegramPassword, pollingDelay, usableQr } from './connection-model';
+import { connectionError, encryptTelegramPassword, pollingDelay, requiresWorkerDisconnect, usableQr } from './connection-model';
 
 type Worker = { id: string; name: string; publicKeySpki: string; online: boolean; lastSeenAt: string | null };
 type Connection = {
     id: string; workerId: string; generation: number; status: string; challengeId: string;
     qrLoginUrl: string | null; qrExpiresAt: string | null; passwordHint: string | null;
-    passwordPending: boolean; errorCode: string | null; cancelledBeforeStart?: boolean;
+    passwordPending: boolean; errorCode: string | null; cancelledBeforeStart?: boolean; workerPinned?: boolean;
     profile: { telegramUserId: string; username: string | null; displayName: string } | null;
 };
 type Snapshot = { workers: Worker[]; connection: Connection | null };
@@ -57,6 +57,7 @@ export function TelegramConnectionBrowser() {
     const worker = snapshot?.workers.find(item => item.id === connection?.workerId);
     const active = connection && !['failed', 'disconnected'].includes(connection.status);
     const qrAvailable = usableQr(connection, now);
+    const workerChangeBlocked = requiresWorkerDisconnect(connection, selectedWorker);
 
     const load = useCallback(async () => {
         if (mutating.current || document.hidden) return;
@@ -68,7 +69,9 @@ export function TelegramConnectionBrowser() {
             const result = await request({ signal: controller.signal });
             if (!controller.signal.aborted && revision === generation.current && mounted.current) {
                 setSnapshot(result);
-                setSelectedWorker(current => result.workers.some(item => item.id === current) ? current : result.workers.find(item => item.online)?.id || result.workers[0]?.id || '');
+                setSelectedWorker(current => result.workers.some(item => item.id === current) ? current
+                    : result.connection?.workerPinned && result.workers.some(item => item.id === result.connection?.workerId) ? result.connection.workerId
+                        : result.workers.find(item => item.online)?.id || result.workers[0]?.id || '');
                 if (!mutationError.current) setError('');
             }
         } catch (failure) {
@@ -169,7 +172,8 @@ export function TelegramConnectionBrowser() {
             {snapshot && !active ? <div className="space-y-3">
                 {snapshot.workers.length ? <><Label htmlFor="telegram-worker">Mac connector</Label><select id="telegram-worker" value={selectedWorker} onChange={event => setSelectedWorker(event.target.value)} disabled={busy || accessDenied} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm">{snapshot.workers.map(item => <option key={item.id} value={item.id}>{item.name} — {item.online ? 'Online' : 'Offline'}</option>)}</select>
                     {!snapshot.workers.find(item => item.id === selectedWorker)?.online ? <p className="text-sm text-muted-foreground">This connector is offline. Start it on your Mac; this page will detect it automatically.</p> : null}
-                    <Button onClick={() => void mutate({ action: 'connect', workerId: selectedWorker })} disabled={busy || accessDenied || !snapshot.workers.find(item => item.id === selectedWorker)?.online}>{busy ? 'Starting…' : connection ? 'Connect again' : 'Connect Telegram'}</Button></>
+                    {workerChangeBlocked ? <p role="status" className="text-sm text-muted-foreground">Disconnect this account before choosing another Mac. Wait for logout confirmation, or select the original Mac to retry.</p> : null}
+                    <Button onClick={() => { if (!workerChangeBlocked) void mutate({ action: 'connect', workerId: selectedWorker }); }} disabled={busy || accessDenied || workerChangeBlocked || !snapshot.workers.find(item => item.id === selectedWorker)?.online}>{busy ? 'Starting…' : connection ? 'Connect again' : 'Connect Telegram'}</Button></>
                     : <p className="text-sm text-muted-foreground">No registered Mac connector is available. Ask your workspace administrator to register this Mac and start its Telegram connector, then refresh this page.</p>}
             </div> : null}
             {active ? <div className="flex flex-wrap items-center gap-2 text-sm"><span>{worker?.name || 'Assigned Mac connector'}</span><Badge variant="secondary">{worker?.online ? 'Online' : 'Offline'}</Badge></div> : null}

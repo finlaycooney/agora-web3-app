@@ -12,6 +12,10 @@ export function connectionError(code) {
     return connectionErrors[code] || (code ? 'The connection could not be completed. Refresh the status and try again.' : '');
 }
 
+export function requiresWorkerDisconnect(connection, workerId) {
+    return Boolean(connection?.workerPinned && connection.workerId !== workerId);
+}
+
 export function pollingDelay(status) {
     return ['requested', 'qr_pending', 'awaiting_password', 'disconnecting'].includes(status) ? 2000 : 15000;
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import test from 'node:test';
-import { connectionError, encryptTelegramPassword, pollingDelay, usableQr } from '../../src/app/staff/telegram-intake/connect/connection-model.js';
+import { connectionError, encryptTelegramPassword, pollingDelay, requiresWorkerDisconnect, usableQr } from '../../src/app/staff/telegram-intake/connect/connection-model.js';
 
 test('Telegram password is RSA-encrypted and bound to the exact connection challenge', async () => {
     const keys = await webcrypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['encrypt', 'decrypt']);
@@ -38,4 +38,14 @@ test('pending actions poll promptly; fixed error text never renders provider err
     assert.match(connectionError('LOGOUT_FAILED'), /not confirmed logout/);
     assert.match(connectionError('PASSWORD_INVALID'), /not accepted/);
     assert.equal(connectionError('provider error containing private sentinel').includes('sentinel'), false);
+});
+
+
+test('a failed connection with a possible saved session requires logout before changing Macs', () => {
+    const failed = { status: 'failed', workerId: 'original-mac', workerPinned: true };
+    assert.equal(requiresWorkerDisconnect(failed, 'another-mac'), true);
+    assert.equal(requiresWorkerDisconnect(failed, 'original-mac'), false);
+    assert.equal(requiresWorkerDisconnect({ ...failed, workerPinned: false }, 'another-mac'), false);
+    assert.equal(requiresWorkerDisconnect({ ...failed, status: 'disconnected', workerPinned: false }, 'another-mac'), false);
+    assert.equal(requiresWorkerDisconnect(null, 'another-mac'), false);
 });
