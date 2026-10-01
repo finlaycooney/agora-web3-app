@@ -5,7 +5,7 @@ This Node22 process indexes complete, reviewed candidate profiles and the worker
 ## Start the demo
 
 1. Start the **updated** local embedding service described in `../local-embeddings/README.md`. Its `/health` must report `chunker_version: e5-utf8-448-v1`. Existing older8817 instances do not provide the chunk planner; update them during an explicit maintenance step or start this checkout on a separate port and point this worker there. Never stop an unrelated service.
-2. Create a private0600 JSON config, separate0600 token files, and a dedicated0700 state directory. Use the scoped worker credential created in the platform's Telegram intake settings. The token owner must retain candidate read/write access.
+2. Create a private0600 JSON config, separate0600 token files, and a dedicated0700 state directory. An administrator must provision the scoped worker credential through the existing authenticated Telegram worker endpoint; see `../../docs/telegram-connection-release.md`. There is no self-service Mac setup screen yet. The token owner must retain candidate read/write access.
 
 ```json
 {
