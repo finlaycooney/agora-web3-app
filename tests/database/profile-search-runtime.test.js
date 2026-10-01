@@ -19,8 +19,8 @@ const org = AUTHZ_ID.ORG_B;
 const identity = subject => ({ provider: 'google', issuer: 'https://accounts.google.com', subject });
 const owner = identity(CJ_SUBJECTS.ADMIN);
 const other = identity(CJ_SUBJECTS.RECRUITER);
-const indexVersion = 'intfloat/multilingual-e5-small@614241f622f53c4eeff9890bdc4f31cfecc418b3:e5-prefix:l2:384:v1';
-const chunkerVersion = 'e5-utf8-448-v1';
+const indexVersion = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2@e8f8c211226b894fcb81acc59f3b34ba3efd5f42:mean-pool:l2:384:v1';
+const chunkerVersion = 'minilm-utf8-128-v1';
 const hash = text => createHash('sha256').update(text).digest('hex');
 const vector = axis => Array.from({ length: 384 }, (_, i) => i === axis ? 1 : 0);
 
@@ -32,8 +32,8 @@ async function fixture(t) {
   let pool; let workerPool; let admin;
   t.after(async () => { await Promise.all([pool?.end(), workerPool?.end(), admin?.end()]); stopAndRemoveContainer(db); rmSync(root, { recursive: true, force: true }); });
   const dir = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
-  const files = readdirSync(dir).filter(name => name >= '20260922090000_foundation_roles.sql' && name.slice(0, 14) <= '20261002180000' && name.endsWith('.sql')).sort();
-  assert.ok(files.some(name => name.startsWith('20261002180000_')), 'Install the semantic-search migration');
+  const files = readdirSync(dir).filter(name => name >= '20260922090000_foundation_roles.sql' && name.slice(0, 14) <= '20261002210000' && name.endsWith('.sql')).sort();
+  assert.ok(files.some(name => name.startsWith('20261002210000_')), 'Install the semantic-search migration');
   for (const name of files) psql(db, readFileSync(join(dir, name), 'utf8'));
   const password = installStaffFixture(db); psql(db, clientJobFixtureSql);
   psql(db, `insert into app.role_permissions(organization_id,role_id,permission_key) values('${org}','${CJ_ID.ROLE_B_RECRUITER}','candidates.write') on conflict do nothing;`);
@@ -64,7 +64,7 @@ function syntheticPlan({ text }) {
   while (start < bytes.length) {
     let end = Math.min(start + 512, bytes.length);
     while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--;
-    chunks.push({ ordinal: chunks.length, start_byte: start, end_byte: end, sha256: hash(bytes.subarray(start, end)), token_count: 400 });
+    chunks.push({ ordinal: chunks.length, start_byte: start, end_byte: end, sha256: hash(bytes.subarray(start, end)), token_count: 100 });
     start = end;
   }
   return { index_version: indexVersion, chunker_version: chunkerVersion, source_sha256: hash(bytes), byte_length: bytes.length, chunks };
@@ -143,7 +143,7 @@ test('real local model ranks 100 synthetic profiles through the actual hosted an
     const response = await fetch(new URL(path, base), { method: 'POST', redirect: 'error', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
     assert.equal(response.status, 200, `Local model returned ${response.status}`); return response.json();
   };
-  const model = 'intfloat/multilingual-e5-small';
+  const model = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2';
   const embed = async ({ texts, inputType }) => {
     const value = await request('/v1/embeddings', { model, input: texts, input_type: inputType });
     return { indexVersion: value.index_version, embeddings: value.data.map(row => row.embedding) };
@@ -180,7 +180,7 @@ test('exact authorized search and queue claims remain bounded at 5k, 20k and 100
       select ('a1000000-0000-4000-8000-'||lpad(g::text,12,'0'))::uuid,$1,'Synthetic scale profile '||g,'established','active'
       from generate_series($2::integer,$3::integer)g`, [org, previous + 1, count]);
     const claimStarted = performance.now();
-    await f.host('claim', {});
+    await f.host('claim', { capabilities: ['minilm-v1'] });
     const claimMs = performance.now() - claimStarted;
     // Seed only derived synthetic vectors here. Protocol and real-model tests
     // above exercise the actual plan/embed phases; this isolates query scale.
@@ -196,7 +196,7 @@ test('exact authorized search and queue claims remain bounded at 5k, 20k and 100
       )v where s.organization_id=$1 and s.source_type='candidate' and not exists(select 1 from app.profile_search_chunks c where c.source_id=s.id)`, [org]);
     await f.admin.query('analyze app.profile_search_sources; analyze app.profile_search_chunks; analyze app.candidates');
     const requested = await f.action({ action: 'search', operationId: randomUUID(), query: 'Synthetic scale query', scope: 'approved', readyOnly: false });
-    const { job } = await f.host('claim', {}); assert.equal(job.id, requested.queryId); assert.equal(job.kind, 'query');
+    const { job } = await f.host('claim', { capabilities: ['minilm-v1'] }); assert.equal(job.id, requested.queryId); assert.equal(job.kind, 'query');
     const started = performance.now();
     const completed = await f.host('complete', { jobId: job.id, leaseToken: job.leaseToken, kind: 'query', indexVersion,
       projectionVersion: 'candidate-profile-v1', chunkerVersion, querySha256: job.querySha256, result: { embedding: vector(0) } });

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { MODEL } from '../../services/semantic-worker/constants.mjs';
 import { createSemanticWorker } from '../../services/semantic-worker/worker.mjs';
 import { createLocalClient } from '../../services/semantic-worker/local.mjs';
 import { registerTelegramWorker } from '../../src/lib/telegram-intake-operations.js';
@@ -21,7 +22,7 @@ const publicRanking = results => results.map(({ sourceId, score, matchedComponen
 
 // Requires the already-running pinned local model; does not start/download a
 // model, contact Telegram, or use production records. Ordinary CI skips it.
-test('actual E5 retrieves CV-only multilingual passages and preserves document-ineligible rankings', {
+test('actual pinned model retrieves CV-only multilingual passages and preserves document-ineligible rankings', {
   timeout: 1200000, skip: !process.env.SEMANTIC_EMBEDDING_TOKEN_FILE,
 }, async t => {
   const base = new URL(process.env.SEMANTIC_EMBEDDING_URL ?? 'http://127.0.0.1:8818/v1/embeddings');
@@ -92,7 +93,7 @@ test('actual E5 retrieves CV-only multilingual passages and preserves document-i
     }
     rows.push({ queryId: query.id, recallAt10: queryRecall, reciprocalRank: first < 0 ? 0 : 1 / (first + 1) });
   }
-  const metrics = { syntheticOnly: true, model: 'intfloat/multilingual-e5-small', profiles: profilesById.size,
+  const metrics = { syntheticOnly: true, model: MODEL, profiles: profilesById.size,
     queries: cvRelevanceQueries.length, cvOnlyRecallAt10: recall / cvRelevanceQueries.length,
     mrr: reciprocalRank / cvRelevanceQueries.length, tailRecallAt10: tailHits / tailTotal,
     englishCvRecallAt10: languageHits.en / languageTotal.en, spanishCvRecallAt10: languageHits.es / languageTotal.es };

@@ -6,7 +6,7 @@ export const PROFILE_PROJECTION_VERSION = 'candidate-profile-v1';
 export const PROFILE_CHUNKER_VERSION = 'minilm-utf8-128-v1';
 export const CV_CHUNKER_VERSION = 'minilm-cv-lines-128-v1';
 export const CV_PROJECTION_VERSION = 'candidate-reviewed-cv-v1';
-export const CV_SEARCH_MAX_READY_CHUNKS = 100000; // Provisional until concurrent capacity acceptance.
+export const CV_SEARCH_MAX_READY_CHUNKS = 12000; // Concurrent acceptance: docs/cv-search-release.md.
 export const PROFILE_SOURCE_BYTE_LIMIT = 65536;
 export const PROFILE_WORKER_BODY_LIMIT = 262144;
 const bad = field => { throw new ClientJobContractError({ [field]: 'Invalid search input.' }); };

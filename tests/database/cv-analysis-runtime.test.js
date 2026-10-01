@@ -22,7 +22,9 @@ import { createCvAnalysisWorker } from '../../services/cv-analysis-worker/worker
 import { createPendingStore } from '../../services/cv-analysis-worker/vault.mjs';
 import { createCvAnalysisProvider } from '../../services/cv-analysis-worker/provider.mjs';
 import { runIsolatedParser } from '../../services/cv-analysis-worker/sandbox.mjs';
-import { profileSearchStatus } from '../../src/lib/profile-search-operations.js';
+import { profileSearchStatus, profileSearchAction, profileSearchWorkerOperation } from '../../src/lib/profile-search-operations.js';
+import { createSemanticWorker } from '../../services/semantic-worker/worker.mjs';
+import { createPendingStore as createSemanticStore } from '../../services/semantic-worker/store.mjs';
 import { handleTelegramMaintenance } from '../../src/lib/telegram-maintenance.js';
 
 const owner = { provider: 'google', issuer: 'https://accounts.google.com', subject: CJ_SUBJECTS.ADMIN };
@@ -42,7 +44,7 @@ test('attachment-only CVs become reviewed candidates without losing field edits 
     await Promise.all([pool?.end(), workerPool?.end(), maintenancePool?.end()]); stopAndRemoveContainer(db); rmSync(root, { recursive: true, force: true });
   });
   const dir = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
-  for (const name of readdirSync(dir).filter(name => name >= '20260922090000_foundation_roles.sql' && name <= '20261002200000_cv_analysis.sql' && name.endsWith('.sql')).sort()) psql(db, readFileSync(join(dir, name), 'utf8'));
+  for (const name of readdirSync(dir).filter(name => name >= '20260922090000_foundation_roles.sql' && name <= '20261002210000_cv_search.sql' && name.endsWith('.sql')).sort()) psql(db, readFileSync(join(dir, name), 'utf8'));
   const password = installStaffFixture(db); psql(db, clientJobFixtureSql);
   pool = new pg.Pool(staffPoolOptions(db, password, 3));
   const workerPassword = randomUUID();
@@ -207,6 +209,28 @@ test('attachment-only CVs become reviewed candidates without losing field edits 
       assert.equal(artifact[0].documentSha256, parsed.documentSha256);
       assert.equal(artifact[0].textSha256, parsed.textSha256);
       assert.deepEqual(artifact[0].blocks, parsed.blocks);
+      // The real isolated parser and normal approval above now feed the actual
+      // semantic queue. Synthetic vectors test delivery, not model relevance.
+      const indexVersion = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2@e8f8c211226b894fcb81acc59f3b34ba3efd5f42:mean-pool:l2:384:v1';
+      const sha = value => createHash('sha256').update(value).digest('hex');
+      const semantic = createSemanticWorker({
+        host: (action, body) => profileSearchWorkerOperation(workerPool, token, action, body),
+        plan: async ({ text, chunkerVersion }) => ({ index_version: indexVersion, chunker_version: chunkerVersion,
+          source_sha256: sha(text), byte_length: Buffer.byteLength(text),
+          chunks: [{ ordinal: 0, start_byte: 0, end_byte: Buffer.byteLength(text), sha256: sha(text), token_count: 100 }] }),
+        embed: async ({ texts }) => ({ indexVersion, embeddings: texts.map(text => Array.from({ length: 384 }, (_, i) => i === (text.includes('Kafka') ? 0 : 1) ? 1 : 0)) }),
+        vault: createSemanticStore({ root: join(root, 'semantic'), server: 'https://synthetic.invalid', workerToken: token }),
+      });
+      for (let tick = 0; tick < 50; tick++) if ((await semantic.tick()).status === 'idle') break;
+      const query = await profileSearchAction(pool, owner, org, { action: 'search', operationId: randomUUID(), query: 'Kafka', scope: 'approved', readyOnly: false, includeCv: true });
+      await semantic.tick();
+      const matches = await profileSearchStatus(pool, owner, org, { queryId: query.queryId });
+      assert.equal(matches.status, 'completed');
+      const match = matches.results.find(row => row.sourceId === approved.candidateId);
+      assert.equal(match.matchedComponent, 'cv');
+      assert.match(match.matchedText, /Kafka/);
+      assert.equal(match.score, 1);
+
     }
     await maintenance();
     assert.equal(Number(psql(db, `select count(*) from app.candidate_reviewed_cv_text where candidate_id='${approved.candidateId}'`).trim()), index ? 0 : 1);

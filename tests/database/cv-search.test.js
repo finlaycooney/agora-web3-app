@@ -11,6 +11,7 @@ import { CJ_SUBJECTS, clientJobFixtureSql } from '../support/client-job-workflow
 import { withStaffTransaction } from '../../src/lib/staff-authorization.js';
 import { mergeCandidateDuplicates } from '../../src/lib/duplicate-review-operations.js';
 import { profileSearchAction, profileSearchStatus, profileSearchWorkerOperation } from '../../src/lib/profile-search-operations.js';
+import { CV_SEARCH_MAX_READY_CHUNKS } from '../../src/lib/profile-search-contracts.js';
 const dir = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
 const migrations = readdirSync(dir).filter(f => f >= '20260922090000_foundation_roles.sql' && f <= '20261002210000_cv_search.sql' && f.endsWith('.sql')).sort();
 const sha = x => createHash('sha256').update(x).digest('hex');
@@ -146,12 +147,13 @@ test('approved CV search preserves profile parity, document access and cached sa
         const r = await profileSearchStatus(pool, identity, org, { queryId: q.queryId }); assert.equal(r.status, 'expired'); assert.equal(r.query, null); assert.deepEqual(r.results, []);
     });
     await t.test('capacity is explicit and its cached CV counts are fenced after removal', async () => {
+        assert.equal(Number(psql(db, 'select app.cv_search_limit_v1()').trim()), CV_SEARCH_MAX_READY_CHUNKS);
         psql(db, 'create or replace function app.cv_search_limit_v1() returns integer language sql immutable as $$ select 1 $$;');
         const q = await query(true); assert.equal(q.status, 'failed'); assert.equal(q.errorCode, 'SEARCH_CAPACITY'); assert.deepEqual(q.results, []);
         const doc = psql(db, `select document_id from app.profile_search_sources where component='cv' and status='ready' limit 1`).trim();
         psql(db, `update app.documents set lifecycle='restricted' where id='${doc}'`);
         const stale = await profileSearchStatus(pool, identity, org, { queryId: q.queryId }); assert.equal(stale.errorCode, 'CV_RESULTS_CHANGED'); assert.equal(stale.capacity, null);
-        psql(db, 'create or replace function app.cv_search_limit_v1() returns integer language sql immutable as $$ select 100000 $$;');
+        psql(db, `create or replace function app.cv_search_limit_v1() returns integer language sql immutable as $$ select ${CV_SEARCH_MAX_READY_CHUNKS} $$;`);
     });
     await t.test('index retry locking cannot deadlock a concurrent document restriction', async () => {
         const item = seed('Concurrent failure fixture'); await drain(false); const j = (await call('claim', { capabilities: ['minilm-v1', 'approved-cv-v1'] })).job;
