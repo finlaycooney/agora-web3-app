@@ -46,6 +46,8 @@ const migrations = [
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 async function waitForServer(url) {
@@ -125,6 +127,12 @@ test('staff previews records in place and opens CV content', async (t) => {
     const page = await context.newPage();
     page.setDefaultTimeout(20_000);
     const pageErrors = [];
+    const previewRequests = [];
+    page.on('request', (request) => {
+        if (/\/api\/staff\/(candidates|jobs)\/[0-9a-f-]{36}$/.test(request.url())) {
+            previewRequests.push(request.url());
+        }
+    });
     page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
     try {
         await page.goto(`${baseURL}/staff/candidates?q=Synthetic`, { waitUntil: 'domcontentloaded' });
@@ -142,6 +150,13 @@ test('staff previews records in place and opens CV content', async (t) => {
         await expect(candidatePreview).toHaveCount(0);
         assert.deepEqual(pageErrors, [], pageErrors.join('\n'));
         await expect(candidateLink).toBeFocused();
+        const firstReadCount = previewRequests.length;
+        await candidateLink.click();
+        await expect(candidatePreview).toBeVisible();
+        assert.equal(previewRequests.length, firstReadCount,
+            'reopening a recent preview reuses its authorized in-memory result');
+        await candidatePreview.getByRole('button', { name: 'Close' }).click();
+
 
         await page.route('**/api/staff/candidates/*', async (route) => {
             const response = await route.fetch();
@@ -172,6 +187,8 @@ test('staff previews records in place and opens CV content', async (t) => {
             await route.fulfill({ status: 200, contentType: 'application/pdf',
                 body: createSyntheticPdf() });
         });
+        await page.evaluate(() => window.dispatchEvent(
+            new CustomEvent('staff-workspace-updated', { detail: { scope: 'workspace' } })));
         await candidateLink.click();
         const documentPreview = page.getByRole('dialog', { name: 'Synthetic Candidate B' });
         await expect(documentPreview.getByRole('tab', { name: /Documents/ }))
@@ -207,6 +224,14 @@ test('staff previews records in place and opens CV content', async (t) => {
         await expect(page).toHaveURL(`${baseURL}/staff/jobs?q=Legacy`);
         await jobPreview.getByRole('button', { name: 'Close' }).click();
         await expect(jobLink).toBeFocused();
+        const jobReadCount = previewRequests.length;
+        await jobLink.click();
+        await expect(jobPreview).toBeVisible();
+        assert.equal(previewRequests.length, jobReadCount,
+            'reopening a job uses the bounded cache');
+        await page.evaluate(() => window.dispatchEvent(new Event('staff-session-invalidated')));
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+
 
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(`${baseURL}/staff/candidates`, { waitUntil: 'domcontentloaded' });

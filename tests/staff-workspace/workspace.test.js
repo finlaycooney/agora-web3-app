@@ -68,6 +68,8 @@ const MIGRATIONS = [
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -1630,13 +1632,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
                 rename to get_staff_workspace_outage_test;
         `);
         try {
-            const summaryOutage = page.waitForResponse(
-                (response) => response.url().includes('/api/staff/workspace')
-                    && response.request().method() === 'GET',
-                { timeout: 90_000 },
-            );
             await page.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
-            await summaryOutage;
             await page.getByText('Workspace summary is temporarily unavailable.')
                 .waitFor();
             const nav = page.getByRole('navigation', { name: 'Main navigation' });
