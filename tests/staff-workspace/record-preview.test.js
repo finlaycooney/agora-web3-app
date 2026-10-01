@@ -124,6 +124,24 @@ test('staff previews records in place and opens CV content', async (t) => {
         { name: 'next-auth.session-token', value: token, url: baseURL },
         { name: STAFF_MFA_COOKIE, value: proof, url: baseURL },
     ]);
+    await context.addInitScript(() => {
+        const OriginalWorker = window.Worker;
+        window.__pdfRequestsBeforeReady = 0;
+        window.Worker = class extends OriginalWorker {
+            constructor(...args) {
+                super(...args);
+                let ready = false;
+                this.addEventListener('message', event => {
+                    if (event.data?.action === 'ready') ready = true;
+                });
+                const send = this.postMessage.bind(this);
+                this.postMessage = (message, ...options) => {
+                    if (message?.action === 'GetDocRequest' && !ready) window.__pdfRequestsBeforeReady++;
+                    return send(message, ...options);
+                };
+            }
+        };
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(20_000);
     const pageErrors = [];
@@ -217,6 +235,7 @@ test('staff previews records in place and opens CV content', async (t) => {
             }
             return dark;
         }), { timeout: 20_000, message: 'the rendered PDF page contains visible ink' }).toBeGreaterThan(100);
+        assert.equal(await page.evaluate(() => window.__pdfRequestsBeforeReady), 0, 'PDF parsing must wait for the worker readiness handshake');
         await documentPreview.getByRole('button', { name: 'Close' }).click();
         await page.unroute('**/api/staff/candidates/*');
         await page.unroute('**/api/staff/documents/*?view=text');

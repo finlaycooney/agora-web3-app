@@ -11,7 +11,7 @@ supported. A connection is bound to one registered worker.
 is `{id,name,publicKeySpki,lastSeenAt,online}`; only active, nonexpired workers with
 a registered connector key appear. `online` means heartbeat within 90 seconds.
 `connection` is null or `{id,workerId,generation,status,challengeId,qrLoginUrl,
-qrExpiresAt,passwordHint,passwordPending,errorCode,profile,updatedAt,cancelledBeforeStart}`. `profile`
+qrExpiresAt,passwordHint,passwordPending,errorCode,profile,updatedAt,cancelledBeforeStart,workerPinned}`. `profile`
 is null or `{telegramUserId,username,displayName}`. All IDs are UUIDs except the
 Telegram user ID, which is a decimal string. Generation is a positive integer.
 No phone number, session string, ciphertext or private key is returned.
@@ -21,7 +21,7 @@ POST the same path; success returns the same `{workers,connection}` envelope:
 - `{action:"connect",workerId}` starts/restarts login only when no connection
   exists, or its status is `failed`/`disconnected`. Repeating while active with the
   same worker returns the current state without restarting it. The worker must
-  have a fresh heartbeat. A restart increments generation and changes challengeId.
+  have a fresh heartbeat. A restart increments generation and changes challengeId. If `workerPinned` is true, a failed connection must complete acknowledged disconnect before it can move to another worker; retrying on the same worker is allowed.
 - `{action:"password",connectionId,generation,challengeId,ciphertext}` is accepted
   only for that owner's current `awaiting_password` challenge. Ciphertext is
   standard base64 encoding of exactly 256 bytes. The browser imports the worker's
@@ -65,8 +65,7 @@ requests have a 16 KiB body limit. No Telegram session leaves the Mac.
   Claim every 20 seconds while active, every 5 seconds otherwise. Each claim
   renews a 120-second lease; an unexpired lease keeps its token. Expired leases
   receive a new token. The worker must stop/close clients when generation changes,
-  claim returns null, access is denied or lease expires. A `failed` task means
-  close pending auth clients and erase pending login state; do not initiate login.
+  claim returns null, access is denied or lease expires. A `failed` task means close the client and revoke any saved potentially authorized session before erasing its credentials. Retain a session-free logout receipt until the host acknowledges disconnect or a new generation safely consumes it; do not initiate login.
 - `update` body `{connectionId,generation,leaseToken,status,challengeId?,
   qrLoginUrl?,qrExpiresAt?,passwordHint?,profile?,errorCode?,passwordSubmissionId?}` returns `{ok:true}`.
   Valid generation, current token and unexpired lease are mandatory. Supported
