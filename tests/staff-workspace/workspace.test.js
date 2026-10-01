@@ -420,7 +420,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByRole('heading', { name: 'Awaiting review' }).waitFor();
         await page.getByRole('heading', { name: 'Clients hiring' }).waitFor();
         await page.getByRole('link', { name: 'Synthetic Candidate B' }).waitFor();
-        assert.match(await page.getByRole('main').last().innerText(), /You’re up to date/);
+        // Tasks load independently of the server-rendered overview. Wait for
+        // their empty state instead of asserting against the loading snapshot.
+        await page.getByRole('main').last().getByText('You’re up to date', { exact: true }).waitFor();
     });
 
     await runCase('application client labels and stage totals stay correct for empty and inaccessible clients', async () => {
