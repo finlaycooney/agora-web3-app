@@ -45,6 +45,8 @@ const migrations = [
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
     '20261002100000_candidate_upload.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 const listen = (server, port = 0) => new Promise((resolve, reject) => {

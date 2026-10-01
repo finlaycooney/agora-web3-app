@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Lock } from 'lucide-react';
@@ -151,11 +151,13 @@ function StageSelect({
     disabled: boolean;
 }) {
     const router = useRouter();
-    const [pending, setPending] = useState(false);
+    const [saving, setPending] = useState(false);
+    const [refreshing, startTransition] = useTransition();
+    const pending = saving || refreshing;
     const [error, setError] = useState('');
 
     const move = async (toStageId: string) => {
-        if (!toStageId || toStageId === application.stageId) return;
+        if (pending || !toStageId || toStageId === application.stageId) return;
         setPending(true);
         setError('');
         try {
@@ -177,7 +179,10 @@ function StageSelect({
                         : 'Stage change failed.',
                 );
             } else {
-                router.refresh();
+                window.dispatchEvent(new CustomEvent('staff-workspace-updated', {
+                    detail: { scope: 'workspace' },
+                }));
+                startTransition(() => router.refresh());
             }
         } catch {
             setError('Stage change failed.');
@@ -211,6 +216,7 @@ function StageSelect({
                     ))}
                 </SelectContent>
             </Select>
+            {pending ? <span role="status" className="text-xs text-muted-foreground">Updating stage…</span> : null}
             {error ? (
                 <span role="alert" className="text-xs text-destructive">{error}</span>
             ) : null}
@@ -221,11 +227,13 @@ function StageSelect({
 function NoteComposer({ candidateId }: { candidateId: string }) {
     const router = useRouter();
     const [body, setBody] = useState('');
-    const [pending, setPending] = useState(false);
+    const [saving, setPending] = useState(false);
+    const [refreshing, startTransition] = useTransition();
+    const pending = saving || refreshing;
     const [message, setMessage] = useState('');
 
     const submit = async () => {
-        if (!body.trim()) return;
+        if (pending || !body.trim()) return;
         setPending(true);
         setMessage('');
         try {
@@ -243,7 +251,10 @@ function NoteComposer({ candidateId }: { candidateId: string }) {
             } else {
                 setBody('');
                 setMessage('Note added.');
-                router.refresh();
+                window.dispatchEvent(new CustomEvent('staff-workspace-updated', {
+                    detail: { scope: 'workspace' },
+                }));
+                startTransition(() => router.refresh());
             }
         } catch {
             setMessage('Note could not be saved.');
@@ -257,6 +268,7 @@ function NoteComposer({ candidateId }: { candidateId: string }) {
             <Label htmlFor="note-body">Add a note</Label>
             <Textarea
                 id="note-body"
+                disabled={pending}
                 placeholder="Interview feedback, context, next steps…"
                 rows={3}
                 value={body}

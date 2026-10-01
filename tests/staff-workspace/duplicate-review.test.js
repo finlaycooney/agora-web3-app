@@ -62,6 +62,8 @@ const migrations = [
     '20260930090100_candidate_intake_serialization.sql',
     '20261001090000_public_intake_duplicate_review.sql',
     '20261001100000_candidate_merge.sql',
+    '20261002110000_staff_shell_capabilities.sql',
+    '20261002120000_staff_list_pagination.sql',
 ];
 
 async function waitForServer(url) {
