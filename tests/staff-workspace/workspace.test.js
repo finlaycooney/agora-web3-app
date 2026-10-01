@@ -441,9 +441,13 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await expect(page.getByText('No applications found', { exact: true })).toBeVisible();
             await expect(page.getByText('Review candidates across your clients and open roles.')).toHaveCount(0);
             await page.reload({ waitUntil: 'domcontentloaded' });
+            // The label is server-rendered; seeing it does not mean the filter
+            // handlers have hydrated. Match gotoStaff before interacting again.
+            await page.waitForLoadState('networkidle');
             await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Empty filter client');
 
             await page.getByRole('button', { name: 'Clear filters' }).click();
+            await expect(page).toHaveURL(`${baseURL}/staff/applications`);
             await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*1/);
             await page.locator('#application-search').fill('no-such-candidate');
             for (const card of await cards.getByRole('button').all()) await expect(card).toHaveText(/0$/);
