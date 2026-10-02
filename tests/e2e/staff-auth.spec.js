@@ -33,7 +33,7 @@ test('staff no-access page redirects unauthenticated visitors to sign-in', async
 });
 
 test('staff MFA pages redirect unauthenticated visitors to sign-in', async ({ page }) => {
-    for (const path of ['/staff/mfa/enroll', '/staff/mfa/verify']) {
+    for (const path of ['/staff/mfa/enroll', '/staff/mfa/verify', '/staff/mfa/backup-codes']) {
         await gotoStaff(page, path);
         await expect(page).toHaveURL(/\/staff\/sign-in/);
     }
@@ -73,6 +73,9 @@ for (const path of [
     '/api/staff/candidates',
     '/api/staff/candidates/duplicates',
     '/api/staff/members',
+    '/api/staff/mfa/enroll',
+    '/api/staff/mfa/verify',
+    '/api/staff/mfa/backup-codes',
 ]) {
     test(`${path} rejects unauthenticated requests`, async ({ request }) => {
         const response = await request.post(path, { data: {} });
