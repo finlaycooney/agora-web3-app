@@ -22,6 +22,7 @@ function staffLayout(loadStaffCapabilities) {
         '@/lib/workspace.server': { loadStaffCapabilities, loadStaffWorkspace: () => {
             assert.fail('layout must not block on workspace metrics');
         } },
+        './auth-recovery-notice': { AuthRecoveryNotice: () => null },
         './staff-shell': {
             StaffShell: (props) => jsx('div', {
                 'data-shell': 'true',

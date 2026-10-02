@@ -710,7 +710,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await fillWhenReady(dialog.locator('#task-title'), 'Doomed task title');
         await dialog.getByRole('button', { name: 'Add task' }).click();
-        await dialog.getByText('Could not save. Please try again.').waitFor();
+        await dialog.getByText('The workspace is temporarily unavailable. Your changes have not been saved. Please retry.').waitFor();
         await expect(dialog.locator('#task-title')).toHaveValue('Doomed task title');
         await page.unroute('**/api/staff/tasks');
         const created = page.waitForResponse(
@@ -1488,6 +1488,14 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             if (browserEvents.length < 40) browserEvents.push(`${message.type()}: ${message.text().slice(0, 400)}`);
         });
         try {
+            // Compile the mutation before mounting the form. Next dev may
+            // otherwise reload the document during its first POST and erase
+            // client confirmation state even though the invitation committed.
+            const warm = await fetch(`${baseURL}/api/staff/members`, {
+                method: 'POST', headers: { 'content-type': 'application/json' },
+                body: '{}',
+            });
+            assert.equal(warm.status, 401);
             await gotoStaff(page, `${baseURL}/staff/members`);
             await page.locator('#invite-name').fill('Invited Synthetic');
             await page.locator('#invite-email').fill('invited@synthetic.test');
@@ -1499,6 +1507,9 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await page.getByRole('button', { name: 'Record invitation' }).click();
             await invited;
             await page.getByText(/Invitation recorded/).waitFor();
+            const invitationMessage = await page.getByLabel('Share this invitation message').inputValue();
+            assert.ok(invitationMessage.includes(`${baseURL}/staff/sign-in`));
+            assert.ok(invitationMessage.includes('invited@synthetic.test'));
             // Assert the refreshed directory instead of a particular RSC transport
             // response. This row comes from server-loaded data, not an optimistic insert.
             await expect(page.getByRole('row', { name: /Invited Synthetic/ })).toBeVisible();

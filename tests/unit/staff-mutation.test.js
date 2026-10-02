@@ -56,10 +56,10 @@ test('a 400 with field errors carries only string entries and a human message', 
     assert.equal(dispatched.length, 0);
 });
 
-test('auth and conflict failures keep their existing messages', async () => {
+test('auth failures offer recovery while permission and conflict messages stay stable', async () => {
     for (const [status, message] of [
-        [401, 'Your session expired. Sign in again.'],
-        [428, 'Your session expired. Sign in again.'],
+        [401, 'Sign in again in another tab, then retry. Your changes have not been saved.'],
+        [428, 'Verify your authenticator in another tab, then retry. Your changes have not been saved.'],
         [403, 'You do not have permission to make this change.'],
         [409, 'This record changed. Reload and try again.'],
     ]) {

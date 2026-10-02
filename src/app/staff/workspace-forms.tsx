@@ -1083,6 +1083,7 @@ export function MemberInviteForm({
     const [error, setError] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [invitation, setInvitation] = useState<string | null>(null);
 
     const submit = async (form: HTMLFormElement) => {
         const data = new FormData(form);
@@ -1092,6 +1093,7 @@ export function MemberInviteForm({
             email: String(data.get('email') ?? ''),
             roleId: String(data.get('roleId') ?? ''),
         });
+        setInvitation(`You have been invited to Agora. Open ${window.location.origin}/staff/sign-in and sign in with ${String(data.get('email') ?? '').trim()}. Set up your authenticator when prompted.`);
         form.reset();
         setStatus('Invitation recorded — the person signs in with that Google account.');
         router.refresh();
@@ -1104,6 +1106,7 @@ export function MemberInviteForm({
                 event.preventDefault();
                 setError(null);
                 setStatus(null);
+                setInvitation(null);
                 setBusy(true);
                 void submit(event.currentTarget)
                     .catch((caught) =>
@@ -1150,6 +1153,15 @@ export function MemberInviteForm({
             )}
             {status && (
                 <p role="status" className="text-sm text-muted-foreground">{status}</p>
+            )}
+            {invitation && (
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="invitation-message">Share this invitation message</Label>
+                    <textarea id="invitation-message" readOnly value={invitation}
+                        className="min-h-24 rounded-md border bg-background p-3 text-sm"
+                        onFocus={(event) => event.currentTarget.select()} />
+                    <p className="text-xs text-muted-foreground">Select and copy this message to send it to the invited person.</p>
+                </div>
             )}
             <Button type="submit" disabled={busy} className="self-start">
                 {busy ? 'Recording…' : 'Record invitation'}

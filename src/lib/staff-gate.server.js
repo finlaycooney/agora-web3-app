@@ -20,6 +20,7 @@ import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
  *   identity: StaffGateIdentity, principal: StaffGatePrincipal, totp: StaffGateTotp,
  *   pool: StaffGatePool, organizationId: string }} StaffGateResolved
  * @typedef {{ stage: 'signed-out' }
+ *   | { stage: 'reauthenticate' } | { stage: 'unavailable' }
  *   | { stage: 'unresolved', session: StaffGateSession, identity: StaffGateIdentity }
  *   | StaffGateResolved} StaffGateResult
  */
@@ -28,6 +29,8 @@ import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 // continue using their uncached staffApiContext and fresh transaction checks.
 // One server-side gate for every staff surface. Stages:
 //   signed-out   → no session or non-Google provider
+//   reauthenticate → Google credential needs renewal
+//   unavailable  → workspace access could not be checked
 //   unresolved   → Google identity with no active staff membership
 //   resolved     → active principal, but TOTP not yet active
 //   mfa-pending  → active credential without a valid staff_mfa proof
@@ -44,13 +47,13 @@ async function resolveStaffGate() {
     // request, not when the session expires. 'unknown' fails open — a Google
     // outage must not lock out the workspace — while 'revoked' fails closed.
     if (await staffGoogleCredentialStatus(identity.subject) === 'revoked') {
-        return { stage: 'unresolved', session, identity };
+        return { stage: 'reauthenticate' };
     }
 
     const pool = getStaffPool();
     const organizationId = process.env.STAFF_ORGANIZATION_ID;
-    if (!pool || !organizationId) {
-        return { stage: 'unresolved', session, identity };
+    if (!pool || !organizationId || !process.env.NEXTAUTH_SECRET) {
+        return { stage: 'unavailable' };
     }
 
     let principal = null;
@@ -62,8 +65,11 @@ async function resolveStaffGate() {
             totp = await getTotpStatus(pool, identity, organizationId);
         }
     } catch (error) {
+        if (error?.code === '42501' || error?.code === '23505') {
+            return { stage: 'unresolved', session, identity };
+        }
         console.error('staff gate resolution failed', error);
-        principal = null;
+        return { stage: 'unavailable' };
     }
     if (!principal) {
         return { stage: 'unresolved', session, identity };
@@ -93,7 +99,10 @@ export const staffGate = cache(resolveStaffGate);
 /** @returns {Promise<StaffGateResolved & { stage: 'verified' }>} */
 export async function requireStaffVerified() {
     const gate = await staffGate();
-    if (gate.stage === 'signed-out') {
+    if (gate.stage === 'unavailable') {
+        redirect('/staff/unavailable');
+    }
+    if (gate.stage === 'signed-out' || gate.stage === 'reauthenticate') {
         redirect('/staff/sign-in');
     }
     if (gate.stage === 'unresolved') {

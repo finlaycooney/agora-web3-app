@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+// These routes share a cold Next dev server in CI, so a streamed redirect
+// can take longer than Playwright's default five-second assertion window.
+test.setTimeout(90_000);
+
 // Cold next-dev compilation plus the layout redirect can abort or stall the
 // navigation's load event in CI; commit resolves once the redirected document
 // commits, and the toHaveURL poll confirms the final location.
@@ -7,6 +11,7 @@ const gotoStaff = async (page, path) => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
             await page.goto(path, { waitUntil: 'commit' });
+            await page.waitForURL(/\/staff\/sign-in/, { timeout: 30_000 });
             return;
         } catch (error) {
             if (attempt === 2 || !String(error).includes('ERR_ABORTED')) {
@@ -48,6 +53,7 @@ for (const path of [
     '/staff/candidates/duplicates',
     `/staff/candidates/${id}`,
     '/staff/members',
+    '/staff/unavailable',
 ]) {
     test(`${path} redirects unauthenticated visitors to sign-in`, async ({ page }) => {
         await gotoStaff(page, path);
