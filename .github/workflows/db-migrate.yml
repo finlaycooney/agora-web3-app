@@ -21,6 +21,11 @@ on:
     branches: [main]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      allow_out_of_order:
+        description: 'Apply reviewed missing migrations that precede the production migration history'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -57,7 +62,14 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
       - name: Apply pending migrations
-        run: supabase db push --linked
         env:
+          ALLOW_OUT_OF_ORDER: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_out_of_order }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ "$ALLOW_OUT_OF_ORDER" = "true" ]; then
+            supabase db push --linked --include-all --dry-run
+            supabase db push --linked --include-all
+          else
+            supabase db push --linked
+          fi
