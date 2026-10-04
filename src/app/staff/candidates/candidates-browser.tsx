@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { FileText, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/staff-ui/button';
@@ -19,6 +18,8 @@ import {
 import {
     type CandidateProfileOptions,
 } from './candidate-profile-dialog';
+import { candidateDirectoryQuery } from '@/lib/staff-directory-query';
+import { useDirectoryNavigation } from '../use-directory-navigation';
 import { CandidateUploadDialog } from './candidate-upload-dialog';
 
 export interface CandidateRow {
@@ -38,40 +39,41 @@ const formatDate = (iso: string) =>
         day: 'numeric', month: 'short', year: 'numeric',
     });
 
+const parseFilters = (params: { get(name: string): string | null }) =>
+    candidateDirectoryQuery({ q: params.get('q'), page: params.get('page') });
+const serializeFilters = (filters: { query: string; page: number }) => {
+    const params = new URLSearchParams();
+    if (filters.query.trim()) params.set('q', filters.query);
+    if (filters.page > 1) params.set('page', String(filters.page));
+    return params.toString();
+};
+
 export function CandidatesBrowser({
     candidates,
-    capped = false,
+    total,
+    page,
+    pageSize,
     canReviewDuplicates = false,
     profileOptions = null,
     profileUnavailable = false,
     semanticSearchEnabled = false,
 }: {
     candidates: CandidateRow[];
-    capped?: boolean;
+    total: number;
+    page: number;
+    pageSize: number;
     canReviewDuplicates?: boolean;
     profileOptions?: CandidateProfileOptions | null;
     profileUnavailable?: boolean;
     semanticSearchEnabled?: boolean;
 }) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const query = searchParams.get('q') ?? '';
-
-    const updateQuery = (value: string) => {
-        const params = new URLSearchParams();
-        if (value.trim()) params.set('q', value);
-        const queryString = params.toString();
-        window.history.replaceState(
-            null, '',
-            `/staff/candidates${queryString ? `?${queryString}` : ''}`);
-    };
-
-    const visible = useMemo(() => {
-        const needle = query.trim().toLowerCase();
-        if (!needle) return candidates;
-        return candidates.filter((row) =>
-            `${row.fullName ?? ''} ${row.email ?? ''}`.toLowerCase().includes(needle));
-    }, [candidates, query]);
+    const { filters, update: navigate, pending } = useDirectoryNavigation(
+        '/staff/candidates', parseFilters, serializeFilters);
+    const query = filters.query;
+    const updateQuery = (value: string, debounce = false) =>
+        navigate({ query: value, page: 1 }, debounce);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     return (
         <div className="flex flex-col gap-6">
@@ -95,7 +97,8 @@ export function CandidatesBrowser({
                             className="pl-9"
                             placeholder="Search name or email…"
                             value={query}
-                            onChange={(event) => updateQuery(event.target.value)}
+                            maxLength={200}
+                            onChange={(event) => updateQuery(event.target.value, true)}
                         />
                     </div>
                 </div>
@@ -127,23 +130,20 @@ export function CandidatesBrowser({
             ) : null}
 
             <span role="status" className="text-xs text-muted-foreground">
-                {visible.length} candidate{visible.length === 1 ? '' : 's'}
-                {capped
-                    ? ' · Showing the latest 500 candidates; filters apply to loaded records'
-                    : ''}
+                {total} candidate{total === 1 ? '' : 's'}{pending ? ' · Updating…' : ''}
             </span>
 
-            {visible.length === 0 ? (
+            {candidates.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
                     <p className="text-sm font-medium text-foreground">No candidates found</p>
                     <p className="max-w-sm text-sm text-muted-foreground">
-                        {candidates.length === 0
+                        {!query
                             ? 'Candidates appear here after submissions are imported from the applications page.'
                             : 'Try clearing the search.'}
                     </p>
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <div aria-busy={pending} className="overflow-hidden rounded-lg border border-border bg-card">
                     <Table>
                     <TableHeader>
                         <TableRow>
@@ -156,7 +156,7 @@ export function CandidatesBrowser({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {visible.map((row) => (
+                        {candidates.map((row) => (
                             <TableRow key={row.candidateId}>
                                 <TableCell>
                                     <a
@@ -196,6 +196,16 @@ export function CandidatesBrowser({
                     </Table>
                 </div>
             )}
+            <nav aria-label="Directory pages" className="flex items-center justify-between gap-3">
+                <Button variant="outline" size="sm" disabled={pending || page <= 1}
+                    onClick={() => navigate({ ...filters, page: page - 1 })}>Previous</Button>
+                <span className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                    {total > 0 ? ` · ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}` : ''}
+                </span>
+                <Button variant="outline" size="sm" disabled={pending || page >= totalPages}
+                    onClick={() => navigate({ ...filters, page: page + 1 })}>Next</Button>
+            </nav>
         </div>
     );
 }

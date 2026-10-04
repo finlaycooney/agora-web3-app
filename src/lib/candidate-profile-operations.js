@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { candidateDirectoryQuery } from './staff-directory-query.js';
 
 import { withStaffTransaction } from './staff-authorization.js';
 import { ClientJobContractError } from './client-job-contracts.js';
@@ -97,6 +98,17 @@ export async function listCandidateProfiles(
             const { rows } = await client.query(
                 'select app.list_candidate_profiles_v1($1::text, $2::integer) as result',
                 [query === '' ? null : query, limit]);
+            return rows[0].result;
+        });
+}
+
+export async function listCandidateProfileDirectory(pool, identity, organizationId, input = {}) {
+    const filters = candidateDirectoryQuery(input);
+    return withStaffTransaction(
+        pool, identity, organizationId, CANDIDATE_READ, async ({ client }) => {
+            const { rows } = await client.query(
+                'select app.list_candidate_profile_directory_v1($1::text, $2::integer) as result',
+                [filters.query, filters.page]);
             return rows[0].result;
         });
 }
