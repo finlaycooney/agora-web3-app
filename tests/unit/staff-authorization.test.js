@@ -100,7 +100,9 @@ test('resolves principal, checks every permission and commits', async () => {
     assert.match(texts[0], /set local lock_timeout = '2s'/);
     assert.match(texts[0], /set local statement_timeout = '10s'/);
     assert.match(texts[0], /set_config\('app.actor_id', '', true\)/);
-    assert.equal(client.queries.length, 5, 'setup, resolve, context, permissions, commit');
+    assert.equal(client.queries.length, 4, 'setup, resolve with context, permissions, commit');
+    assert.match(texts[1], /resolved as materialized/);
+    assert.match(texts[1], /set_config\('app.actor_id', user_id::text, true\)/);
     assert.equal(texts.at(-1), 'commit');
     const resolverCall = client.queries.find(({ text }) => text.includes('resolve_staff_principal_v1'));
     assert.deepEqual(resolverCall.params, ['google', 'https://accounts.google.com', '12345', ORG]);
@@ -331,7 +333,7 @@ for (const rows of [[], [{ allowed: null }], [{ allowed: 'true' }]]) {
 test('actor transactions batch setup and retain the staff role before resolving', async () => {
     const client = makeClient();
     await withStaffActor(makePool(client), IDENTITY, ORG, () => 'done');
-    assert.equal(client.queries.length, 4);
+    assert.equal(client.queries.length, 3);
     assert.match(client.queries[0].text, /set local role app_staff;/);
     assert.match(client.queries[1].text, /resolve_staff_principal_v1/);
     assert.equal(client.queries.at(-1).text, 'commit');

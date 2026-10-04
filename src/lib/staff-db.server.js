@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { readStaffAccess } from './staff-access.js';
 
 let staffPool;
 
@@ -100,4 +101,12 @@ export async function resolveOrClaimStaffPrincipal(pool, identity, email, organi
     return resolveStaffPrincipal(pool, identity, organizationId);
 }
 
+// Shared by page and API gates. Only an unresolved identity enters invitation
+// recovery; re-read after a claim, including a claim consumed concurrently.
+export async function resolveOrClaimStaffAccess(pool, identity, email, organizationId) {
+    const access = await readStaffAccess(pool, identity, organizationId);
+    if (access || !email) return access;
+    await claimStaffInvite(pool, identity, email, organizationId);
+    return readStaffAccess(pool, identity, organizationId);
+}
 
