@@ -21,6 +21,7 @@ import {
     installStaffFixture,
     staffPoolOptions,
 } from '../support/staff-authorization.js';
+import { generateBackupCodes } from '../../src/lib/staff-backup-codes.js';
 import { withStaffActor } from '../../src/lib/staff-authorization.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -33,6 +34,7 @@ const MIGRATIONS = [
     AUTHZ_MIGRATION,
     GOOGLE_MIGRATION,
     TOTP_MIGRATION,
+    '20261002140000_staff_mfa_backup_codes.sql',
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
@@ -309,4 +311,59 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
                   and grantee not in ('app_owner', 'app_executor')`,
         ), '0');
     });
+    await t.test('backup codes are hashed, actor bound, single use, replaceable and audited', async () => {
+        const credential = (await totpStatus(pool, SUBJECTS.ADMIN1)).credential_id;
+        const backup = generateBackupCodes(credential);
+        const set = (hashes) => withStaffActor(pool, identity(SUBJECTS.ADMIN1), ORG_A,
+            ({ client, auditId, correlationId }) => client.query(
+                'select app.set_mfa_backup_codes_v1($1,$2,$3,$4)',
+                [credential, hashes, auditId, correlationId]));
+        const consume = (hash, subject = SUBJECTS.ADMIN1) => withStaffActor(pool,
+            identity(subject), ORG_A, async ({ client, auditId, correlationId }) =>
+                (await client.query('select app.consume_mfa_backup_code_v1($1,$2,$3,$4) as accepted',
+                    [credential, hash, auditId, correlationId])).rows[0].accepted);
+        await rejectCode(set(['bad']), '22023');
+        await rejectCode(set(Array(10).fill(backup.hashes[0])), '22023');
+        await set(backup.hashes);
+        assert.equal(scalar(container, `select count(*) from app.staff_mfa_backup_codes
+            where credential_id = '${credential}'`), '10');
+        assert.equal(scalar(container, `select code_hash from app.staff_mfa_backup_codes
+            where credential_id = '${credential}' order by code_hash limit 1`), [...backup.hashes].sort()[0]);
+        assert.equal(await consume(backup.hashes[0], SUBJECTS.ADMIN2), false);
+        const concurrent = await Promise.all([consume(backup.hashes[0]), consume(backup.hashes[0])]);
+        assert.deepEqual(concurrent.sort(), [false, true]);
+        assert.equal(await consume(backup.hashes[0]), false);
+        assert.equal(scalar(container, `select count(*) from app.audit_events where
+            target_id = '${credential}' and action = 'staff.mfa.backup_code.used'`), '1');
+        assert.equal(scalar(container, `select count(*) from app.audit_events where
+            action like 'staff.mfa.%' and details::text like '%${backup.hashes[0]}%'`), '0');
+        const replacement = generateBackupCodes(credential);
+        await set(replacement.hashes);
+        assert.equal(await consume(backup.hashes[1]), false);
+        assert.equal(await consume(replacement.hashes[1]), true);
+        scalar(container, `update app.totp_credentials set status = 'revoked', revoked_at = now()
+            where id = '${credential}';`);
+        assert.equal(await consume(replacement.hashes[2]), false);
+        await rejectCode(set(replacement.hashes), '42501');
+    });
+
+    await t.test('MFA attempts share a persistent atomic budget across concurrent requests', async () => {
+        const reserve = () => withStaffActor(pool, identity(SUBJECTS.ADMIN1), ORG_A,
+            async ({ client }) => (await client.query('select app.reserve_mfa_attempt_v1() as retry')).rows[0].retry);
+        const results = await Promise.all(Array.from({ length: 12 }, reserve));
+        assert.equal(results.filter((n) => n === 0).length, 10);
+        assert.equal(results.filter((n) => n > 0 && n <= 600).length, 2);
+        assert.ok(await reserve() > 0);
+        scalar(container, `update app.staff_mfa_attempts set window_started_at = now() - interval '11 minutes'
+            where user_id = '${USER_ADMIN1}';`);
+        assert.equal(await reserve(), 0);
+        assert.equal(scalar(container, `select attempts from app.staff_mfa_attempts where user_id = '${USER_ADMIN1}'`), '1');
+        await rejectCode(withContext(pool, '', '', (client) => client.query('select app.reserve_mfa_attempt_v1()')), '42501');
+        await rejectCode(pool.query('select * from app.staff_mfa_backup_codes'), '42501');
+        await rejectCode(pool.query('select * from app.staff_mfa_attempts'), '42501');
+        assert.equal(scalar(container, `select count(*) from information_schema.role_table_grants
+            where table_schema = 'app' and table_name in ('staff_mfa_backup_codes', 'staff_mfa_attempts')
+            and grantee not in ('app_owner','app_executor')`), '0');
+    });
+
 });

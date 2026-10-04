@@ -13,9 +13,11 @@ const reactScripts = ['react', 'react-dom'].map((name) => readFileSync(
     join(dirname(require.resolve(name)), `umd/${name}.development.js`), 'utf8',
 ));
 
+const backupCodes = Array.from({ length: 10 }, (_, i) => `${String(i).padStart(8, '0')}-ABCDEF12-ABCDEF12-ABCDEF12`);
+
 // Exercise the real client component with simulated API responses. This
 // fixture never authenticates, creates a credential, or contacts a database.
-async function mountForm(page, { mode = 'enroll', status = 200, error, networkError = false } = {}) {
+async function mountForm(page, { mode = 'enroll', status = 200, error, networkError = false, missingCodes = false } = {}) {
     const origin = 'http://127.0.0.1:3000';
     const submissions = [];
     await page.route('**/*', async (route) => {
@@ -27,7 +29,7 @@ async function mountForm(page, { mode = 'enroll', status = 200, error, networkEr
             return route.fulfill({
                 status,
                 contentType: 'application/json',
-                body: JSON.stringify(error ? { error } : { ok: true }),
+                body: JSON.stringify(error ? { error } : { ok: true, ...(mode !== 'verify' && !missingCodes ? { backupCodes } : {}) }),
             });
         }
         return route.fulfill({
@@ -41,7 +43,7 @@ async function mountForm(page, { mode = 'enroll', status = 200, error, networkEr
         content: `const exports = {}; const require = () => React;
             ${compiledForm}
             ReactDOM.createRoot(document.getElementById('root')).render(
-                React.createElement(exports.${mode === 'enroll' ? 'MfaEnrollForm' : 'MfaVerifyForm'}, {
+                React.createElement(exports.${mode === 'enroll' ? 'MfaEnrollForm' : mode === 'generate' ? 'BackupCodesGenerateForm' : 'MfaVerifyForm'}, {
                     qrDataUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
                     secret: 'SYNTHETIC-TEST-ONLY',
                 })
@@ -52,16 +54,26 @@ async function mountForm(page, { mode = 'enroll', status = 200, error, networkEr
 
 async function submitCode(page) {
     await page.getByPlaceholder('000000').fill('123456');
-    await page.getByRole('button').click();
+    await page.getByRole('button', { name: /^(Enable two-factor|Verify|Generate 10 new backup codes)$/ }).click();
 }
 
-for (const mode of ['enroll', 'verify']) {
+for (const mode of ['enroll', 'verify', 'generate']) {
     test(`successful MFA ${mode} leaves the form for the staff workspace`, async ({ page }) => {
         const { origin, submissions } = await mountForm(page, { mode });
         await submitCode(page);
+        if (mode !== 'verify') {
+            await expect(page.getByLabel('Your backup codes')).toHaveValue(backupCodes.join('\n'));
+            await expect(page.getByRole('button', { name: 'Continue to workspace' })).toBeDisabled();
+            await expect(page.getByAltText('Authenticator QR code')).toHaveCount(0);
+            const download = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'Download backup codes' }).click();
+            expect((await download).suggestedFilename()).toBe('agora-backup-codes.txt');
+            await page.getByLabel('I saved my backup codes').check();
+            await page.getByRole('button', { name: 'Continue to workspace' }).click();
+        }
         await expect(page).toHaveURL(`${origin}/staff`);
         expect(submissions).toEqual([{
-            path: `/api/staff/mfa/${mode}`, method: 'POST', body: { code: '123456' },
+            path: `/api/staff/mfa/${mode === 'generate' ? 'backup-codes' : mode}`, method: 'POST', body: { code: '123456' },
         }]);
     });
 }
@@ -89,3 +101,31 @@ for (const scenario of [
         await expect(page).toHaveURL(`${origin}/__staff-mfa-test`);
     });
 }
+
+for (const status of [200, 401]) {
+    test(`backup verification handles status ${status}`, async ({ page }) => {
+        const { origin, submissions } = await mountForm(page, { mode: 'verify', status, error: status === 401 ? 'invalid backup code' : undefined });
+        await page.getByRole('button', { name: 'Use a backup code', exact: true }).click();
+        await page.getByLabel('Backup code', { exact: true }).fill(backupCodes[0]);
+        await page.getByRole('button', { name: 'Use backup code', exact: true }).click();
+        expect(submissions[0].body).toEqual({ code: backupCodes[0], method: 'backup' });
+        if (status === 200) await expect(page).toHaveURL(`${origin}/staff`);
+        else {
+            await expect(page.getByRole('alert')).toContainText('invalid or has already been used');
+            await page.getByRole('button', { name: 'Use authenticator instead' }).click();
+            await expect(page.getByLabel('Authenticator code')).toHaveValue('');
+        }
+    });
+}
+
+test('rate limiting explains when to retry', async ({ page }) => {
+    await mountForm(page, { status: 429, error: 'too many attempts' });
+    await submitCode(page);
+    await expect(page.getByRole('alert')).toContainText('Wait 10 minutes');
+});
+
+test('missing backup codes provides a generation recovery link', async ({ page }) => {
+    await mountForm(page, { missingCodes: true });
+    await submitCode(page);
+    await expect(page.getByRole('link', { name: 'Generate a new set' })).toHaveAttribute('href', '/staff/mfa/backup-codes');
+});

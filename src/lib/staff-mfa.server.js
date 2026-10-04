@@ -1,4 +1,6 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
+import { generateBackupCodes, hashBackupCode } from './staff-backup-codes.js';
 import { generateTotpSecret, matchTotpCode } from './totp.js';
 import { withStaffActor } from './staff-authorization.js';
 
@@ -40,13 +42,19 @@ export async function enrollTotp(pool, identity, organizationId) {
     return { credentialId, secret };
 }
 
-export async function confirmTotpEnrollment(pool, identity, organizationId, credentialId) {
+export async function confirmTotpEnrollment(pool, identity, organizationId, credentialId, counter) {
+    const backup = generateBackupCodes(credentialId);
     await withStaffActor(pool, identity, organizationId, async ({ client, auditId, correlationId }) => {
         await client.query(
             'select app.totp_confirm_v1($1, $2, $3)',
             [credentialId, auditId, correlationId],
         );
+        await client.query('select app.totp_record_use_v1($1,$2,$3,$4)',
+            [credentialId, counter, randomUUID(), correlationId]);
+        await client.query('select app.set_mfa_backup_codes_v1($1,$2,$3,$4)',
+            [credentialId, backup.hashes, randomUUID(), correlationId]);
     });
+    return backup.codes;
 }
 
 export async function recordTotpUse(pool, identity, organizationId, credentialId, counter) {
@@ -60,4 +68,31 @@ export async function recordTotpUse(pool, identity, organizationId, credentialId
 
 export function verifyTotpCode(secret, code) {
     return matchTotpCode(secret, code);
+}
+
+// This reservation is committed separately so a failed code cannot roll it back.
+export async function reserveMfaAttempt(pool, identity, organizationId) {
+    return withStaffActor(pool, identity, organizationId, async ({ client }) =>
+        (await client.query('select app.reserve_mfa_attempt_v1() as retry_after')).rows[0].retry_after);
+}
+
+export async function consumeBackupCode(pool, identity, organizationId, credentialId, code) {
+    const hash = hashBackupCode(credentialId, code);
+    if (!hash) return false;
+    return withStaffActor(pool, identity, organizationId, async ({ client, auditId, correlationId }) =>
+        (await client.query('select app.consume_mfa_backup_code_v1($1,$2,$3,$4) as accepted',
+            [credentialId, hash, auditId, correlationId])).rows[0].accepted);
+}
+
+// Existing users can create/replace their set, but only after a fresh TOTP
+// check. Generation and replay recording commit together or not at all.
+export async function replaceBackupCodes(pool, identity, organizationId, credentialId, counter) {
+    const backup = generateBackupCodes(credentialId);
+    await withStaffActor(pool, identity, organizationId, async ({ client, auditId, correlationId }) => {
+        await client.query('select app.totp_record_use_v1($1,$2,$3,$4)',
+            [credentialId, counter, auditId, correlationId]);
+        await client.query('select app.set_mfa_backup_codes_v1($1,$2,$3,$4)',
+            [credentialId, backup.hashes, randomUUID(), correlationId]);
+    });
+    return backup.codes;
 }

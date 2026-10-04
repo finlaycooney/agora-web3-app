@@ -422,6 +422,10 @@ export function StaffShell({
                         </span>
                     </div>
                 </div>
+                <Link href="/staff/mfa/backup-codes" onClick={onNavigate}
+                    className="px-1 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline">
+                    Backup codes
+                </Link>
                 <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: '/staff/sign-in' })}

@@ -1,71 +1,27 @@
-import { cookies } from 'next/headers';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { staffIdentityFromSession } from '@/lib/staff-identity';
-import { getStaffPool, resolveStaffPrincipal } from '@/lib/staff-db.server';
-import {
-    getTotpStatus,
-    recordTotpUse,
-    verifyTotpCode,
-} from '@/lib/staff-mfa.server';
-import {
-    STAFF_MFA_COOKIE,
-    STAFF_MFA_TTL_MS,
-    createStaffMfaProof,
-} from '@/lib/staff-mfa-cookie';
+import { consumeBackupCode, getTotpStatus, recordTotpUse, verifyTotpCode } from '@/lib/staff-mfa.server';
+import { staffMfaContext, issueMfaProof, mfaJson, mfaFailure } from '@/lib/staff-mfa-http.server';
 
 export const runtime = 'nodejs';
 
-const json = (body: unknown, status = 200) => Response.json(body, { status });
-
 export async function POST(request: Request) {
-    const session = await getServerSession(authOptions);
-    const identity = staffIdentityFromSession(session);
-    if (!identity) {
-        return json({ error: 'unauthorized' }, 401);
-    }
-    const pool = getStaffPool();
-    const organizationId = process.env.STAFF_ORGANIZATION_ID;
-    const secret = process.env.NEXTAUTH_SECRET;
-    if (!pool || !organizationId || !secret) {
-        return json({ error: 'staff workspace not configured' }, 503);
-    }
-
-    const body = await request.json().catch(() => ({}));
-    const code = typeof body?.code === 'string' ? body.code : '';
-
-    const status = await getTotpStatus(pool, identity, organizationId);
-    if (!status || status.status !== 'active') {
-        return json({ error: 'no active credential' }, 409);
-    }
-    const counter = verifyTotpCode(status.secret, code);
-    // Replays land on the same counter the DB already recorded — reject
-    // before touching it so a reused code never produces an audit row.
-    if (counter === null || counter <= status.lastUsedCounter) {
-        return json({ error: 'invalid code' }, 401);
-    }
-
     try {
-        await recordTotpUse(pool, identity, organizationId, status.credentialId, counter);
-    } catch {
-        return json({ error: 'invalid code' }, 401);
-    }
-    const principal = await resolveStaffPrincipal(pool, identity, organizationId);
-    if (!principal) {
-        return json({ error: 'unauthorized' }, 401);
-    }
-
-    const cookieStore = await cookies();
-    cookieStore.set(STAFF_MFA_COOKIE, createStaffMfaProof(secret, {
-        subject: identity.subject,
-        userId: principal.user_id,
-        credentialId: status.credentialId,
-    }), {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-        maxAge: STAFF_MFA_TTL_MS / 1000,
-    });
-    return json({ ok: true });
+        const context = await staffMfaContext(request);
+        if (context.denied) return context.denied;
+        const { pool, identity, organizationId } = context;
+        const body = await request.json().catch(() => ({}));
+        const status = await getTotpStatus(pool, identity, organizationId);
+        if (!status || status.status !== 'active') return mfaJson({ error: 'no active credential' }, 409);
+        if (body?.method === 'backup') {
+            if (!await consumeBackupCode(pool, identity, organizationId, status.credentialId, body?.code)) {
+                return mfaJson({ error: 'invalid backup code' }, 401);
+            }
+        } else {
+            if (body?.method !== undefined && body.method !== 'totp') return mfaJson({ error: 'invalid code' }, 401);
+            const counter = verifyTotpCode(status.secret, body?.code);
+            if (counter === null || counter <= status.lastUsedCounter) return mfaJson({ error: 'invalid code' }, 401);
+            await recordTotpUse(pool, identity, organizationId, status.credentialId, counter);
+        }
+        if (!await issueMfaProof(context, status.credentialId)) return mfaJson({ error: 'unauthorized' }, 401);
+        return mfaJson({ ok: true });
+    } catch (error) { return mfaFailure(error); }
 }
