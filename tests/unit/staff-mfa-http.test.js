@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import { staffRequestOriginAllowed } from '../../src/lib/staff-request-origin.js';
 
 function helper({ signedIn = true, google = 'active', retry = 0 } = {}) {
     let reservations = 0;
     const imports = {
+        './staff-request-origin.js': { staffRequestOriginAllowed },
         'server-only': {}, 'next/headers': { cookies: async () => ({ set: () => {} }) },
         'next-auth': { getServerSession: async () => signedIn ? {} : null },
         './auth-options': { authOptions: {} },
