@@ -1,9 +1,4 @@
-import {
-    getCandidateProfileOptions,
-    isMissingProfileFunctionError,
-    listCandidateProfiles,
-} from '@/lib/candidate-profile-operations';
-import { listCandidates } from '@/lib/pipeline-operations';
+import { listCandidateProfileDirectory } from '@/lib/candidate-profile-operations';
 import { StaffAuthorizationError } from '@/lib/staff-authorization';
 import { requireStaffVerified } from '@/lib/staff-gate.server';
 import { PageHeader } from '@/components/staff-preview/shared';
@@ -15,50 +10,26 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Candidates · Agora staff' };
 
-const LIST_LIMIT = 500;
-
-const unavailableOptions: CandidateProfileOptions = {
-    currentMembershipId: '',
-    canWrite: false,
-    owners: [],
-};
-
-export default async function StaffCandidatesPage() {
+export default async function StaffCandidatesPage({ searchParams }: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
     const gate = await requireStaffVerified();
+    const params = await searchParams;
     let candidates: CandidateRow[] | null = null;
     let profileOptions: CandidateProfileOptions | null = null;
-    let profileUnavailable = false;
+    let total = 0;
+    let page = 1;
+    let pageSize = 50;
     try {
-        const result = await listCandidateProfiles(
-            gate.pool, gate.identity, gate.organizationId,
-            { limit: LIST_LIMIT });
-        candidates = result?.candidates ?? [];
-        profileOptions = await getCandidateProfileOptions(
-            gate.pool, gate.identity, gate.organizationId);
+        const result = await listCandidateProfileDirectory(
+            gate.pool, gate.identity, gate.organizationId, params);
+        candidates = result.rows;
+        profileOptions = result.profileOptions;
+        total = result.total;
+        page = result.page;
+        pageSize = result.pageSize;
     } catch (error) {
-        if (isMissingProfileFunctionError(error)) {
-            profileUnavailable = true;
-            try {
-                const fallback = await listCandidates(
-                    gate.pool, gate.identity, gate.organizationId,
-                    { limit: LIST_LIMIT });
-                candidates = fallback?.candidates ?? [];
-                profileOptions = unavailableOptions;
-            } catch (fallbackError) {
-                if (!(fallbackError instanceof StaffAuthorizationError
-                    && fallbackError.code === 'FORBIDDEN')) {
-                    throw fallbackError;
-                }
-                candidates = null;
-                profileOptions = null;
-            }
-        } else if (error instanceof StaffAuthorizationError
-            && error.code === 'FORBIDDEN') {
-            candidates = null;
-            profileOptions = null;
-        } else {
-            throw error;
-        }
+        if (!(error instanceof StaffAuthorizationError && error.code === 'FORBIDDEN')) throw error;
     }
 
     return (
@@ -81,10 +52,11 @@ export default async function StaffCandidatesPage() {
                 <CandidatesBrowser
                     candidates={candidates}
                     semanticSearchEnabled={process.env.TELEGRAM_INTAKE_ENABLED === '1'}
-                    capped={candidates.length >= LIST_LIMIT}
+                    total={total}
+                    page={page}
+                    pageSize={pageSize}
                     canReviewDuplicates={profileOptions?.canReviewDuplicates === true}
                     profileOptions={profileOptions}
-                    profileUnavailable={profileUnavailable}
                 />
             )}
         </section>

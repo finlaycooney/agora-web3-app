@@ -70,6 +70,7 @@ const MIGRATIONS = [
     '20261002100000_candidate_upload.sql',
     '20261002110000_staff_shell_capabilities.sql',
     '20261002120000_staff_list_pagination.sql',
+    '20261004100000_staff_candidate_directory.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -1329,6 +1330,21 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await expect(preview.getByRole('tab', { name: /Applications/ })).toBeVisible();
         await preview.getByRole('link', { name: 'Open full candidate' }).click();
         await page.waitForURL(/\/staff\/candidates\/[0-9a-f-]{36}/);
+    });
+
+    await runCase('candidate directory searches on the server while retaining the existing table', async () => {
+        await gotoStaff(page, `${baseURL}/staff/candidates`);
+        const search = page.locator('#candidate-search');
+        const response = page.waitForResponse((r) => r.url().includes('/staff/candidates?q=')
+            && r.request().headers()['rsc'] === '1');
+        await search.fill('no-such-directory-person');
+        await expect(page.getByRole('table')).toBeVisible();
+        await expect(page.getByRole('status').filter({ hasText: 'Updating' })).toBeVisible();
+        await response;
+        await expect(page.getByText('No candidates found', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Clear', exact: true }).click();
+        await expect(page.getByRole('table')).toBeVisible();
+        await expect(page.getByRole('link', { name: 'Synthetic Candidate B', exact: true })).toBeVisible();
     });
 
     await runCase('candidate and job previews keep list filters and scroll position', async () => {

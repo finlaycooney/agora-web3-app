@@ -6,6 +6,7 @@ import { POSTGRES_17_IMAGE, assertLocalTestEnvironment, psql,
     startPostgresContainer, stopAndRemoveContainer } from '../support/foundation-docker.js';
 import { AUTHZ_ID, GOOGLE_ISSUER, installStaffFixture, staffPoolOptions } from '../support/staff-authorization.js';
 import { CJ_ID, CJ_SUBJECTS, clientJobFixtureSql } from '../support/client-job-workflows.js';
+import { getCandidateProfileOptions, listCandidateProfiles, listCandidateProfileDirectory } from '../../src/lib/candidate-profile-operations.js';
 import { listClientDirectory, listJobDirectory } from '../../src/lib/client-job-operations.js';
 
 
@@ -115,6 +116,67 @@ test('staff directory pages filter all records and preserve authorization', asyn
         for (const scan of scans) assert.equal(scan['Actual Loops'], 1);
         t.diagnostic(`Job directory EXPLAIN execution: ${explanation['Execution Time']} ms (121 jobs/clients).`);
 
+    });
+    await t.test('candidate pages search beyond the former cap and exclude restricted/foreign data', async () => {
+        psql(container, `
+            insert into app.candidates (id, organization_id, full_name, identity_state,
+                lifecycle, profile_contact_set, contact_email, created_at)
+            select ('94000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${AUTHZ_ID.ORG_B}', 'Page candidate ' || lpad(i::text, 3, '0'),
+                'established', 'active', true, 'page-' || i || '@example.test',
+                '2026-01-01'::timestamptz + i * interval '1 second'
+            from generate_series(1, 620) i;
+            insert into app.candidates (id, organization_id, full_name, identity_state, lifecycle)
+            values ('94000000-0000-4000-8000-000000000621', '${AUTHZ_ID.ORG_B}',
+                'Page candidate restricted', 'established', 'restricted'),
+                ('94000000-0000-4000-8000-000000000622', '${AUTHZ_ID.ORG_A}',
+                'Page candidate foreign', 'established', 'active');
+        `);
+        const candidates = (input) => listCandidateProfileDirectory(pool, admin, AUTHZ_ID.ORG_B, input);
+        let exchanges = 0;
+        const countedPool = { async connect() {
+            const client = await pool.connect();
+            return { query(...args) { exchanges += 1; return client.query(...args); },
+                release(error) { client.release(error); } };
+        } };
+        const oldList = await listCandidateProfiles(countedPool, admin, AUTHZ_ID.ORG_B,
+            { query: 'Page candidate', limit: 500 });
+        await getCandidateProfileOptions(countedPool, admin, AUTHZ_ID.ORG_B);
+        assert.equal(exchanges, 10);
+        exchanges = 0;
+        const first = await listCandidateProfileDirectory(countedPool, admin, AUTHZ_ID.ORG_B,
+            { q: 'Page candidate' });
+        assert.equal(exchanges, 5);
+        assert.equal(oldList.candidates.length, 500);
+        assert.ok(JSON.stringify(first).length < JSON.stringify(oldList).length / 5);
+        t.diagnostic(`Candidate rows: ${oldList.candidates.length} → ${first.rows.length}; ` +
+            `list + options exchanges: 10 → ${exchanges}; ` +
+            `result bytes: ${Buffer.byteLength(JSON.stringify(oldList))} → ${Buffer.byteLength(JSON.stringify(first))}.`);
+
+        const second = await candidates({ q: 'Page candidate', page: '2' });
+        assert.equal(first.total, 620);
+        assert.equal(first.rows.length, 50);
+        assert.equal(first.rows[0].fullName, 'Page candidate 620');
+        assert.equal(first.profileOptions.canWrite, true);
+        assert.equal(new Set([...first.rows, ...second.rows].map((r) => r.candidateId)).size, 100);
+        assert.deepEqual(await candidates({ q: 'Page candidate', page: '2' }), second);
+        const last = await candidates({ q: 'Page candidate', page: '999' });
+        assert.equal(last.page, 13);
+        assert.equal(last.rows.length, 20);
+        const email = await candidates({ q: 'page-1@example.test' });
+        assert.equal(email.total, 1);
+        assert.equal(email.rows[0].fullName, 'Page candidate 001');
+        assert.equal(email.rows[0].email, 'page-1@example.test');
+        assert.equal((await candidates({ q: '%' })).total, 0);
+        assert.equal((await candidates({ q: 'Page candidate restricted' })).total, 0);
+        assert.equal((await candidates({ q: 'Page candidate foreign' })).total, 0);
+        const empty = await candidates({ q: 'missing', page: '9' });
+        assert.equal(empty.page, 1);
+        assert.deepEqual(empty.rows, []);
+        await assert.rejects(listCandidateProfileDirectory(pool,
+            identity(CJ_SUBJECTS.VIEWER), AUTHZ_ID.ORG_B), (e) => e.code === 'FORBIDDEN');
+        await assert.rejects(listCandidateProfileDirectory(pool,
+            identity(CJ_SUBJECTS.RECRUITER), AUTHZ_ID.ORG_A), (e) => e.code === 'UNAUTHORIZED');
     });
     await t.test('both operations deny unauthorized users and foreign memberships', async () => {
         for (const operation of [listClientDirectory, listJobDirectory]) {

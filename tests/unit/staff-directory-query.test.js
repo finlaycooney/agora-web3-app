@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clientDirectoryQuery, jobDirectoryQuery } from '../../src/lib/staff-directory-query.js';
+import { candidateDirectoryQuery, clientDirectoryQuery, jobDirectoryQuery } from '../../src/lib/staff-directory-query.js';
 
 test('directory query bounds untrusted URL parameters and preserves literal searches', () => {
     assert.deepEqual(clientDirectoryQuery({ q: '  100%_client  ', page: '-1', status: 'bad' }), {
@@ -20,4 +20,13 @@ test('job filters retain legacy URLs and all status/sort combinations', () => {
         query: 'Engineer', clientId: id, state: 'unlisted', intake: 'closed', mine: true,
         sortBy: 'publication', sortDirection: 'desc', page: 3,
     });
+});
+
+test('candidate search bounds input and rejects repeated or invalid pages', () => {
+    assert.deepEqual(candidateDirectoryQuery({ q: '  Person_%  ', page: '3' }),
+        { query: 'Person_%', page: 3 });
+    assert.deepEqual(candidateDirectoryQuery({ q: ['hidden'], page: ['2'] }),
+        { query: '', page: 1 });
+    assert.equal(candidateDirectoryQuery({ q: 'x'.repeat(201), page: '1000001' }).query.length, 200);
+    assert.equal(candidateDirectoryQuery({ page: '1000001' }).page, 1);
 });

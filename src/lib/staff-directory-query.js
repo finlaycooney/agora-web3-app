@@ -30,3 +30,7 @@ export function jobDirectoryQuery(input = {}) {
         page: page(input.page),
     };
 }
+
+export function candidateDirectoryQuery(input = {}) {
+    return { query: text(input.q).trim().slice(0, 200), page: page(input.page) };
+}
