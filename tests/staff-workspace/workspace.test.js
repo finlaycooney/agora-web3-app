@@ -71,6 +71,7 @@ const MIGRATIONS = [
     '20261002110000_staff_shell_capabilities.sql',
     '20261002120000_staff_list_pagination.sql',
     '20261004100000_staff_candidate_directory.sql',
+    '20261004110000_staff_application_directory.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -426,6 +427,63 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         await page.getByRole('main').last().getByText('You’re up to date', { exact: true }).waitFor();
     });
 
+    await runCase('candidate and application pagination navigate without losing full totals', async () => {
+        psql(container, `
+            insert into app.candidates (id, organization_id, full_name, identity_state,
+                lifecycle, profile_contact_set, contact_email, created_at)
+            select ('96000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${ORG_ID}', 'Paging UI candidate ' || lpad(i::text, 3, '0'),
+                'established', 'active', true, 'paging-' || i || '@example.test',
+                '2026-01-01'::timestamptz + i * interval '1 second'
+            from generate_series(1, 51) i;
+            insert into app.applications (id, organization_id, candidate_id, job_id, pipeline_id,
+                stage_id, public_reference, reference_version, received_at)
+            select ('96100000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${ORG_ID}', ('96000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${CJ_ID.JOB_LEGACY_B}', '${CJ_ID.PIPELINE_B}',
+                case when i % 2 = 0 then '${CJ_ID.STAGE_B_1}'::uuid else '${CJ_ID.STAGE_B_2}'::uuid end,
+                'AG-CCCC' || lpad(upper(to_hex(i)), 8, '0'), 1,
+                '2026-01-01'::timestamptz + i * interval '1 second'
+            from generate_series(1, 51) i;
+        `);
+        try {
+            for (const directory of ['candidates', 'applications']) {
+                await gotoStaff(page, `${baseURL}/staff/${directory}?q=Paging+UI`);
+                await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(50);
+                const pages = page.getByRole('navigation', { name: 'Directory pages' });
+                await expect(pages).toHaveText(/Page 1 of 2.*1–50 of 51/);
+                await pages.getByRole('button', { name: 'Next', exact: true }).click();
+                await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+                await expect(pages).toHaveText(/Page 2 of 2.*51–51 of 51/);
+                await expect(pages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+                await pages.getByRole('button', { name: 'Previous', exact: true }).click();
+                await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(50);
+            }
+            const cards = page.getByRole('group', { name: 'Stage filter cards' });
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*51/);
+            await cards.getByRole('button', { name: /^Interview/ }).click();
+            await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(26);
+            await expect(cards.getByRole('button', { name: /^All applications/ })).toHaveText(/All applications\s*51/);
+            await expect(page.getByRole('status').filter({ hasText: '26 applications' })).toBeVisible();
+        } finally {
+            psql(container, `delete from app.applications where id::text like '96100000-%';
+                delete from app.candidates where id::text like '96000000-%';`);
+        }
+    });
+
+    await runCase('application search retains the table during a server transition', async () => {
+        await gotoStaff(page, `${baseURL}/staff/applications`);
+        const response = page.waitForResponse((r) => r.url().includes('/staff/applications?q=')
+            && r.request().headers()['rsc'] === '1');
+        await page.locator('#application-search').fill('no-such-directory-person');
+        await expect(page.getByRole('table')).toBeVisible();
+        await expect(page.getByRole('status').filter({ hasText: 'Updating' })).toBeVisible();
+        await response;
+        await expect(page.getByText('No applications found', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+        await expect(page.getByRole('table')).toBeVisible();
+    });
+
     await runCase('application client labels and stage totals stay correct for empty and inaccessible clients', async () => {
         const emptyClient = '97000000-0000-4000-8000-000000000001';
         const foreignClient = '97000000-0000-4000-8000-000000000002';
@@ -463,7 +521,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             await page.getByRole('button', { name: 'Awaiting review', exact: true }).click();
             await cards.getByRole('button', { name: /^All applications/ }).click();
             await expect(page.getByRole('button', { name: 'Awaiting review', exact: true })).toHaveAttribute('aria-pressed', 'true');
-            assert.equal(new URL(page.url()).searchParams.get('review'), '1');
+            await expect.poll(() => new URL(page.url()).searchParams.get('review')).toBe('1');
 
             await gotoStaff(page, `${baseURL}/staff/applications?client=${foreignClient}`);
             await expect(page.getByRole('combobox', { name: 'Filter by client' })).toHaveText('Unavailable client');

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { applicationDirectoryQuery } from './staff-directory-query.js';
 import {
     StaffAuthorizationError,
     withStaffTransaction,
@@ -163,3 +164,10 @@ export async function getDocumentDownload(pool, verifiedIdentity, organizationId
 }
 
 export { StaffAuthorizationError };
+
+export async function listApplicationDirectory(pool, identity, organizationId, input = {}) {
+    const filters = applicationDirectoryQuery(input);
+    return run(pool, identity, organizationId, APPLICATION_READ_PERMISSIONS,
+        'select app.list_application_directory_v1($1::text, $2::uuid, $3::uuid, $4::text, $5::boolean, $6::integer) as result',
+        [filters.query, filters.jobId, filters.clientId, filters.stage, filters.review, filters.page]);
+}

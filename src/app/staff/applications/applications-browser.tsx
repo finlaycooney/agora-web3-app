@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/staff-ui/badge';
@@ -24,8 +23,8 @@ import {
     TableRow,
 } from '@/components/staff-ui/table';
 import { cn } from '@/lib/utils';
-import { filterApplicationRows } from '@/lib/application-filters';
-import { flagParam, textParam, uuidParam } from '../filter-params';
+import { applicationDirectoryQuery } from '@/lib/staff-directory-query';
+import { useDirectoryNavigation } from '../use-directory-navigation';
 
 export interface ApplicationRow {
     applicationId: string;
@@ -45,6 +44,7 @@ export interface ApplicationRow {
 }
 
 export interface ApplicationFiltersState {
+    page: number;
     query: string;
     jobId: string;
     clientId: string;
@@ -64,84 +64,48 @@ const formatDate = (iso: string) =>
         day: 'numeric', month: 'short', year: 'numeric',
     });
 
-function syncUrl(filters: ApplicationFiltersState) {
+function serializeFilters(filters: ApplicationFiltersState) {
     const params = new URLSearchParams();
     if (filters.query.trim()) params.set('q', filters.query);
     if (filters.jobId !== 'all') params.set('job', filters.jobId);
     if (filters.clientId !== 'all') params.set('client', filters.clientId);
     if (filters.stage !== 'all') params.set('stage', filters.stage);
     if (filters.review) params.set('review', '1');
-    const query = params.toString();
-    window.history.replaceState(
-        null, '', `/staff/applications${query ? `?${query}` : ''}`);
+    if (filters.page > 1) params.set('page', String(filters.page));
+    return params.toString();
 }
 
-const parseFilters = (params: { get(name: string): string | null }): ApplicationFiltersState => ({
-    query: textParam(params, 'q'),
-    jobId: uuidParam(params, 'job'),
-    clientId: uuidParam(params, 'client'),
-    stage: params.get('stage') ?? 'all',
-    review: flagParam(params, 'review'),
-});
+const parseFilters = (params: { get(name: string): string | null }): ApplicationFiltersState => {
+    const filters = applicationDirectoryQuery({ q: params.get('q'), job: params.get('job'),
+        client: params.get('client'), stage: params.get('stage'), review: params.get('review'), page: params.get('page') });
+    return { ...filters, jobId: filters.jobId ?? 'all', clientId: filters.clientId ?? 'all' };
+};
 
 export function ApplicationsBrowser({
     applications,
     jobs,
     clientOptions = [],
-    capped = false,
+    stages,
+    scopeTotal,
+    total,
+    page,
+    pageSize,
 }: {
     applications: ApplicationRow[];
     jobs: { id: string; title: string }[];
     clientOptions?: { id: string; name: string }[];
-    capped?: boolean;
+    stages: { key: string; label: string; kind: string; count: number }[];
+    scopeTotal: number;
+    total: number;
+    page: number;
+    pageSize: number;
 }) {
-    const searchParams = useSearchParams();
-    const filters = parseFilters(searchParams);
-
-    const update = (next: ApplicationFiltersState) => {
-        syncUrl(next);
-    };
-
-    const scopedApplications = useMemo(
-        () => filterApplicationRows(applications, filters, { includeStage: false }),
-        [applications, filters],
-    );
-
-    const stages = useMemo(() => {
-        const seen = new Map<string, { label: string; kind: string; count: number }>();
-        for (const row of applications) {
-            const existing = seen.get(row.stageKey);
-            if (existing) {
-                continue;
-            } else {
-                seen.set(row.stageKey, {
-                    label: row.stageLabel, kind: row.stageKind, count: 0,
-                });
-            }
-        }
-        for (const row of scopedApplications) {
-            const stage = seen.get(row.stageKey);
-            if (stage) stage.count += 1;
-        }
-        return Array.from(seen.entries()).map(([key, value]) => ({ key, ...value }));
-    }, [applications, scopedApplications]);
-
-    const clients = useMemo(() => {
-        const seen = new Map(clientOptions.map((client) => [client.id, client.name]));
-        for (const row of applications) {
-            if (!seen.has(row.clientId)) seen.set(row.clientId, row.clientName);
-        }
-        return Array.from(seen.entries())
-            .map(([id, name]) => ({ id, name }))
-            .sort((left, right) => left.name.localeCompare(right.name));
-    }, [applications, clientOptions]);
-
-    const reviewSupported = applications.every(
-        (row) => typeof row.stageIsInitial === 'boolean',
-    );
-
-    const visible = useMemo(() => filterApplicationRows(applications, filters),
-        [applications, filters]);
+    const { filters, update: navigate, pending } = useDirectoryNavigation(
+        '/staff/applications', parseFilters, serializeFilters);
+    const update = (next: ApplicationFiltersState, debounce = false) =>
+        navigate({ ...next, page: 1 }, debounce);
+    const clients = clientOptions;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     const filtersSet =
         filters.query.trim() !== ''
@@ -151,7 +115,7 @@ export function ApplicationsBrowser({
         || filters.review;
 
     const clearFilters = () =>
-        update({ query: '', jobId: 'all', clientId: 'all', stage: 'all', review: false });
+        update({ query: '', jobId: 'all', clientId: 'all', stage: 'all', review: false, page: 1 });
 
     return (
         <div className="flex flex-col gap-6">
@@ -184,7 +148,7 @@ export function ApplicationsBrowser({
                 >
                     <span className="text-sm text-muted-foreground">All applications</span>
                     <span className="text-[26px] leading-8 font-semibold text-foreground">
-                        {scopedApplications.length}
+                        {scopeTotal}
                     </span>
                 </button>
                 {stages.map((stage) => (
@@ -222,9 +186,10 @@ export function ApplicationsBrowser({
                             id="application-search"
                             className="pl-9"
                             placeholder="Search candidate, job or client…"
+                            maxLength={200}
                             value={filters.query}
                             onChange={(event) =>
-                                update({ ...filters, query: event.target.value })
+                                update({ ...filters, query: event.target.value }, true)
                             }
                         />
                     </div>
@@ -293,31 +258,21 @@ export function ApplicationsBrowser({
                 ) : null}
             </div>
 
-            {filters.review && !reviewSupported ? (
-                <p role="status" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                    Review-stage filtering needs a database update — showing all
-                    applications instead.
-                </p>
-            ) : null}
-
             <span role="status" className="text-xs text-muted-foreground">
-                {visible.length} application{visible.length === 1 ? '' : 's'}
-                {capped
-                    ? ' · Showing the latest 500 applications; filters apply to loaded records'
-                    : ''}
+                {total} application{total === 1 ? '' : 's'}{pending ? ' · Updating…' : ''}
             </span>
 
-            {visible.length === 0 ? (
+            {applications.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
                     <p className="text-sm font-medium text-foreground">No applications found</p>
                     <p className="max-w-sm text-sm text-muted-foreground">
-                        {applications.length === 0
+                        {!filtersSet
                             ? 'Applications appear here once candidates are linked to jobs.'
                             : 'Try clearing the filters.'}
                     </p>
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <div aria-busy={pending} className="overflow-hidden rounded-lg border border-border bg-card">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -330,7 +285,7 @@ export function ApplicationsBrowser({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {visible.map((row) => (
+                            {applications.map((row) => (
                                 <TableRow key={row.applicationId}>
                                     <TableCell>
                                         <a
@@ -349,12 +304,12 @@ export function ApplicationsBrowser({
                                         </a>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
-                                        <a
+                                        <Link
                                             href={`/staff/clients/${row.clientId}`}
                                             className="underline-offset-4 hover:underline"
                                         >
                                             {row.clientName}
-                                        </a>
+                                        </Link>
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant={KIND_TONE[row.stageKind] ?? 'secondary'}>
@@ -373,6 +328,16 @@ export function ApplicationsBrowser({
                     </Table>
                 </div>
             )}
+            <nav aria-label="Directory pages" className="flex items-center justify-between gap-3">
+                <Button variant="outline" size="sm" disabled={pending || page <= 1}
+                    onClick={() => navigate({ ...filters, page: page - 1 })}>Previous</Button>
+                <span className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                    {total > 0 ? ` · ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}` : ''}
+                </span>
+                <Button variant="outline" size="sm" disabled={pending || page >= totalPages}
+                    onClick={() => navigate({ ...filters, page: page + 1 })}>Next</Button>
+            </nav>
         </div>
     );
 }
