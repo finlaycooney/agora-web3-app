@@ -15,7 +15,31 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Select validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      selection: ${{ steps.select.outputs.selection }}
+      app_checks: ${{ steps.select.outputs.app_checks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Select affected checks or reuse identical validated code
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci-selection.mjs
+
   quality:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['quality'] }}
     name: Quality and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -32,13 +56,17 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Type-check
+        if: needs.plan.outputs.app_checks == 'true'
         run: npm run typecheck
       - name: Run unit tests
         run: npm test
       - name: Build production application
+        if: needs.plan.outputs.app_checks == 'true'
         run: npm run build
 
   browser-tests:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['browser-tests'] }}
     name: Browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -58,6 +86,8 @@ jobs:
         run: npm run test:e2e
 
   database-foundation:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-foundation'] }}
     name: Database foundation (${{ matrix.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -84,6 +114,8 @@ jobs:
         run: npm run test:db:foundation
 
   database-staff-authorization:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-staff-authorization'] }}
     name: Database staff authorization
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -101,6 +133,8 @@ jobs:
         run: npm run test:db:staff
 
   database-privacy-foundation:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-privacy-foundation'] }}
     name: Database privacy foundation
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -118,6 +152,8 @@ jobs:
         run: npm run test:db:privacy
 
   database-privacy-operations:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-privacy-operations'] }}
     name: Database privacy operations
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -135,6 +171,8 @@ jobs:
         run: npm run test:db:privacy-operations
 
   database-client-jobs:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-client-jobs'] }}
     name: Database client and job workflows
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -152,6 +190,8 @@ jobs:
         run: npm run test:db:client-jobs
 
   staff-workspace:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['staff-workspace'] }}
     name: Authenticated staff workspace
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -173,6 +213,8 @@ jobs:
         run: npm run test:db:candidate-upload
 
   duplicate-review:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['duplicate-review'] }}
     name: Candidate duplicate review
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -192,6 +234,8 @@ jobs:
         run: npm run test:duplicate-review
 
   database-staff-totp:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['database-staff-totp'] }}
     name: Database staff TOTP
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -209,6 +253,8 @@ jobs:
         run: npm run test:db:totp
 
   telegram-intake:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-intake'] }}
     name: Private Telegram intake
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -228,6 +274,8 @@ jobs:
         run: npm run test:telegram-intake
 
   telegram-connection:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-connection'] }}
     name: Telegram connection
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -254,6 +302,8 @@ jobs:
 
 
   telegram-history:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-history'] }}
     name: Telegram history import
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -279,6 +329,8 @@ jobs:
         run: npm run test:telegram-history
 
   telegram-extraction:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-extraction'] }}
     name: Telegram candidate extraction
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -298,6 +350,8 @@ jobs:
         run: npm run test:telegram-extraction
 
   telegram-cv:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-cv'] }}
     name: Telegram CV retrieval
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -319,6 +373,8 @@ jobs:
         run: npm run test:telegram-cv
 
   profile-search:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['profile-search'] }}
     name: Private and approved profile search
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -346,6 +402,8 @@ jobs:
         run: npm run test:profile-search
 
   telegram-retention:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['telegram-retention'] }}
     name: Telegram catch-up and reviewed source cleanup
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -363,6 +421,8 @@ jobs:
         run: npm run test:telegram-retention
 
   cv-analysis:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['cv-analysis'] }}
     name: CV analysis and draft review
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -386,6 +446,8 @@ jobs:
         run: npm run test:cv-analysis
 
   cv-search:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['cv-search'] }}
     name: Approved CV semantic search
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -403,6 +465,8 @@ jobs:
         run: npm run test:cv-search
 
   worker-pairing:
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.selection)['worker-pairing'] }}
     name: Mac worker pairing
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -418,3 +482,25 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify pairing, recovery and device management
         run: npm run test:worker-pairing
+
+  validation:
+    name: CI validation
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [plan, quality, browser-tests, database-foundation, database-staff-authorization, database-privacy-foundation, database-privacy-operations, database-client-jobs, staff-workspace, duplicate-review, database-staff-totp, telegram-intake, telegram-connection, telegram-history, telegram-extraction, telegram-cv, profile-search, telegram-retention, cv-analysis, cv-search, worker-pairing]
+    steps:
+      - name: Reject failed, cancelled or unexpectedly skipped checks
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const results = JSON.parse(process.env.RESULTS);
+          if (results.plan.result !== 'success') throw new Error('CI selection failed');
+          const selected = JSON.parse(results.plan.outputs.selection);
+          for (const [job, enabled] of Object.entries(selected)) {
+            if (enabled && results[job]?.result !== 'success') {
+              throw new Error(`Required job ${job}: ${results[job]?.result ?? 'missing'}`);
+            }
+          }
+          console.log('All selected checks passed.');
+          NODE

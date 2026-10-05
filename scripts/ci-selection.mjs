@@ -1,0 +1,140 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+export const JOBS = [
+    'quality', 'browser-tests', 'database-foundation', 'database-staff-authorization',
+    'database-privacy-foundation', 'database-privacy-operations', 'database-client-jobs',
+    'staff-workspace', 'duplicate-review', 'database-staff-totp', 'telegram-intake',
+    'telegram-connection', 'telegram-history', 'telegram-extraction', 'telegram-cv',
+    'profile-search', 'telegram-retention', 'cv-analysis', 'cv-search', 'worker-pairing',
+];
+const STAFF = JOBS.filter((job) => !['quality', 'database-foundation'].includes(job));
+const TELEGRAM = JOBS.filter((job) => job.startsWith('telegram-'));
+const all = () => ({ selection: Object.fromEntries(JOBS.map((job) => [job, true])), appChecks: true });
+
+// Unknown paths and shared security/schema changes deliberately fail closed.
+// Expand this map only with evidence of the affected suites' dependencies.
+export function selectJobs(files, full = false) {
+    if (full || files === null) return all();
+    const selected = new Set();
+    let appChecks = false;
+    for (const file of files) {
+        if (/\.md$/i.test(file)) continue;
+        selected.add('quality');
+        if (file === '.github/workflows/ci.yml' || file === 'scripts/ci-selection.mjs'
+            || file.startsWith('tests/unit/')) continue;
+        appChecks = true;
+        let jobs;
+        if (/^(supabase\/|tests\/support\/)/.test(file)
+            || /^(package(?:-lock)?\.json|\.nvmrc|next\.config\.mjs|tsconfig\.json)$/.test(file)) return all();
+        if (/^src\/app\/staff\/(applications|clients|jobs)\//.test(file)) jobs = ['staff-workspace'];
+        else if (/^src\/app\/staff\/candidates\/search\//.test(file)) jobs = ['profile-search', 'cv-search'];
+        else if (/^src\/app\/staff\/candidates\/duplicates\//.test(file)) jobs = ['duplicate-review'];
+        else if (/^src\/app\/staff\/candidates\//.test(file)) jobs = ['staff-workspace', 'duplicate-review', 'profile-search', 'cv-analysis'];
+        else if (/^src\/app\/staff\/telegram-intake\//.test(file)) jobs = [...TELEGRAM, 'profile-search'];
+        else if (/^(src\/app\/staff\/|src\/app\/api\/staff\/|src\/components\/staff)/.test(file)) jobs = STAFF;
+        else if (/^src\/lib\/(staff-|auth-options|totp|workspace|pipeline-|candidate-|client-job-|privacy-|duplicate-review|worker-pairing)/.test(file)) jobs = STAFF;
+        else if (/^src\/lib\/telegram-/.test(file)) jobs = [...STAFF];
+        else if (/^(src\/lib\/(profile-search|cv-analysis)|services\/(semantic-worker|local-embeddings|cv-analysis-worker))/.test(file)) jobs = ['profile-search', 'cv-search', 'cv-analysis', 'worker-pairing'];
+        else if (/^services\/(telegram-|worker-pairing|mac-worker)/.test(file)) jobs = STAFF;
+        else if (/^tests\/(database|staff-workspace)\//.test(file)) jobs = testJobs(file);
+        else if (/^(tests\/e2e\/|playwright\.config\.mjs|public\/)/.test(file)) jobs = ['browser-tests'];
+        // Shared app entry points and components can affect every browser suite.
+        else if (/^(src\/app\/(layout\.|globals\.)|src\/components\/)/.test(file)) jobs = [...STAFF, 'browser-tests'];
+        else if (/^src\/app\/(?!api\/|staff\/)/.test(file)) jobs = ['browser-tests'];
+        else return all();
+        if (!jobs) return all();
+        for (const job of jobs) selected.add(job);
+    }
+    return { selection: Object.fromEntries(JOBS.map((job) => [job, selected.has(job)])), appChecks };
+}
+
+function testJobs(file) {
+    const name = file.split('/').at(-1);
+    const mapping = [
+        [/^foundation\./, ['database-foundation']],
+        [/^staff-authorization\./, ['database-staff-authorization']],
+        [/^staff-totp\./, ['database-staff-totp']],
+        [/^privacy-foundation\./, ['database-privacy-foundation']],
+        [/^privacy-operations\./, ['database-privacy-operations']],
+        [/^client-job-workflows\./, ['database-client-jobs']],
+        [/^(staff-workspace|staff-list-pagination|candidate-profiles|candidate-upload|workspace|record-preview)\./, ['staff-workspace']],
+        [/^(candidate-merge|duplicate-review)\./, ['duplicate-review']],
+        [/^telegram-intake\./, ['telegram-intake']],
+        [/^telegram-connection\./, ['telegram-connection']],
+        [/^telegram-history/, ['telegram-history']],
+        [/^telegram-extraction/, ['telegram-extraction']],
+        [/^telegram-cv/, ['telegram-cv']],
+        [/^telegram-(retention|sync)/, ['telegram-retention', 'telegram-history']],
+        [/^profile-search/, ['profile-search']],
+        [/^cv-analysis/, ['cv-analysis']],
+        [/^cv-search/, ['cv-search']],
+        [/^worker-pairing/, ['worker-pairing']],
+    ];
+    return mapping.find(([pattern]) => pattern.test(name))?.[1];
+}
+
+export function reusableRun(runs, head, repository) {
+    const latest = runs.filter((run) => run.head_sha === head
+        && run.event === 'pull_request' && run.head_repository?.full_name === repository)
+        .sort((a, b) => b.id - a.id)[0];
+    return latest?.status === 'completed' && latest.conclusion === 'success' ? latest : null;
+}
+
+const sha = (value) => typeof value === 'string' && /^[a-f0-9]{40}$/i.test(value);
+export async function planEvent({ eventName, event, repository, git, runs }) {
+    if (eventName === 'workflow_dispatch') return { ...all(), reason: 'Manual full validation' };
+    if (eventName === 'push' && sha(event.after)) {
+        // Reuse only a successful run for the exact same tree, never merely a
+        // commit associated with a PR. Direct pushes or changed merge results
+        // still get tests. API errors fall back to normal change selection.
+        const parents = git(['show', '-s', '--format=%P', event.after]).trim().split(' ');
+        if (parents.length === 2 && parents.every(sha)
+            && git(['rev-parse', `${event.after}^{tree}`]).trim()
+                === git(['rev-parse', `${parents[1]}^{tree}`]).trim()) {
+            try {
+                const run = reusableRun(await runs(parents[1]), parents[1], repository);
+                if (run) return { ...selectJobs([]), reason: `Reused successful PR CI run ${run.id}; identical merge tree` };
+            } catch { /* No trusted proof: run the affected checks. */ }
+        }
+    }
+    let base;
+    let head;
+    let range;
+    if (eventName === 'pull_request') {
+        base = event.pull_request?.base?.sha;
+        head = event.pull_request?.head?.sha;
+        range = '...';
+    } else if (eventName === 'push') {
+        base = event.before;
+        head = event.after;
+        range = '..';
+    }
+    if (!sha(base) || !sha(head) || /^0+$/.test(base)) return { ...all(), reason: 'Unknown change range; full validation' };
+    const files = git(['diff', '--name-only', '--no-renames', '-z', `${base}${range}${head}`]).split('\0').filter(Boolean);
+    return { ...selectJobs(files), reason: `Selected checks for ${files.length} changed files`, files };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+    let plan;
+    try {
+        const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+        const repository = process.env.GITHUB_REPOSITORY;
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid repository');
+        plan = await planEvent({ eventName: process.env.GITHUB_EVENT_NAME, event, repository,
+            git: (args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }),
+            runs: async (head) => JSON.parse(execFileSync('gh', ['api',
+                `repos/${repository}/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${head}&per_page=100`],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })).workflow_runs,
+        });
+    } catch {
+        plan = { ...all(), reason: 'Selection failed; full validation' };
+    }
+    appendFileSync(process.env.GITHUB_OUTPUT,
+        `selection=${JSON.stringify(plan.selection)}\napp_checks=${plan.appChecks}\n`);
+    console.log(JSON.stringify(plan, null, 2));
+    if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+        `### CI selection\n${plan.reason}\n\nJobs: ${JOBS.filter((job) => plan.selection[job]).join(', ') || 'none (no unvalidated code changes)'}\n`);
+}
