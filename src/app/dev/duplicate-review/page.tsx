@@ -101,12 +101,12 @@ const demoComparisons: Record<string, Comparison> = {
 export default function DuplicateReviewDemoPage() {
     if (process.env.NODE_ENV !== 'development') notFound();
     return (
-        <div className="staff-scope min-h-screen bg-background px-4 py-8 text-foreground">
+        <main className="staff-scope min-h-screen bg-background px-4 py-8 text-foreground">
             <p className="mx-auto mb-6 w-full max-w-6xl text-xs text-muted-foreground">
                 Local demo data
             </p>
             <DuplicateReviewsBrowser reviews={reviews} status="pending" demo
                 demoComparisons={demoComparisons} />
-        </div>
+        </main>
     );
 }

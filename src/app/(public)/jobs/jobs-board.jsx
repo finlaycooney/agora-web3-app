@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import DecryptedText from '../../components/magicui/DecryptedText';
+import DecryptedText from '@/components/magicui/DecryptedText';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Briefcase, MapPin, DollarSign, ArrowRight, Zap, X } from 'lucide-react';
 import SignalSubmissionModal from '@/components/common/SignalSubmissionModal';
