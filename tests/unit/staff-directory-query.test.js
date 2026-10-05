@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { candidateDirectoryQuery, clientDirectoryQuery, jobDirectoryQuery } from '../../src/lib/staff-directory-query.js';
+import { applicationDirectoryQuery, candidateDirectoryQuery, clientDirectoryQuery, jobDirectoryQuery } from '../../src/lib/staff-directory-query.js';
 
 test('directory query bounds untrusted URL parameters and preserves literal searches', () => {
     assert.deepEqual(clientDirectoryQuery({ q: '  100%_client  ', page: '-1', status: 'bad' }), {
@@ -29,4 +29,16 @@ test('candidate search bounds input and rejects repeated or invalid pages', () =
         { query: '', page: 1 });
     assert.equal(candidateDirectoryQuery({ q: 'x'.repeat(201), page: '1000001' }).query.length, 200);
     assert.equal(candidateDirectoryQuery({ page: '1000001' }).page, 1);
+});
+
+test('application directory safely normalizes every filter', () => {
+    const id = '90000000-0000-4000-8000-000000000001';
+    assert.deepEqual(applicationDirectoryQuery({ q: '  Alice  ', job: id, client: id,
+        stage: 'interview', review: 'true', page: '2' }), {
+        query: 'Alice', jobId: id, clientId: id, stage: 'interview', review: true, page: 2,
+    });
+    assert.deepEqual(applicationDirectoryQuery({ q: ['x'], job: "' or true", client: ['x'],
+        stage: 'x'.repeat(65), review: ['true'], page: 'Infinity' }), {
+        query: '', jobId: null, clientId: null, stage: 'all', review: false, page: 1,
+    });
 });

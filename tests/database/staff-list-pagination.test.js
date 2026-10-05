@@ -7,6 +7,8 @@ import { POSTGRES_17_IMAGE, assertLocalTestEnvironment, psql,
 import { AUTHZ_ID, GOOGLE_ISSUER, installStaffFixture, staffPoolOptions } from '../support/staff-authorization.js';
 import { CJ_ID, CJ_SUBJECTS, clientJobFixtureSql } from '../support/client-job-workflows.js';
 import { getCandidateProfileOptions, listCandidateProfiles, listCandidateProfileDirectory } from '../../src/lib/candidate-profile-operations.js';
+import { withStaffTransaction } from '../../src/lib/staff-authorization.js';
+import { listApplicationDirectory } from '../../src/lib/pipeline-operations.js';
 import { listClientDirectory, listJobDirectory } from '../../src/lib/client-job-operations.js';
 
 
@@ -177,6 +179,116 @@ test('staff directory pages filter all records and preserve authorization', asyn
             identity(CJ_SUBJECTS.VIEWER), AUTHZ_ID.ORG_B), (e) => e.code === 'FORBIDDEN');
         await assert.rejects(listCandidateProfileDirectory(pool,
             identity(CJ_SUBJECTS.RECRUITER), AUTHZ_ID.ORG_A), (e) => e.code === 'UNAUTHORIZED');
+    });
+    await t.test('application paging retains whole-directory facets and secure filter options', async () => {
+        psql(container, `
+            insert into app.applications (id, organization_id, candidate_id, job_id, pipeline_id,
+                stage_id, public_reference, reference_version, received_at)
+            select ('95000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                '${AUTHZ_ID.ORG_B}',
+                ('94000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+                case when i <= 500 then '${CJ_ID.JOB_LEGACY_B}'::uuid
+                    else '92000000-0000-4000-8000-000000000120'::uuid end,
+                '${CJ_ID.PIPELINE_B}',
+                case when i % 2 = 0 then '${CJ_ID.STAGE_B_1}'::uuid else '${CJ_ID.STAGE_B_2}'::uuid end,
+                'AG-BBBB' || lpad(upper(to_hex(i)), 8, '0'), 1,
+                '2026-01-01'::timestamptz + i * interval '1 second'
+            from generate_series(1, 621) i;
+        `);
+        const applications = (filters) => listApplicationDirectory(pool, admin, AUTHZ_ID.ORG_B, filters);
+        let exchanges = 0;
+        const countedPool = { async connect() {
+            const client = await pool.connect();
+            return { query(...args) { exchanges += 1; return client.query(...args); },
+                release(error) { client.release(error); } };
+        } };
+        const started = performance.now();
+        const first = await listApplicationDirectory(countedPool, admin, AUTHZ_ID.ORG_B, { q: 'Page candidate' });
+        const directoryMs = performance.now() - started;
+        assert.equal(exchanges, 5);
+        assert.equal(first.total, 620);
+        assert.equal(first.scopeTotal, 620);
+        assert.equal(first.rows.length, 50);
+        assert.equal(first.rows[0].candidateName, 'Page candidate 620');
+        assert.equal(first.stages.reduce((sum, stage) => sum + stage.count, 0), 620);
+        assert.equal(first.stages.find((stage) => stage.key === 'review').count, 310);
+        assert.equal(first.stages.find((stage) => stage.key === 'interview').count, 310);
+        assert.equal(first.jobs.length, 121);
+        assert.ok(first.clients.some((client) => client.name === 'Page client 001'));
+        assert.ok(first.clients.every((client) => client.name !== 'Foreign page client'));
+        const second = await applications({ q: 'Page candidate', page: '2' });
+        assert.equal(new Set([...first.rows, ...second.rows].map((r) => r.applicationId)).size, 100);
+        assert.deepEqual(await applications({ q: 'Page candidate', page: '2' }), second);
+        const stage = await applications({ q: 'Page candidate', stage: 'interview', page: '2' });
+        assert.equal(stage.total, 310);
+        assert.equal(stage.scopeTotal, 620);
+        assert.deepEqual(stage.stages, first.stages);
+        assert.ok(stage.rows.every((row) => row.stageKey === 'interview'));
+        const review = await applications({ q: 'Page candidate', review: '1' });
+        assert.equal(review.total, 310);
+        assert.ok(review.rows.every((row) => row.stageIsInitial));
+        assert.equal(review.stages.find((row) => row.key === 'interview').count, 0);
+        const job = await applications({ q: 'Page candidate', job: CJ_ID.JOB_LEGACY_B });
+        assert.equal(job.total, 500);
+        const client = await applications({ q: 'Page candidate', client: '91000000-0000-4000-8000-000000000120' });
+        assert.equal(client.total, 120);
+        const offPage = await applications({ q: 'Page candidate 001' });
+        assert.equal(offPage.total, 1);
+        const reference = await applications({ q: 'AG-BBBB00000001' });
+        assert.equal(reference.total, 1);
+        assert.equal((await applications({ q: '%' })).total, 0);
+        assert.equal((await applications({ q: 'Page candidate restricted' })).total, 0);
+        assert.equal((await applications({ client: '93000000-0000-4000-8000-000000000001' })).total, 0);
+        const stageId = await applications({ q: 'Page candidate', stage: CJ_ID.STAGE_B_1 });
+        assert.equal(stageId.total, 310);
+        const last = await applications({ q: 'Page candidate', page: '999' });
+        assert.equal(last.page, 13);
+        assert.equal(last.rows.length, 20);
+        const empty = await applications({ q: 'Page candidate', stage: 'unavailable', page: '5' });
+        assert.equal(empty.total, 0);
+        assert.equal(empty.scopeTotal, 620);
+        assert.equal(empty.page, 1);
+        assert.deepEqual(empty.rows, []);
+        const baselineStarted = performance.now();
+        // Only the old-query comparison in this throwaway database gets more
+        // time. The new operation must pass the normal production timeout.
+        const old = await withStaffTransaction(pool, admin, AUTHZ_ID.ORG_B,
+            ['applications.read'], async ({ client }) => {
+                await client.query("set local statement_timeout = '60s'");
+                const { rows } = await client.query(
+                    'select app.list_applications_v1(null, $1, 500) as result', ['Page candidate']);
+                return rows[0].result;
+            });
+        t.diagnostic(`Application query: old ${(performance.now() - baselineStarted).toFixed(1)} ms; ` +
+            `bounded directory ${directoryMs.toFixed(1)} ms (single synthetic sample).`);
+        assert.ok(JSON.stringify(first).length < JSON.stringify(old).length / 4);
+        t.diagnostic(`Application result bytes: ${Buffer.byteLength(JSON.stringify(old))} → ` +
+            `${Buffer.byteLength(JSON.stringify(first))} (including all filter labels and stage counts).`);
+        await assert.rejects(listApplicationDirectory(pool,
+            identity(CJ_SUBJECTS.VIEWER), AUTHZ_ID.ORG_B), (e) => e.code === 'FORBIDDEN');
+        await assert.rejects(listApplicationDirectory(pool,
+            identity(CJ_SUBJECTS.RECRUITER), AUTHZ_ID.ORG_A), (e) => e.code === 'UNAUTHORIZED');
+    });
+    await t.test('application joins scan each authorized table scope once', async () => {
+        const migration = readFileSync(new URL('20261004110000_staff_application_directory.sql', migrationRoot), 'utf8');
+        let sql = migration.split('    return (')[1].split('    );')[0];
+        const values = { v_org: `'${AUTHZ_ID.ORG_B}'::uuid`, p_query: "'Page candidate'",
+            p_job: 'null::uuid', p_client: 'null::uuid', p_stage: "'all'", p_review: 'false', p_page: '1' };
+        for (const [key, value] of Object.entries(values)) sql = sql.replace(new RegExp(`\\b${key}\\b`, 'g'), value);
+        const plan = psql(container, `set role app_executor;
+            select set_config('app.actor_id', '${AUTHZ_ID.USER_ADMIN2}', false),
+                set_config('app.organization_id', '${AUTHZ_ID.ORG_B}', false);
+            explain (analyze, buffers, format json) ${sql}`);
+        const explanation = JSON.parse(plan.slice(plan.indexOf('[')))[0];
+        const scans = [];
+        const visit = (node) => {
+            if (['applications', 'candidates', 'jobs', 'clients', 'pipeline_stages'].includes(node['Relation Name'])) scans.push(node);
+            for (const child of node.Plans ?? []) visit(child);
+        };
+        visit(explanation.Plan);
+        assert.equal(scans.length, 5);
+        for (const scan of scans) assert.equal(scan['Actual Loops'], 1);
+        t.diagnostic(`Application directory EXPLAIN: ${explanation['Execution Time']} ms (622 applications).`);
     });
     await t.test('both operations deny unauthorized users and foreign memberships', async () => {
         for (const operation of [listClientDirectory, listJobDirectory]) {

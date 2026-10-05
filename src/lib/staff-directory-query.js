@@ -34,3 +34,15 @@ export function jobDirectoryQuery(input = {}) {
 export function candidateDirectoryQuery(input = {}) {
     return { query: text(input.q).trim().slice(0, 200), page: page(input.page) };
 }
+
+export function applicationDirectoryQuery(input = {}) {
+    const stage = text(input.stage);
+    return {
+        query: text(input.q).trim().slice(0, 200),
+        jobId: uuid.test(text(input.job)) ? input.job : null,
+        clientId: uuid.test(text(input.client)) ? input.client : null,
+        stage: stage && stage.length <= 64 ? stage : 'all',
+        review: input.review === '1' || input.review === 'true',
+        page: page(input.page),
+    };
+}
