@@ -35,7 +35,7 @@ const MIGRATIONS = [
     AUTHZ_MIGRATION,
     GOOGLE_MIGRATION,
     TOTP_MIGRATION,
-    '20261002140000_staff_mfa_backup_codes.sql',
+    '20261003090000_staff_mfa_backup_codes.sql',
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
