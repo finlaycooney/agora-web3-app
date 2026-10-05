@@ -36,6 +36,18 @@ const TRANSACTION_SETUP = `begin isolation level read committed;
         pg_catalog.set_config('app.identity_issuer', '', true),
         pg_catalog.set_config('app.identity_subject', '', true);`;
 
+// Materialization finishes the resolver (which clears context) before the
+// trusted actor is installed. The following statement checks permissions with
+// a fresh READ COMMITTED snapshot, exactly as before.
+const RESOLVE_ACTOR = `with resolved as materialized (
+    select user_id, membership_id, role_id
+    from app.resolve_staff_principal_v1($1, $2, $3, $4)
+)
+select user_id, membership_id, role_id,
+    pg_catalog.set_config('app.actor_id', user_id::text, true),
+    pg_catalog.set_config('app.organization_id', $4::text, true)
+from resolved`;
+
 export const STAFF_PROVIDER = 'google';
 export const STAFF_ISSUER = 'https://accounts.google.com';
 const SUBJECT_PATTERN = /^[1-9][0-9]{0,20}$/;
@@ -93,8 +105,7 @@ export async function withStaffTransaction(
     try {
         await client.query(TRANSACTION_SETUP);
         const resolved = await client.query(
-            'select user_id, membership_id, role_id'
-                + ' from app.resolve_staff_principal_v1($1, $2, $3, $4)',
+            RESOLVE_ACTOR,
             [
                 verifiedIdentity.provider,
                 verifiedIdentity.issuer,
@@ -109,12 +120,6 @@ export async function withStaffTransaction(
             );
         }
         const principal = resolved.rows[0];
-        await client.query(
-            `select
-                pg_catalog.set_config('app.actor_id', $1, true),
-                pg_catalog.set_config('app.organization_id', $2, true)`,
-            [principal.user_id, organizationId],
-        );
         const permissions = await client.query(
             `select app.has_permission_v1(permission.key) as allowed
              from pg_catalog.unnest($1::text[]) as permission(key)`,
@@ -181,8 +186,7 @@ export async function withStaffActor(pool, identity, organizationId, operation) 
     try {
         await client.query(`${TRANSACTION_SETUP} set local role app_staff;`);
         const resolved = await client.query(
-            'select user_id, membership_id, role_id'
-                + ' from app.resolve_staff_principal_v1($1, $2, $3, $4)',
+            RESOLVE_ACTOR,
             [identity.provider, identity.issuer, identity.subject, organizationId],
         );
         if (resolved.rows.length !== 1) {
@@ -192,12 +196,6 @@ export async function withStaffActor(pool, identity, organizationId, operation) 
             );
         }
         const principal = resolved.rows[0];
-        await client.query(
-            `select
-                pg_catalog.set_config('app.actor_id', $1, true),
-                pg_catalog.set_config('app.organization_id', $2, true)`,
-            [principal.user_id, organizationId],
-        );
         const result = await operation({
             client,
             principal: {

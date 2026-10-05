@@ -23,6 +23,7 @@ import {
 } from '../support/staff-authorization.js';
 import { generateBackupCodes } from '../../src/lib/staff-backup-codes.js';
 import { withStaffActor } from '../../src/lib/staff-authorization.js';
+import { readStaffAccess } from '../../src/lib/staff-access.js';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
@@ -92,6 +93,32 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
     const runtimePassword = installStaffFixture(container);
     pool = new pg.Pool(staffPoolOptions(container, runtimePassword, 4));
 
+    await t.test('combined access uses four exchanges and does not reuse access across requests', async () => {
+        const queries = [];
+        const countedPool = { async connect() {
+            const client = await pool.connect();
+            return {
+                query: (...args) => { queries.push(args[0]); return client.query(...args); },
+                release: (error) => client.release(error),
+            };
+        } };
+        const access = await readStaffAccess(countedPool, identity(SUBJECTS.ADMIN2), ORG_A);
+        assert.equal(access.principal.user_id, USER_ADMIN2);
+        assert.equal(access.totp, null);
+        assert.equal(queries.length, 4, 'setup, resolve/context, MFA, commit');
+        assert.equal(await readStaffAccess(pool, identity(SUBJECTS.UNMAPPED), ORG_A), null);
+        assert.equal(await readStaffAccess(pool, identity(SUBJECTS.ADMIN1), AUTHZ_ID.ORG_B), null);
+        psql(container, `update app.organization_memberships set status='revoked', revoked_at=now(), version=version+1
+            where id='${AUTHZ_ID.MEMBER_ADMIN2}';`);
+        try {
+            assert.equal(await readStaffAccess(pool, identity(SUBJECTS.ADMIN2), ORG_A), null);
+        } finally {
+            psql(container, `update app.organization_memberships set status='active', revoked_at=null, version=version+1
+                where id='${AUTHZ_ID.MEMBER_ADMIN2}';`);
+        }
+        assert.equal((await readStaffAccess(pool, identity(SUBJECTS.ADMIN2), ORG_A)).principal.user_id, USER_ADMIN2);
+    });
+
     await t.test('procedures fail closed without a trusted actor context', async () => {
         await rejectCode(withContext(pool, '', '', (client) => client.query(
             'select app.totp_status_v1()',
@@ -122,6 +149,7 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
         let status = await totpStatus(pool, SUBJECTS.ADMIN1);
         assert.equal(status.credential_id, enrolled.credentialId);
         assert.equal(status.status, 'pending');
+        assert.equal((await readStaffAccess(pool, identity(SUBJECTS.ADMIN1), ORG_A)).totp.status, 'pending');
         assert.equal(status.secret, SECRET);
         assert.equal(Number(status.last_used_counter), -1);
         assert.equal(scalar(
@@ -157,6 +185,10 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
         );
         status = await totpStatus(pool, SUBJECTS.ADMIN1);
         assert.equal(status.status, 'active');
+        const access = await readStaffAccess(pool, identity(SUBJECTS.ADMIN1), ORG_A);
+        assert.equal(access.totp.status, 'active');
+        assert.equal(access.totp.credentialId, second);
+        assert.equal(access.principal.user_id, USER_ADMIN1);
         assert.equal(scalar(
             container,
             `select count(*) from app.audit_events where action = 'staff.totp.activated'`

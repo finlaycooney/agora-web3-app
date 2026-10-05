@@ -16,10 +16,9 @@ function boundary(file, overrides = {}) {
         './staff-identity': { staffIdentityFromSession: (s) => s, staffInviteEmailFromSession: () => session.user.email },
         './staff-db.server': {
             getStaffPool: () => ({}),
-            resolveOrClaimStaffPrincipal: async () => ({ user_id: 'user' }),
+            resolveOrClaimStaffAccess: async () => ({ principal: { user_id: 'user' }, totp: { status: 'active', credentialId: 'credential' } }),
         },
         './staff-google.server': { staffGoogleCredentialStatus: async () => 'active' },
-        './staff-mfa.server': { getTotpStatus: async () => ({ status: 'active', credentialId: 'credential' }) },
         './staff-mfa-cookie': { STAFF_MFA_COOKIE: 'staff_mfa', readStaffMfaProof: () => ({}) },
         './staff-operations': { StaffOperationsError: class extends Error {} },
         './client-job-contracts': { ClientJobContractError: class extends Error {} },
@@ -45,24 +44,28 @@ test('revoked Google authorization directs an existing session to reauthenticati
     await assert.rejects(gate.requireStaffVerified, { message: '/staff/sign-in' });
 });
 
-for (const failure of ['resolution', 'mfa']) {
-    const overrides = failure === 'resolution'
-        ? { './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffPrincipal: async () => { throw new Error('DB unavailable'); } } }
-        : { './staff-mfa.server': { getTotpStatus: async () => { throw new Error('DB unavailable'); } } };
-    test(`${failure} outage is unavailable, never a missing membership`, async () => {
-        const gate = boundary('staff-gate.server.js', overrides);
-        assert.equal((await gate.staffGate()).stage, 'unavailable');
-        await assert.rejects(gate.requireStaffVerified, { message: '/staff/unavailable' });
-        const api = boundary('staff-api.server.js', overrides);
-        const context = await api.staffApiContext();
-        assert.equal(context.status, 'unavailable');
-        assert.equal(api.staffGateResponse(context).status, 503);
+test('combined access outage is unavailable, never a missing membership', async () => {
+    const overrides = { './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffAccess: async () => { throw new Error('DB unavailable'); } } };
+    const gate = boundary('staff-gate.server.js', overrides);
+    assert.equal((await gate.staffGate()).stage, 'unavailable');
+    await assert.rejects(gate.requireStaffVerified, { message: '/staff/unavailable' });
+    const api = boundary('staff-api.server.js', overrides);
+    const context = await api.staffApiContext();
+    assert.equal(context.status, 'unavailable');
+    assert.equal(api.staffGateResponse(context).status, 503);
+});
+
+for (const totp of [null, { status: 'pending', credentialId: 'credential' }]) {
+    test('a member without active MFA cannot enter a data-bearing route', async () => {
+        const overrides = { './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffAccess: async () => ({ principal: { user_id: 'user' }, totp }) } };
+        assert.equal((await boundary('staff-gate.server.js', overrides).staffGate()).stage, 'resolved');
+        assert.equal((await boundary('staff-api.server.js', overrides).staffApiContext()).status, 'mfa-required');
     });
 }
 
 test('real missing membership stays denied and a verified member still enters', async () => {
     const gate = boundary('staff-gate.server.js', {
-        './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffPrincipal: async () => null },
+        './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffAccess: async () => null },
     });
     assert.equal((await gate.staffGate()).stage, 'unresolved');
     await assert.rejects(gate.requireStaffVerified, { message: '/staff/no-access' });
@@ -72,7 +75,7 @@ test('real missing membership stays denied and a verified member still enters', 
 for (const code of ['42501', '23505']) {
     test(`invite denial ${code} is not reported as an outage`, async () => {
         const overrides = {
-            './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffPrincipal: async () => {
+            './staff-db.server': { getStaffPool: () => ({}), resolveOrClaimStaffAccess: async () => {
                 throw Object.assign(new Error('denied'), { code });
             } },
         };

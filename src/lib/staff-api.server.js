@@ -3,10 +3,9 @@ import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
 import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
-import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { getStaffPool, resolveOrClaimStaffAccess } from './staff-db.server';
 import { staffGoogleCredentialStatus } from './staff-google.server';
 import { StaffOperationsError } from './staff-operations';
-import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 import { ClientJobContractError } from './client-job-contracts';
 import { StaffAuthorizationError } from './staff-authorization';
@@ -33,12 +32,13 @@ export async function staffApiContext() {
     let principal;
     let totp;
     try {
-        principal = await resolveOrClaimStaffPrincipal(
+        const access = await resolveOrClaimStaffAccess(
             pool, identity, staffInviteEmailFromSession(session), organizationId);
+        principal = access?.principal ?? null;
         if (!principal) {
             return { status: 'unauthorized' };
         }
-        totp = await getTotpStatus(pool, identity, organizationId);
+        totp = access.totp;
         if (!totp || totp.status !== 'active') {
             return { status: 'mfa-required' };
         }

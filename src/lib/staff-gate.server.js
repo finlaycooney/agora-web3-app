@@ -5,9 +5,8 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
 import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
-import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
+import { getStaffPool, resolveOrClaimStaffAccess } from './staff-db.server';
 import { staffGoogleCredentialStatus } from './staff-google.server';
-import { getTotpStatus } from './staff-mfa.server';
 import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
 
 /**
@@ -59,11 +58,10 @@ async function resolveStaffGate() {
     let principal = null;
     let totp = null;
     try {
-        principal = await resolveOrClaimStaffPrincipal(
+        const access = await resolveOrClaimStaffAccess(
             pool, identity, staffInviteEmailFromSession(session), organizationId);
-        if (principal) {
-            totp = await getTotpStatus(pool, identity, organizationId);
-        }
+        principal = access?.principal ?? null;
+        totp = access?.totp ?? null;
     } catch (error) {
         if (error?.code === '42501' || error?.code === '23505') {
             return { stage: 'unresolved', session, identity };
