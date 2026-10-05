@@ -64,6 +64,7 @@ const migrations = [
     '20261001100000_candidate_merge.sql',
     '20261002110000_staff_shell_capabilities.sql',
     '20261002120000_staff_list_pagination.sql',
+    '20261004100000_staff_candidate_directory.sql',
 ];
 
 async function waitForServer(url) {
