@@ -1,6 +1,6 @@
 # CI validation policy
 
-Run checks affected by the change, not every suite for every PR. `scripts/ci-selection.mjs` selects jobs and records the selection in the Actions summary. Documentation-only changes skip application checks. Narrow staff directory changes run workspace checks; candidate pages also run their dependent review/search suites. Shared authorization changes run staff suites. Schema, dependencies, shared test infrastructure and unknown paths get full coverage. Manual CI dispatch always runs everything.
+Run checks affected by the change, not every suite for every PR. `scripts/ci-selection.mjs` selects jobs and records the selection in the Actions summary. Documentation-only changes skip application checks. Narrow staff directory changes run workspace checks; candidate pages also run their dependent review/search suites. Shared layouts run all affected browser workflows without dedicated database-only jobs. Shared authorization changes run staff suites. Schema, dependencies, shared test infrastructure and unknown paths get full coverage. Manual CI dispatch always runs everything.
 
 A merge into main reuses a successful PR CI run only when the merge tree exactly equals the PR head tree and the latest CI run for that same repository/head succeeded. A changed merge result, direct push, missing proof or API error runs the affected checks instead. This preserves the main CI workflow completion event used by database releases.
 

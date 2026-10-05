@@ -36,6 +36,19 @@ test('shared security keeps staff coverage; schema, dependencies and unknown fil
     }
 });
 
+test('shared layouts cover every staff browser workflow without unrelated database-only jobs', () => {
+    for (const file of ['src/app/layout.jsx', 'src/app/staff/layout.tsx', 'src/app/staff/session-provider.tsx']) {
+        const jobs = selected([file]);
+        assert.ok(jobs.includes('browser-tests'));
+        assert.ok(jobs.includes('staff-workspace'));
+        assert.ok(jobs.includes('cv-analysis'));
+        assert.ok(jobs.includes('worker-pairing'));
+        assert.ok(!jobs.some((job) => job.startsWith('database-')));
+    }
+    assert.ok(selected(['src/app/api/staff/mfa/verify/route.ts']).includes('database-staff-totp'));
+    assert.deepEqual(selected(['src/app/(public)/layout.jsx']), ['quality', 'browser-tests']);
+});
+
 test('suite tests route correctly and unmapped tests cannot silently disappear', () => {
     assert.deepEqual(selected(['tests/database/staff-totp.test.js']), ['quality', 'database-staff-totp']);
     assert.deepEqual(selected(['tests/staff-workspace/record-preview.test.js']), ['quality', 'staff-workspace']);

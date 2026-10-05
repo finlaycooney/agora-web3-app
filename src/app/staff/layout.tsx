@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { loadStaffCapabilities, loadStaffWorkspace } from '@/lib/workspace.server';
 import { AuthRecoveryNotice } from './auth-recovery-notice';
+import { StaffSessionProvider } from './session-provider';
 import { StaffShell } from './staff-shell';
 import { StaffShellSummarySeed } from './staff-shell-summary';
 
@@ -20,23 +21,25 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     const { gate, capabilities } = await loadStaffCapabilities();
     if (gate.stage !== 'verified') {
         return (
-            <div className="staff-scope min-h-screen bg-background font-sans text-sm text-foreground antialiased">
+            <main className="staff-scope min-h-screen bg-background font-sans text-sm text-foreground antialiased">
                 {children}
-            </div>
+            </main>
         );
     }
 
     return (
-        <div className="staff-scope min-h-screen bg-background font-sans text-sm text-foreground antialiased">
-            <AuthRecoveryNotice />
-            <StaffShell
-                userName={gate.session?.user?.name ?? gate.session?.user?.email ?? 'Staff'}
-                userEmail={gate.session?.user?.email ?? ''}
-                initialCapabilities={capabilities}
-                summaryContent={<Suspense fallback={null}><StaffShellSummary /></Suspense>}
-            >
-                {children}
-            </StaffShell>
-        </div>
+        <StaffSessionProvider>
+            <div className="staff-scope min-h-screen bg-background font-sans text-sm text-foreground antialiased">
+                <AuthRecoveryNotice />
+                <StaffShell
+                    userName={gate.session?.user?.name ?? gate.session?.user?.email ?? 'Staff'}
+                    userEmail={gate.session?.user?.email ?? ''}
+                    initialCapabilities={capabilities}
+                    summaryContent={<Suspense fallback={null}><StaffShellSummary /></Suspense>}
+                >
+                    {children}
+                </StaffShell>
+            </div>
+        </StaffSessionProvider>
     );
 }

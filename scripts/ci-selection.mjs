@@ -11,6 +11,7 @@ export const JOBS = [
     'profile-search', 'telegram-retention', 'cv-analysis', 'cv-search', 'worker-pairing',
 ];
 const STAFF = JOBS.filter((job) => !['quality', 'database-foundation'].includes(job));
+const STAFF_BROWSER = STAFF.filter((job) => !job.startsWith('database-'));
 const TELEGRAM = JOBS.filter((job) => job.startsWith('telegram-'));
 const all = () => ({ selection: Object.fromEntries(JOBS.map((job) => [job, true])), appChecks: true });
 
@@ -34,7 +35,8 @@ export function selectJobs(files, full = false) {
         else if (/^src\/app\/staff\/candidates\/duplicates\//.test(file)) jobs = ['duplicate-review'];
         else if (/^src\/app\/staff\/candidates\//.test(file)) jobs = ['staff-workspace', 'duplicate-review', 'profile-search', 'cv-analysis'];
         else if (/^src\/app\/staff\/telegram-intake\//.test(file)) jobs = [...TELEGRAM, 'profile-search'];
-        else if (/^(src\/app\/staff\/|src\/app\/api\/staff\/|src\/components\/staff)/.test(file)) jobs = STAFF;
+        else if (/^src\/app\/api\/staff\//.test(file)) jobs = STAFF;
+        else if (/^(src\/app\/staff\/|src\/components\/staff)/.test(file)) jobs = STAFF_BROWSER;
         else if (/^src\/lib\/(staff-|auth-options|totp|workspace|pipeline-|candidate-|client-job-|privacy-|duplicate-review|worker-pairing)/.test(file)) jobs = STAFF;
         else if (/^src\/lib\/telegram-/.test(file)) jobs = [...STAFF];
         else if (/^(src\/lib\/(profile-search|cv-analysis)|services\/(semantic-worker|local-embeddings|cv-analysis-worker))/.test(file)) jobs = ['profile-search', 'cv-search', 'cv-analysis', 'worker-pairing'];
@@ -42,7 +44,7 @@ export function selectJobs(files, full = false) {
         else if (/^tests\/(database|staff-workspace)\//.test(file)) jobs = testJobs(file);
         else if (/^(tests\/e2e\/|playwright\.config\.mjs|public\/)/.test(file)) jobs = ['browser-tests'];
         // Shared app entry points and components can affect every browser suite.
-        else if (/^(src\/app\/(layout\.|globals\.)|src\/components\/)/.test(file)) jobs = [...STAFF, 'browser-tests'];
+        else if (/^(src\/app\/(layout\.|globals\.)|src\/components\/)/.test(file)) jobs = STAFF_BROWSER;
         else if (/^src\/app\/(?!api\/|staff\/)/.test(file)) jobs = ['browser-tests'];
         else return all();
         if (!jobs) return all();

@@ -22,6 +22,7 @@ function staffLayout(loadStaffCapabilities) {
         '@/lib/workspace.server': { loadStaffCapabilities, loadStaffWorkspace: () => {
             assert.fail('layout must not block on workspace metrics');
         } },
+        './session-provider': { StaffSessionProvider: ({ children }) => jsx('div', { 'data-session': 'true', children }) },
         './auth-recovery-notice': { AuthRecoveryNotice: () => null },
         './staff-shell': {
             StaffShell: (props) => jsx('div', {
@@ -54,6 +55,7 @@ test('unverified stages render bare children inside the staff scope', async () =
     assert.match(html, /sign-in-here/);
     assert.match(html, /staff-scope/);
     assert.doesNotMatch(html, /data-shell/);
+    assert.doesNotMatch(html, /data-session/);
 });
 
 test('verified members get the shell with the lightweight capabilities', async () => {
@@ -69,6 +71,7 @@ test('verified members get the shell with the lightweight capabilities', async (
     );
     assert.match(html, /data-shell="true"/);
     assert.match(html, /data-capabilities="present"/);
+    assert.match(html, /data-session="true"/);
     assert.match(html, /data-stream="true"/);
     assert.match(html, /data-user="staff@example\.test"/);
     assert.match(html, /page-body/);

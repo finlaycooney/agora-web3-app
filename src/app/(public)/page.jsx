@@ -1,9 +1,9 @@
 import './HomePage.css';
-import GifCarousel from '../components/common/GifCarousel.jsx';
-import Testimonials from '../components/common/Testimonials.jsx';
-import Carousel from '../components/common/Carousel.jsx';
+import GifCarousel from '@/components/common/GifCarousel.jsx';
+import Testimonials from '@/components/common/Testimonials.jsx';
+import Carousel from '@/components/common/Carousel.jsx';
 
-import Accordion from '../components/common/Accordion.jsx';
+import Accordion from '@/components/common/Accordion.jsx';
 
 import Link from 'next/link';
 import Image from 'next/image';
@@ -13,13 +13,13 @@ import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import dynamic from 'next/dynamic';
 
-const LaserStreamSection = dynamic(() => import('../components/common/LaserStreamSection'));
-const FlowingHub = dynamic(() => import('../components/common/FlowingHub'));
-const TalentPortal = dynamic(() => import('../components/common/TalentPortal'));
-const CapitalLayer = dynamic(() => import('../components/common/CapitalLayer'));
-const ActiveNetworkQueries = dynamic(() => import('../components/common/ActiveNetworkQueries'));
-const ResearchLayer = dynamic(() => import('../components/common/ResearchLayer'));
-const TheHandshake = dynamic(() => import('../components/common/TheHandshake'));
+const LaserStreamSection = dynamic(() => import('@/components/common/LaserStreamSection'));
+const FlowingHub = dynamic(() => import('@/components/common/FlowingHub'));
+const TalentPortal = dynamic(() => import('@/components/common/TalentPortal'));
+const CapitalLayer = dynamic(() => import('@/components/common/CapitalLayer'));
+const ActiveNetworkQueries = dynamic(() => import('@/components/common/ActiveNetworkQueries'));
+const ResearchLayer = dynamic(() => import('@/components/common/ResearchLayer'));
+const TheHandshake = dynamic(() => import('@/components/common/TheHandshake'));
 
 // --- Data for the Split Cards ---
 const features = [
