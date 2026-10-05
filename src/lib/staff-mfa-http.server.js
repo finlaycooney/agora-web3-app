@@ -1,4 +1,5 @@
 import 'server-only';
+import { staffRequestOriginAllowed } from './staff-request-origin.js';
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
@@ -13,8 +14,7 @@ export const mfaJson = (body, status = 200, headers = {}) => Response.json(body,
 });
 
 export async function staffMfaContext(request) {
-    const origin = request.headers.get('origin');
-    if (origin && origin !== new URL(request.url).origin) {
+    if (!staffRequestOriginAllowed(request)) {
         return { denied: mfaJson({ error: 'forbidden' }, 403) };
     }
     const session = await getServerSession(authOptions);
