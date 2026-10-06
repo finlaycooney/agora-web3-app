@@ -2598,8 +2598,16 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             assert.equal(warm.status, 401);
             const code = totpCode(secrets[0], totpCounter());
             for (const tab of tabs) {
-                await fillWhenReady(tab.getByLabel('Authenticator code'), code);
-                await expect(tab.getByRole('button', { name: 'Enable two-factor' })).toBeEnabled();
+                // The server-rendered input can appear before React attaches its
+                // change handler. Verify the form state, not just the DOM value;
+                // clear first so a retry dispatches a fresh change event.
+                await expect(async () => {
+                    const input = tab.getByLabel('Authenticator code');
+                    await input.fill('');
+                    await input.fill(code);
+                    await expect(tab.getByRole('button', { name: 'Enable two-factor' }))
+                        .toBeEnabled({ timeout: 1500 });
+                }).toPass({ timeout: 30_000 });
             }
             const responses = tabs.map((tab) => tab.waitForResponse((response) => response.url().endsWith('/api/staff/mfa/enroll') && response.request().method() === 'POST'));
             await Promise.all(tabs.map((tab) => tab.getByRole('button', { name: 'Enable two-factor' }).click()));
