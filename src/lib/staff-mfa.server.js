@@ -4,8 +4,8 @@ import { generateBackupCodes, hashBackupCode } from './staff-backup-codes.js';
 import { generateTotpSecret, matchTotpCode } from './totp.js';
 import { withStaffActor } from './staff-authorization.js';
 
-// Reads the acting staff member's TOTP credential (pending preferred over
-// active). Returns { credentialId, status, secret, lastUsedCounter } or null.
+// Reads the acting staff member's TOTP credential (active preferred over
+// pending). Returns { credentialId, status, secret, lastUsedCounter } or null.
 export async function getTotpStatus(pool, identity, organizationId) {
     return withStaffActor(pool, identity, organizationId, async ({ client }) => {
         const result = await client.query(
@@ -25,21 +25,24 @@ export async function getTotpStatus(pool, identity, organizationId) {
     });
 }
 
-// Starts enrollment: generates a fresh secret and stores a pending credential.
-// The server already holds the secret, so confirmation needs no secret re-read.
+// Starting setup is serialized by the database. Read the stored secret in
+// the same transaction: another tab may have won with a different candidate.
 export async function enrollTotp(pool, identity, organizationId) {
-    const secret = generateTotpSecret();
-    const credentialId = await withStaffActor(
-        pool, identity, organizationId,
-        async ({ client, auditId, correlationId }) => {
-            const result = await client.query(
-                'select app.totp_enroll_v1($1, $2, $3) as credential_id',
-                [secret, auditId, correlationId],
-            );
-            return result.rows[0].credential_id;
-        },
-    );
-    return { credentialId, secret };
+    const candidate = generateTotpSecret();
+    return withStaffActor(pool, identity, organizationId, async ({ client, auditId, correlationId }) => {
+        const result = await client.query(
+            'select app.totp_enroll_v1($1, $2, $3) as credential_id',
+            [candidate, auditId, correlationId],
+        );
+        const stored = await client.query(
+            'select credential_id, status, secret, last_used_counter from app.totp_status_v1()',
+        );
+        const row = stored.rows[0];
+        if (!row || row.credential_id !== result.rows[0].credential_id) {
+            throw new Error('Enrollment credential could not be read');
+        }
+        return { credentialId: row.credential_id, status: row.status, secret: row.secret };
+    });
 }
 
 export async function confirmTotpEnrollment(pool, identity, organizationId, credentialId, counter) {

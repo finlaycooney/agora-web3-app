@@ -14,7 +14,7 @@ const verify = await import('../../src/app/api/staff/mfa/verify/route.ts');
 const enroll = await import('../../src/app/api/staff/mfa/enroll/route.ts');
 const generate = await import('../../src/app/api/staff/mfa/backup-codes/route.ts');
 
-function mocks({ denied, accepted = true, credentialStatus = 'active', outage = false } = {}) {
+function mocks({ denied, accepted = true, credentialStatus = 'active', outage = false, confirmationRace = false, pendingAfterError = false } = {}) {
     const calls = [];
     setRouteStub((module, name, args) => {
         calls.push({ name, args });
@@ -22,11 +22,12 @@ function mocks({ denied, accepted = true, credentialStatus = 'active', outage = 
             : { pool: {}, identity: { subject: '123' }, organizationId: 'org' };
         if (name === 'getTotpStatus') {
             if (outage) throw new Error('DB unavailable');
-            return { status: credentialStatus, credentialId: 'credential', secret: 'secret', lastUsedCounter: 41 };
+            return { status: confirmationRace && calls.some(({ name }) => name === 'confirmTotpEnrollment') && !pendingAfterError ? 'active' : credentialStatus, credentialId: 'credential', secret: 'secret', lastUsedCounter: 41 };
         }
         if (name === 'consumeBackupCode') return accepted;
         if (name === 'verifyTotpCode') return args[1] === '123456' ? 42 : null;
         if (name === 'issueMfaProof') return true;
+        if (name === 'confirmTotpEnrollment' && confirmationRace) throw Object.assign(new Error('already active'), { code: '23514' });
         if (name === 'confirmTotpEnrollment' || name === 'replaceBackupCodes') return Array(10).fill('SYNTHETIC');
         if (name === 'mfaJson') return Response.json(args[0], { status: args[1] ?? 200 });
         if (name === 'mfaFailure') return Response.json({}, { status: 503 });
@@ -85,4 +86,19 @@ test('a service outage returns retryable 503 rather than consuming codes or decl
     const calls = mocks({ outage: true });
     assert.equal((await verify.POST(request({ code: '123456' }))).status, 503);
     assert.equal(calls.some(({ name }) => name === 'issueMfaProof' || name === 'consumeBackupCode'), false);
+});
+
+test('simultaneous confirmation returns setup recovery without issuing another proof or backup set', async () => {
+    const calls = mocks({ credentialStatus: 'pending', confirmationRace: true });
+    const response = await enroll.POST(request({ code: '123456' }));
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, 'no pending enrollment');
+    assert.equal(calls.filter(({ name }) => name === 'getTotpStatus').length, 2);
+    assert.ok(!calls.some(({ name }) => name === 'issueMfaProof'));
+});
+test('an enrollment constraint error does not claim setup succeeded while it is still pending', async () => {
+    const calls = mocks({ credentialStatus: 'pending', confirmationRace: true, pendingAfterError: true });
+    const response = await enroll.POST(request({ code: '123456' }));
+    assert.equal(response.status, 503);
+    assert.ok(!calls.some(({ name }) => name === 'issueMfaProof'));
 });
