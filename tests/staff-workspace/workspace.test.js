@@ -1,3 +1,4 @@
+import { totpCode, totpCounter } from '../../src/lib/totp.js';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -72,6 +73,8 @@ const MIGRATIONS = [
     '20261002120000_staff_list_pagination.sql',
     '20261004100000_staff_candidate_directory.sql',
     '20261004110000_staff_application_directory.sql',
+    '20261003090000_staff_mfa_backup_codes.sql',
+    '20261006090000_staff_totp_stable_enrollment.sql',
 ];
 
 const NEXTAUTH_SECRET = 'synthetic-workspace-secret';
@@ -2568,6 +2571,65 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         );
         await expect(page.getByRole('dialog')
             .locator('#edit-candidate-headline')).toHaveValue('Second');
+    });
+
+    await runCase('concurrent authenticator setup tabs keep one QR and one successful confirmation', async () => {
+        // This synthetic member starts without an active authenticator.
+        psql(container, `update app.totp_credentials set status = 'revoked', revoked_at = now()
+            where id = '${TOTP_CREDENTIAL_ID_REC}';`);
+        const context = await browser.newContext();
+        try {
+            await context.addCookies([recruiterCookies[0]]);
+            const tabs = await Promise.all([context.newPage(), context.newPage()]);
+            await Promise.all(tabs.map((tab) => tab.goto(`${baseURL}/staff/mfa/enroll`, { waitUntil: 'domcontentloaded' })));
+            const secrets = await Promise.all(tabs.map(async (tab) => {
+                await expect(tab.getByAltText('Authenticator QR code')).toBeVisible();
+                return (await tab.locator('p.font-mono').textContent()).trim();
+            }));
+            assert.equal(secrets[0], secrets[1]);
+            const qr = await Promise.all(tabs.map((tab) => tab.getByAltText('Authenticator QR code').getAttribute('src')));
+            assert.equal(qr[0], qr[1]);
+            await tabs[1].reload({ waitUntil: 'domcontentloaded' });
+            await expect(tabs[1].getByAltText('Authenticator QR code')).toBeVisible();
+            assert.equal((await tabs[1].locator('p.font-mono').textContent()).trim(), secrets[0]);
+            const credential = psql(container, `select id from app.totp_credentials where organization_id = '${ORG_ID}' and user_id = '${CJ_ID.USER_B_REC}' and status = 'pending'`).trim();
+            assert.equal(psql(container, `select count(*) from app.totp_credentials where organization_id = '${ORG_ID}' and user_id = '${CJ_ID.USER_B_REC}' and status = 'pending'`).trim(), '1');
+            const warm = await fetch(`${baseURL}/api/staff/mfa/enroll`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+            assert.equal(warm.status, 401);
+            const code = totpCode(secrets[0], totpCounter());
+            for (const tab of tabs) {
+                await fillWhenReady(tab.getByLabel('Authenticator code'), code);
+                await expect(tab.getByRole('button', { name: 'Enable two-factor' })).toBeEnabled();
+            }
+            const responses = tabs.map((tab) => tab.waitForResponse((response) => response.url().endsWith('/api/staff/mfa/enroll') && response.request().method() === 'POST'));
+            await Promise.all(tabs.map((tab) => tab.getByRole('button', { name: 'Enable two-factor' }).click()));
+            const results = await Promise.all(responses);
+            assert.deepEqual(results.map((r) => r.status()).sort(), [200, 409]);
+            const winner = results.findIndex((r) => r.status() === 200);
+            const loser = 1 - winner;
+            const backup = (await results[winner].json()).backupCodes;
+            assert.equal(backup.length, 10);
+            await expect(tabs[winner].getByLabel('Your backup codes')).toHaveValue(backup.join('\n'));
+            await expect(tabs[loser].getByRole('alert').filter({ hasText: 'already complete' })).toBeVisible();
+            await expect(tabs[loser].getByLabel('Your backup codes')).toHaveCount(0);
+            assert.equal(psql(container, `select count(*) from app.audit_events where action = 'staff.totp.enrolled' and target_id = '${credential}'`).trim(), '1');
+            assert.equal(psql(container, `select count(*) from app.audit_events where action = 'staff.totp.activated' and target_id = '${credential}'`).trim(), '1');
+            assert.equal(psql(container, `select count(*) from app.staff_mfa_backup_codes where credential_id = '${credential}'`).trim(), '10');
+            await tabs[winner].getByLabel('I saved my backup codes').check();
+            await tabs[winner].getByRole('button', { name: 'Continue to workspace' }).click();
+            await expect(tabs[winner]).toHaveURL(`${baseURL}/staff`);
+            await tabs[loser].getByRole('link', { name: 'Continue to staff' }).click();
+            await expect(tabs[loser]).toHaveURL(`${baseURL}/staff`);
+            await tabs[loser].goto(`${baseURL}/staff/mfa/enroll`, { waitUntil: 'domcontentloaded' });
+            await expect(tabs[loser]).toHaveURL(`${baseURL}/staff`);
+            const replay = await context.request.post(`${baseURL}/api/staff/mfa/verify`, { data: { code } });
+            assert.equal(replay.status(), 401);
+            const savedCode = await context.request.post(`${baseURL}/api/staff/mfa/verify`, { data: { method: 'backup', code: backup[0] } });
+            assert.equal(savedCode.status(), 200);
+            const reused = await context.request.post(`${baseURL}/api/staff/mfa/verify`, { data: { method: 'backup', code: backup[0] } });
+            assert.equal(reused.status(), 401);
+            assert.equal(psql(container, `select count(*) from app.totp_credentials where organization_id = '${ORG_ID}' and user_id = '${CJ_ID.USER_B_REC}' and status = 'pending'`).trim(), '0');
+        } finally { await context.close(); }
     });
 
     await runCase('revoked membership loses staff access', async () => {

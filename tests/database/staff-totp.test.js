@@ -28,6 +28,7 @@ import { readStaffAccess } from '../../src/lib/staff-access.js';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const migrationsDir = join(repoRoot, 'supabase', 'migrations');
 const TOTP_MIGRATION = '20260925100000_staff_totp.sql';
+const STABLE_ENROLLMENT_MIGRATION = '20261006090000_staff_totp_stable_enrollment.sql';
 const MIGRATIONS = [
     '20260922090000_foundation_roles.sql',
     '20260922090100_foundation_schema.sql',
@@ -36,6 +37,7 @@ const MIGRATIONS = [
     GOOGLE_MIGRATION,
     TOTP_MIGRATION,
     '20261003090000_staff_mfa_backup_codes.sql',
+    STABLE_ENROLLMENT_MIGRATION,
 ];
 const readMigration = (name) => readFileSync(join(migrationsDir, name), 'utf8');
 const identity = (subject) => ({ provider: 'google', issuer: GOOGLE_ISSUER, subject });
@@ -87,11 +89,43 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
         await stopAndRemoveContainer(container);
     });
 
-    for (const fileName of MIGRATIONS) {
+    for (const fileName of MIGRATIONS.filter((file) => file !== STABLE_ENROLLMENT_MIGRATION)) {
         psql(container, readMigration(fileName));
     }
     const runtimePassword = installStaffFixture(container);
     pool = new pg.Pool(staffPoolOptions(container, runtimePassword, 4));
+
+    await t.test('upgrade preserves existing credentials, backup codes, audit records and function permissions', async () => {
+        const active = randomUUID();
+        const pending = randomUUID();
+        const legacyPending = randomUUID();
+        const backup = generateBackupCodes(active);
+        psql(container, `insert into app.totp_credentials (id,organization_id,user_id,secret,status,verified_at,last_used_counter)
+            values ('${active}','${ORG_A}','${AUTHZ_ID.USER_CUSTOM}','${SECRET}','active',now(),123),
+                   ('${pending}','${ORG_A}','${AUTHZ_ID.USER_VIEWER}','BCDEFGHIJKLMNOPQ','pending',null,-1),
+                   ('${legacyPending}','${ORG_A}','${AUTHZ_ID.USER_CUSTOM}','CDEFGHIJKLMNOPQR','pending',null,-1);
+            insert into app.staff_mfa_backup_codes (organization_id,user_id,credential_id,code_hash,used_at)
+                values ('${ORG_A}','${AUTHZ_ID.USER_CUSTOM}','${active}','${backup.hashes[0]}',now());
+            insert into app.audit_events (id,organization_id,actor_kind,actor_user_id,actor_membership_id,action,target_type,target_id,correlation_id,occurred_at,details)
+                values ('${randomUUID()}','${ORG_A}','staff','${AUTHZ_ID.USER_CUSTOM}','${AUTHZ_ID.MEMBER_CUSTOM}','staff.totp.enrolled','totp_credential','${active}','${randomUUID()}',now(),jsonb_build_object('credential_id','${active}'));`);
+        const snapshot = () => scalar(container, `select jsonb_build_object(
+            'credentials', (select jsonb_agg(to_jsonb(c) order by c.id) from app.totp_credentials c),
+            'codes', (select jsonb_agg(to_jsonb(c) order by c.credential_id,c.code_hash) from app.staff_mfa_backup_codes c),
+            'audit', (select jsonb_agg(to_jsonb(a) order by a.id) from app.audit_events a),
+            'functions', (select jsonb_agg(jsonb_build_object('oid',p.oid,'owner',p.proowner,'acl',p.proacl) order by p.oid) from pg_proc p
+                where p.oid in ('app.totp_enroll_v1(text,uuid,uuid)'::regprocedure,'app.totp_status_v1()'::regprocedure)));`);
+        const before = snapshot();
+        psql(container, readMigration(STABLE_ENROLLMENT_MIGRATION));
+        assert.equal(snapshot(), before);
+        const access = await readStaffAccess(pool, identity(SUBJECTS.CUSTOM), ORG_A);
+        assert.equal(access.totp.credentialId, active);
+        assert.equal(access.totp.status, 'active');
+        const existing = await withStaffActor(pool, identity(SUBJECTS.CUSTOM), ORG_A,
+            async ({ client, auditId, correlationId }) => (await client.query(
+                'select app.totp_enroll_v1($1,$2,$3) as id', [SECRET,auditId,correlationId])).rows[0].id);
+        assert.equal(existing, active);
+        assert.equal(snapshot(), before);
+    });
 
     await t.test('combined access uses four exchanges and does not reuse access across requests', async () => {
         const queries = [];
@@ -158,7 +192,7 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
                 + ` and target_id = '${enrolled.credentialId}'`,
         ), '1');
 
-        // Re-enrollment revokes the previous pending credential.
+        // Refreshing or opening another setup tab reuses the pending credential.
         const second = await withStaffActor(
             pool, identity(SUBJECTS.ADMIN1), ORG_A,
             async ({ client, auditId, correlationId }) => (await client.query(
@@ -166,14 +200,14 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
                 ['BCDEFGHIJKLMNOPQ', auditId, correlationId],
             )).rows[0].credential_id,
         );
-        assert.notEqual(second, enrolled.credentialId);
+        assert.equal(second, enrolled.credentialId);
         assert.equal(scalar(
             container,
             `select status from app.totp_credentials where id = '${enrolled.credentialId}'`,
-        ), 'revoked');
+        ), 'pending');
         status = await totpStatus(pool, SUBJECTS.ADMIN1);
         assert.equal(status.credential_id, second);
-        assert.equal(status.secret, 'BCDEFGHIJKLMNOPQ');
+        assert.equal(status.secret, SECRET);
 
         // Confirm activates and revokes nothing else (no prior active).
         await withStaffActor(
@@ -195,34 +229,21 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
                 + ` and target_id = '${second}'`,
         ), '1');
 
-        // Re-enrollment now replaces the active credential on confirm.
-        const third = await withStaffActor(
-            pool, identity(SUBJECTS.ADMIN1), ORG_A,
+        // An enrollment request that arrives after confirmation reuses the
+        // active credential and cannot create a competing pending setup.
+        const third = await withStaffActor(pool, identity(SUBJECTS.ADMIN1), ORG_A,
             async ({ client, auditId, correlationId }) => (await client.query(
                 'select app.totp_enroll_v1($1, $2, $3) as credential_id',
                 [SECRET, auditId, correlationId],
-            )).rows[0].credential_id,
-        );
+            )).rows[0].credential_id);
+        assert.equal(third, second);
         status = await totpStatus(pool, SUBJECTS.ADMIN1);
-        assert.equal(status.credential_id, third);
-        assert.equal(status.status, 'pending');
-        await withStaffActor(
-            pool, identity(SUBJECTS.ADMIN1), ORG_A,
-            async ({ client, auditId, correlationId }) => client.query(
-                'select app.totp_confirm_v1($1, $2, $3)',
-                [third, auditId, correlationId],
-            ),
-        );
-        assert.equal(scalar(
-            container,
-            `select count(*) from app.totp_credentials
-                where organization_id = '${ORG_A}' and user_id = '${USER_ADMIN1}'
-                  and status = 'active'`,
-        ), '1');
-        assert.equal(scalar(
-            container,
-            `select status from app.totp_credentials where id = '${second}'`,
-        ), 'revoked');
+        assert.equal(status.status, 'active');
+        assert.equal(status.credential_id, second);
+        assert.equal(scalar(container, `select count(*) from app.totp_credentials
+            where organization_id = '${ORG_A}' and user_id = '${USER_ADMIN1}'`), '1');
+        assert.equal(scalar(container, `select count(*) from app.audit_events
+            where action = 'staff.totp.enrolled' and target_id = '${second}'`), '1');
     });
 
     await t.test('replay protection is counter-monotonic', async () => {
@@ -396,6 +417,40 @@ test('staff totp credentials on PostgreSQL 17', async (t) => {
         assert.equal(scalar(container, `select count(*) from information_schema.role_table_grants
             where table_schema = 'app' and table_name in ('staff_mfa_backup_codes', 'staff_mfa_attempts')
             and grantee not in ('app_owner','app_executor')`), '0');
+    });
+
+    await t.test('simultaneous setup and confirmation keep one secret, audit and backup set', async () => {
+        const subject = SUBJECTS.RECRUITER;
+        const begin = (secret) => withStaffActor(pool, identity(subject), ORG_A,
+            async ({ client, auditId, correlationId }) => {
+                const id = (await client.query('select app.totp_enroll_v1($1,$2,$3) as id', [secret, auditId, correlationId])).rows[0].id;
+                const row = (await client.query('select * from app.totp_status_v1()')).rows[0];
+                assert.equal(row.credential_id, id);
+                return row;
+            });
+        const requests = await Promise.all(Array.from({ length: 8 }, (_, i) => begin(i % 2 ? SECRET : 'BCDEFGHIJKLMNOPQ')));
+        const first = requests[0];
+        for (const row of requests) assert.deepEqual(row, first);
+        assert.equal(first.status, 'pending');
+        const codes = generateBackupCodes(first.credential_id);
+        const confirm = () => withStaffActor(pool, identity(subject), ORG_A,
+            async ({ client, auditId, correlationId }) => {
+                await client.query('select app.totp_confirm_v1($1,$2,$3)', [first.credential_id, auditId, correlationId]);
+                await client.query('select app.totp_record_use_v1($1,$2,$3,$4)', [first.credential_id, 100, randomUUID(), correlationId]);
+                await client.query('select app.set_mfa_backup_codes_v1($1,$2,$3,$4)', [first.credential_id, codes.hashes, randomUUID(), correlationId]);
+            });
+        const outcomes = await Promise.allSettled([confirm(), confirm(), begin('CDEFGHIJKLMNOPQR')]);
+        assert.equal(outcomes.slice(0,2).filter(({ status }) => status === 'fulfilled').length, 1);
+        assert.equal(outcomes.slice(0,2).find(({ status }) => status === 'rejected').reason.code, '23514');
+        const raced = outcomes[2]; assert.equal(raced.status, 'fulfilled');
+        assert.equal(raced.value.credential_id, first.credential_id);
+        assert.equal(raced.value.secret, first.secret);
+        assert.equal((await totpStatus(pool, subject)).status, 'active');
+        assert.equal((await begin('CDEFGHIJKLMNOPQR')).status, 'active');
+        assert.equal(scalar(container, `select count(*) from app.totp_credentials where id = '${first.credential_id}'`), '1');
+        assert.equal(scalar(container, `select count(*) from app.audit_events where action = 'staff.totp.enrolled' and target_id = '${first.credential_id}'`), '1');
+        assert.equal(scalar(container, `select count(*) from app.audit_events where action = 'staff.totp.activated' and target_id = '${first.credential_id}'`), '1');
+        assert.equal(scalar(container, `select count(*) from app.staff_mfa_backup_codes where credential_id = '${first.credential_id}'`), '10');
     });
 
 });

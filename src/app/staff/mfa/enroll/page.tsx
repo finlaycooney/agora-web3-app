@@ -26,11 +26,9 @@ export default async function StaffMfaEnrollPage() {
         redirect('/staff');
     }
 
-    let secret = gate.totp?.secret;
-    if (!secret) {
-        const enrollment = await enrollTotp(gate.pool, gate.identity, gate.organizationId);
-        secret = enrollment.secret;
-    }
+    const enrollment = await enrollTotp(gate.pool, gate.identity, gate.organizationId);
+    if (enrollment.status === 'active') redirect('/staff');
+    const secret = enrollment.secret;
     const uri = totpUri({
         secret,
         accountName: gate.session?.user?.email ?? gate.identity.subject,
