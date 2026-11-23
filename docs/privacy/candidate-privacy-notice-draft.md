@@ -40,7 +40,7 @@ Depending on your interaction with us, we use:
 - Records of which clients received your information, the information shared, your sharing instructions, and any privacy requests or complaints.
 - Limited service and security information necessary to operate the website and protect accounts and applications. `[CONFIRM: actual data categories and collection methods after the website/analytics inventory.]`
 
-We obtain information directly from you when you apply or communicate with us. If you choose optional GitHub sign-in, we obtain the profile information used for that sign-in and prefill. You can apply without GitHub. `[CONFIRM: final provider fields and token-retention practice; the current code stores an access token in its session-token payload and that practice requires review.]`
+We obtain information directly from you when you apply or communicate with us. You do not need an account or any sign-in to apply. `[CONFIRM: if optional Google sign-in to prefill the application form is added later, describe the profile fields it reads and its token-retention practice here.]`
 
 Where we receive information from clients, referees, referrals or public professional sources, we will explain the relevant source and categories when required. `[CONFIRM: which of these sources Agora actually uses; remove unused sources rather than implying a wider collection programme.]` A publicly available profile is not permission for unrestricted collection or reuse.
 
@@ -103,7 +103,7 @@ Depending on the circumstances, you can request access to your personal informat
 
 Contact `[CONFIRM: privacy contact]`, or tell the member of our team you are dealing with. You do not have to use particular legal words, a special form or an Agora account. We may make reasonable and proportionate checks to protect your information from disclosure to someone else. We normally respond without undue delay and within one calendar month, subject to applicable identity/clarification rules and lawful extensions. We will explain any extension, refusal, or retained information and the reasons for it.
 
-If you choose not to provide information genuinely needed to assess or progress an application, we may be unable to provide that part of the service. GitHub sign-in and any future talent-pool opt-in are optional. `[CONFIRM: distinguish mandatory fields from genuinely optional information in the actual form.]`
+If you choose not to provide information genuinely needed to assess or progress an application, we may be unable to provide that part of the service. Any future talent-pool opt-in is optional. `[CONFIRM: distinguish mandatory fields from genuinely optional information in the actual form.]`
 
 ### 8. Automated decisions and website technologies
 

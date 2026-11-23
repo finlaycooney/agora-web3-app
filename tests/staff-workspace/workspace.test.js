@@ -199,8 +199,6 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
         SUPABASE_SERVICE_ROLE_KEY: '',
         SUPABASE_DB_URL: '',
-        GITHUB_ID: '',
-        GITHUB_SECRET: '',
     };
 
     const serverOutput = [];
