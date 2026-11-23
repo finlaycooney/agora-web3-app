@@ -296,16 +296,25 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         AUTHZ_ID.USER_ADMIN2,
         TOTP_CREDENTIAL_ID,
         'Admin Two',
-        'admin-two@synthetic.test',
+        'admin-two@agora4.xyz',
     );
     const recruiterCookies = await staffCookiesFor(
         CJ_SUBJECTS.RECRUITER,
         CJ_ID.USER_B_REC,
         TOTP_CREDENTIAL_ID_REC,
         'Recruiter Synthetic',
-        'recruiter@synthetic.test',
+        'recruiter@agora4.xyz',
     );
     const sessionOnlyCookies = [staffCookies[0]];
+    // Same active admin principal and valid MFA proof, but the Google account
+    // email is outside the pinned staff domain.
+    const offDomainCookies = await staffCookiesFor(
+        SUBJECT,
+        AUTHZ_ID.USER_ADMIN2,
+        TOTP_CREDENTIAL_ID,
+        'Admin Two',
+        'admin-two@synthetic.test',
+    );
     const cookieHeader = (cookies) =>
         cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
 
@@ -1265,6 +1274,8 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             ['GET', '/api/staff/workspace', null, null, 401],
             ['GET', '/api/staff/tasks', null, null, 401],
             ['GET', '/api/staff/workspace', null, sessionOnly, 428],
+            ['GET', '/api/staff/workspace', null, cookieHeader(offDomainCookies), 401],
+            ['GET', '/api/staff/tasks', null, cookieHeader(offDomainCookies), 401],
             ['GET', '/api/staff/tasks', null, sessionOnly, 428],
             ['GET', '/api/staff/tasks', null, recruiter, 403],
             ['POST', '/api/staff/tasks', {
@@ -1433,6 +1444,32 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             const response = await pending.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
             assert.match(pending.url(), /\/staff\/mfa\/verify/);
             assert.ok(response === null || response.status() < 400);
+        } finally {
+            await context.close();
+        }
+    });
+
+    await t.test('a Google account outside @agora4.xyz is refused even with a membership and MFA proof', async () => {
+        const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        try {
+            await context.addCookies(offDomainCookies);
+            const page = await context.newPage();
+            await page.goto(`${baseURL}/staff`, { waitUntil: 'domcontentloaded' });
+            assert.match(page.url(), /\/staff\/no-access/);
+            await page.getByText('Staff access is limited to @agora4.xyz Google accounts.').waitFor();
+            await page.goto(`${baseURL}/staff/jobs`, { waitUntil: 'domcontentloaded' });
+            assert.match(page.url(), /\/staff\/no-access/);
+            for (const path of ['/api/staff/mfa/verify', '/api/staff/mfa/enroll']) {
+                const response = await fetch(`${baseURL}${path}`, {
+                    method: 'POST',
+                    headers: {
+                        cookie: cookieHeader(offDomainCookies),
+                        'content-type': 'application/json',
+                    },
+                    body: JSON.stringify({ code: '000000' }),
+                });
+                assert.equal(response.status, 401, `POST ${path} must refuse an off-domain session`);
+            }
         } finally {
             await context.close();
         }

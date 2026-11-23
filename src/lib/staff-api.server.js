@@ -2,7 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
+import { staffEmailDomainAllowed, staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
 import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
 import { staffGoogleCredentialStatus } from './staff-google.server';
 import { StaffOperationsError } from './staff-operations';
@@ -16,7 +16,7 @@ import { StaffAuthorizationError } from './staff-authorization';
 export async function staffApiContext() {
     const session = await getServerSession(authOptions);
     const identity = staffIdentityFromSession(session);
-    if (!identity) {
+    if (!identity || !staffEmailDomainAllowed(session)) {
         return { status: 'unauthorized' };
     }
     const pool = getStaffPool();

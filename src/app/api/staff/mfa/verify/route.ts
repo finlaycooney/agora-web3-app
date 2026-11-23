@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { staffIdentityFromSession } from '@/lib/staff-identity';
+import { staffEmailDomainAllowed, staffIdentityFromSession } from '@/lib/staff-identity';
 import { getStaffPool, resolveStaffPrincipal } from '@/lib/staff-db.server';
 import {
     getTotpStatus,
@@ -21,7 +21,7 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     const identity = staffIdentityFromSession(session);
-    if (!identity) {
+    if (!identity || !staffEmailDomainAllowed(session)) {
         return json({ error: 'unauthorized' }, 401);
     }
     const pool = getStaffPool();

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { staffIdentityFromSession } from '@/lib/staff-identity';
+import { STAFF_EMAIL_DOMAIN, staffIdentityFromSession } from '@/lib/staff-identity';
 import { staffGate } from '@/lib/staff-gate.server';
 import { StaffSignOutButton } from '../staff-auth-buttons';
 
@@ -18,18 +18,27 @@ export default async function StaffNoAccessPage() {
         redirect('/staff/sign-in');
     }
     // A fully-gated member landing here (e.g. a stale tab) belongs in the shell.
-    if ((await staffGate()).stage === 'verified') {
+    const gate = await staffGate();
+    if (gate.stage === 'verified') {
         redirect('/staff');
     }
+    const wrongDomain = gate.stage === 'unresolved' && gate.reason === 'domain';
 
     return (
         <section className="mx-auto max-w-xl px-6 py-24">
             <p className="text-sm uppercase tracking-widest text-foreground/50">Agora staff</p>
             <h1 className="mt-3 text-2xl font-semibold">No workspace access</h1>
-            <p className="mt-4 text-sm leading-6 text-foreground/60">
-                Your Google account is not linked to an Agora staff membership.
-                Send the identity details below to a workspace administrator.
-            </p>
+            {wrongDomain ? (
+                <p className="mt-4 text-sm leading-6 text-foreground/60">
+                    Staff access is limited to @{STAFF_EMAIL_DOMAIN} Google accounts.
+                    Sign out and sign in again with your Agora account.
+                </p>
+            ) : (
+                <p className="mt-4 text-sm leading-6 text-foreground/60">
+                    Your Google account is not linked to an Agora staff membership.
+                    Send the identity details below to a workspace administrator.
+                </p>
+            )}
             <dl className="mt-8 space-y-3 rounded-lg border border-foreground/10 p-4 font-mono text-xs">
                 <div className="flex gap-3">
                     <dt className="w-24 text-foreground/50">email</dt>

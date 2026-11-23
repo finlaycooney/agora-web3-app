@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-import { staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
+import { staffEmailDomainAllowed, staffIdentityFromSession, staffInviteEmailFromSession } from './staff-identity';
 import { getStaffPool, resolveOrClaimStaffPrincipal } from './staff-db.server';
 import { staffGoogleCredentialStatus } from './staff-google.server';
 import { getTotpStatus } from './staff-mfa.server';
@@ -19,13 +19,14 @@ import { STAFF_MFA_COOKIE, readStaffMfaProof } from './staff-mfa-cookie';
  *   identity: StaffGateIdentity, principal: StaffGatePrincipal, totp: StaffGateTotp,
  *   pool: StaffGatePool, organizationId: string }} StaffGateResolved
  * @typedef {{ stage: 'signed-out' }
- *   | { stage: 'unresolved', session: StaffGateSession, identity: StaffGateIdentity }
+ *   | { stage: 'unresolved', session: StaffGateSession, identity: StaffGateIdentity, reason?: 'domain' }
  *   | StaffGateResolved} StaffGateResult
  */
 
 // One server-side gate for every staff surface. Stages:
 //   signed-out   → no session or non-Google provider
-//   unresolved   → Google identity with no active staff membership
+//   unresolved   → Google identity outside the staff email domain, or with
+//                  no active staff membership
 //   resolved     → active principal, but TOTP not yet active
 //   mfa-pending  → active credential without a valid staff_mfa proof
 //   verified     → full gate satisfied (session + principal + MFA proof)
@@ -35,6 +36,9 @@ export async function staffGate() {
     const identity = staffIdentityFromSession(session);
     if (!identity) {
         return { stage: 'signed-out' };
+    }
+    if (!staffEmailDomainAllowed(session)) {
+        return { stage: 'unresolved', session, identity, reason: 'domain' };
     }
 
     // A suspended/deleted Google account must lose access on its next staff
