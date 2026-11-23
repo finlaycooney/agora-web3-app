@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Github, Shield, Radio, Layers, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { Github, Shield, Radio, Layers, CheckCircle2, ArrowRight } from 'lucide-react';
 import DecryptedText from '../magicui/DecryptedText';
 
 const HEX_CODES = [
@@ -159,13 +160,13 @@ const TalentPortal = () => {
                         ))}
                     </ul>
 
-                    <button className="relative group overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] mt-4">
+                    <Link href="/jobs" className="relative inline-block group overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] mt-4">
                         <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#10b981_0%,#06b6d4_50%,#10b981_100%)]" />
                         <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950/90 px-8 py-4 text-sm font-bold text-white backdrop-blur-3xl transition-all group-hover:bg-slate-950/70 font-outfit tracking-wide">
-                            <Github className="mr-2 h-5 w-5 group-hover:text-emerald-400 transition-colors" />
-                            Sync GitHub Identity
+                            Browse open roles
+                            <ArrowRight className="ml-2 h-5 w-5 group-hover:text-emerald-400 transition-colors" />
                         </span>
-                    </button>
+                    </Link>
                 </div>
             </div>
         </section>
