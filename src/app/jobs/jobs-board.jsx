@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Briefcase, MapPin, DollarSign, ArrowRight, Zap, X } from 'lucide-react';
 import SignalSubmissionModal from '@/components/common/SignalSubmissionModal';
 import JobDetailModal from '@/components/common/JobDetailModal';
+import Beams from '@/components/common/Beams';
 
 const JobsBoard = ({ jobs, unavailable = false }) => {
     const [mounted, setMounted] = useState(false);
@@ -154,6 +155,20 @@ const JobsBoard = ({ jobs, unavailable = false }) => {
             <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#006d9630] via-[#00244b] to-[#00244b] pointer-events-none -z-50" />
             <div className="fixed inset-0 bg-[radial-gradient(800px_circle_at_top_center,_#67bed915,_transparent)] pointer-events-none -z-50" />
             <div className="fixed inset-0 bg-[radial-gradient(800px_circle_at_bottom_center,_#67bed915,_transparent)] pointer-events-none -z-50" />
+
+            {/* Beams Background - Customized for Jobs Page */}
+            <div className="absolute inset-0 w-full h-full z-0 [mask-image:linear-gradient(to_bottom,black_20%,transparent_100%)] pointer-events-none">
+                <Beams
+                    beamWidth={3}
+                    beamNumber={8}
+                    lightColor="#00244b" // Emerald tint for growth/hiring
+                    speed={0.2}
+                    noiseIntensity={1.5}
+                    rotation={45}
+                    beamHeight={15}
+                    scale={1}
+                />
+            </div>
 
             {/* Header */}
             <div className="max-w-6xl mx-auto mb-16 text-center relative z-10">
