@@ -59,7 +59,7 @@ The app requests `access_type=offline` and `prompt=consent`, so Google shows the
 ```bash
 supabase link --project-ref <ref>
 supabase migration list --linked      # remote column should be empty
-supabase db push --linked --dry-run   # lists all 21 files from 20260911120000 to 20260930100000
+supabase db push --linked --dry-run   # lists all 20 files from 20260911120000 to 20260930100000
 ```
 
 If `20260911120000_candidate_applications.sql` was already applied by hand (the remote column is empty but `public.applicants` has `job_id`), you do not need to repair anything: the file is idempotent (`if not exists` / `on conflict do nothing`).
