@@ -134,6 +134,8 @@ Staff sign-in is Google OAuth only (`20260922131000_staff_google_identities.sql`
 - Environment: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (OAuth client), `STAFF_DATABASE_URL` (runtime credential able to `SET ROLE app_staff`), `STAFF_ORGANIZATION_ID` (seeded org UUID `9c4edd11-2571-490b-a87c-ef30b9e0a001`).
 - Bootstrap (one-time, operator-run in the Supabase SQL editor — the subject is displayed on `/staff/no-access` after the first Google sign-in):
 
+> Superseded: run the bootstrap in `docs/staff-workspace-launch.md` instead. The `set role app_owner` below fails on Supabase because `app_owner` cannot bypass the forced RLS on `app.users`; the SQL editor's `postgres` role can.
+
 ```sql
 set role app_owner;
 insert into app.users (id, display_name, status)

@@ -121,11 +121,10 @@ Invites need an existing admin, so the first one is created by hand. Staff acces
 
 1. Deploy the code (step 6) with the environment variables set.
 2. Open `https://<production domain>/staff/sign-in` and sign in with **fin@agora4.xyz**. You land on "No workspace access", which lists your Google `subject` (a long number).
-3. In the Supabase SQL editor, run this with the subject filled in:
+3. In the Supabase SQL editor (which runs as `postgres`), run this with the subject filled in. Do not add `set role app_owner`: every `app` table has forced RLS and `app_owner` cannot bypass it, while `postgres` has `BYPASSRLS` and inherits `app_owner`'s table privileges.
 
    ```sql
    begin;
-   set local role app_owner;
    with new_user as (
        insert into app.users (id, display_name, status)
        values (gen_random_uuid(), 'Fin', 'active')
