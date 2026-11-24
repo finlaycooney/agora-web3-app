@@ -1647,7 +1647,7 @@ test('staff workspace end-to-end in a real browser', async (t) => {
             requests.push(route.request().postDataJSON());
             if (requests.length === 1) {
                 const response = await route.fetch();
-                assert.equal(response.status(), 200);
+                assert.equal(response.status(), 200, `first duplicate attempt: ${await response.text()}`);
                 await route.abort('failed');
             } else {
                 await route.continue();
