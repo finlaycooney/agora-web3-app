@@ -132,7 +132,10 @@ test('the board polls while visible, skips hidden ticks, and recovers from a sta
 
     jobs = [];
     const ticked = page.waitForRequest('**/api/public/jobs');
-    await page.clock.runFor(30_000);
+    // fastForward fires each due timer once without replaying every animation
+    // frame in between. runFor would also render ~1,800 Beams WebGL frames,
+    // which in software GL takes far longer than the test timeout.
+    await page.clock.fastForward(30_000);
     await ticked;
     await expect(card).toHaveCount(0);
 
@@ -148,7 +151,7 @@ test('the board polls while visible, skips hidden ticks, and recovers from a sta
         };
     });
     const hitsBeforeHidden = hits;
-    await page.clock.runFor(30_000);
+    await page.clock.fastForward(30_000);
     expect(hits).toBe(hitsBeforeHidden);
 
     jobs = [LISTED_JOB];
@@ -161,7 +164,7 @@ test('the board polls while visible, skips hidden ticks, and recovers from a sta
     const stalled = page.waitForRequest('**/api/public/jobs');
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await stalled;
-    await page.clock.runFor(11_000);
+    await page.clock.fastForward(11_000);
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
 
     await held[held.length - 1].fulfill({ json: { jobs } });

@@ -7,13 +7,6 @@ import { expect, test } from '@playwright/test';
 // single flat colour. Runs on both configured projects (desktop + mobile) and
 // again with prefers-reduced-motion.
 
-// Headless Chromium only falls back to software WebGL when asked to.
-test.use({
-    launchOptions: {
-        args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-    },
-});
-
 // Section headings that identify each homepage component.
 const HOMEPAGE_SECTIONS = {
     FlowingHub: 'Transforming raw signal into Tier 1 infrastructure',
@@ -50,7 +43,7 @@ async function scrollThrough(page) {
 // Screenshots only the given canvas, with every other box hidden and the body
 // painted magenta, then measures colour variety and luminance range.
 async function canvasPixelStats(page, canvas) {
-    await canvas.scrollIntoViewIfNeeded();
+    await canvas.evaluate((node) => node.scrollIntoView({ block: 'start' }));
     await page.waitForTimeout(1500);
     const handle = await canvas.elementHandle();
     await page.evaluate((element) => {
@@ -146,7 +139,9 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
 
             for (const [component, heading] of Object.entries(HOMEPAGE_SECTIONS)) {
                 const locator = page.getByText(heading, { exact: false }).first();
-                await locator.scrollIntoViewIfNeeded();
+                // Some headings sit inside continuously animating sections, so
+                // scroll directly instead of waiting for the box to be stable.
+                await locator.evaluate((node) => node.scrollIntoView({ block: 'center' }));
                 await expect(locator, `${component} renders`).toBeVisible();
             }
 
