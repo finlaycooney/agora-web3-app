@@ -96,13 +96,28 @@ const srgb = (value) => {
 const relativeLuminance = ({ r, g, b }) =>
     0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
 
+// A router.refresh() left in flight by the previous step (e.g. after an
+// invite) can supersede page.goto, which then rejects with ERR_ABORTED.
+// Retry only that case; the summary assertion below is unchanged.
 const gotoStaff = async (page, url) => {
-    const summaryFetch = page.waitForResponse(
-        (response) => response.url().includes('/api/staff/workspace')
-            && response.request().method() === 'GET',
-        { timeout: 90_000 },
-    );
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    let summaryFetch;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        summaryFetch = page.waitForResponse(
+            (response) => response.url().includes('/api/staff/workspace')
+                && response.request().method() === 'GET',
+            { timeout: 90_000 },
+        );
+        try {
+            await page.goto(url, { waitUntil: 'domcontentloaded' });
+            break;
+        } catch (error) {
+            summaryFetch.catch(() => {});
+            if (attempt === 2 || !String(error).includes('ERR_ABORTED')) {
+                throw error;
+            }
+            await page.waitForLoadState('networkidle');
+        }
+    }
     const summary = await summaryFetch;
     assert.equal(summary.status(), 200, 'Workspace summary request failed');
     await page.waitForLoadState('networkidle');
