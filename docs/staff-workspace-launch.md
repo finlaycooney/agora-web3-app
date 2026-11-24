@@ -83,14 +83,14 @@ What happens to existing objects:
 The app connects with two least-privilege login roles. Run this once in the SQL editor, with two new strong passwords:
 
 ```sql
-create role agora_staff_runtime login password '<staff password>' noinherit;
-grant app_staff to agora_staff_runtime with inherit false, set true;
+create role agora_staff_runtime login password '<staff password>';
+grant app_staff to agora_staff_runtime;
 
-create role agora_intake_runtime login password '<intake password>' noinherit;
-grant app_intake to agora_intake_runtime with inherit false, set true;
+create role agora_intake_runtime login password '<intake password>';
+grant app_intake to agora_intake_runtime;
 ```
 
-Both pools run `set local role app_staff` / `set local role app_intake` inside every transaction, so the login role needs only the right to switch into its one runtime role. Do not use the `postgres` password for either variable.
+Each login role is a member of exactly one runtime role and nothing else. Keep the default `inherit`: the permission-checked staff transactions (`withStaffTransaction`) run with the login role's inherited `app_staff` privileges rather than issuing `set role`, so a `noinherit` role is refused with `42501` on every workspace action (creating a client, a job, an invite). This matches the role the test suites create. Do not use the `postgres` password for either variable.
 
 Vercel cannot reach the IPv6-only direct host (`db.<ref>.supabase.co`), so use the pooler (Project Settings → Database → Connection string → Transaction pooler):
 
