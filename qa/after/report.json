@@ -1,0 +1,893 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "capturedAt": "2026-11-24T00:32:11.707Z",
+  "console": {
+    "home:desktop": [
+      {
+        "type": "warning",
+        "text": "[.WebGL-0xabc003c2200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0xabc01fcde00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0xabc01fcde00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0xabc01fcde00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+      }
+    ],
+    "jobs:desktop": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "for-employers:desktop": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3100/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      }
+    ],
+    "job-detail-modal:desktop": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "application-modal:desktop": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "home:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "jobs:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "for-employers:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3100/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      }
+    ],
+    "job-detail-modal:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "application-modal:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "home:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "jobs:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "for-employers:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3100/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "job-detail-modal:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "application-modal:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      }
+    ],
+    "home:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "jobs:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "for-employers:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3100/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "job-detail-modal:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ],
+    "application-modal:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3100/_vercel/speed-insights/script.js"
+      }
+    ]
+  },
+  "inventory": {
+    "desktop": {
+      "Beams_home": {
+        "present": true,
+        "error": "TimeoutError: locator.boundingBox: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('section#home canvas').first()\u001b[22m\n\u001b[2m    - locator resolved to visible <canvas width=\"1440\" height"
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 720
+        },
+        "paintedShare": 0.546,
+        "paintedColours": 6,
+        "paintedLumaRange": 34,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 1137
+        },
+        "paintedShare": 1,
+        "paintedColours": 21,
+        "paintedLumaRange": 87,
+        "drawn": true
+      },
+      "jobCards": 6,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "mobile": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 844
+        },
+        "paintedShare": 1,
+        "paintedColours": 91,
+        "paintedLumaRange": 430,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 1166
+        },
+        "paintedShare": 0.558,
+        "paintedColours": 6,
+        "paintedLumaRange": 35,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 2653
+        },
+        "paintedShare": 1,
+        "paintedColours": 18,
+        "paintedLumaRange": 81,
+        "drawn": true
+      },
+      "jobCards": 6,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "desktop-reduced-motion": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 900
+        },
+        "paintedShare": 1,
+        "paintedColours": 72,
+        "paintedLumaRange": 404,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 720
+        },
+        "paintedShare": 0.535,
+        "paintedColours": 6,
+        "paintedLumaRange": 34,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 1137
+        },
+        "paintedShare": 1,
+        "paintedColours": 21,
+        "paintedLumaRange": 84,
+        "drawn": true
+      },
+      "jobCards": 6,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "mobile-reduced-motion": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 844
+        },
+        "paintedShare": 1,
+        "paintedColours": 81,
+        "paintedLumaRange": 405,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 1166
+        },
+        "paintedShare": 0.618,
+        "paintedColours": 7,
+        "paintedLumaRange": 552,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 2653
+        },
+        "paintedShare": 1,
+        "paintedColours": 18,
+        "paintedLumaRange": 80,
+        "drawn": true
+      },
+      "jobCards": 6,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    }
+  }
+}

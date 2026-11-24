@@ -1,0 +1,1308 @@
+{
+  "base": "http://127.0.0.1:3001",
+  "capturedAt": "2026-11-24T00:45:55.169Z",
+  "console": {
+    "home:desktop": [
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_TUNNEL_CONNECTION_FAILED https://grainy-gradients.vercel.app/noise.svg"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED"
+      },
+      {
+        "type": "pageerror",
+        "text": "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x35dc00c35200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x35dc00c3ca00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x35dc00c3ca00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x35dc00c3ca00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+      }
+    ],
+    "jobs:desktop": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "for-employers:desktop": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "job-detail-modal:desktop": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "application-modal:desktop": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "home:mobile": [
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_TUNNEL_CONNECTION_FAILED https://grainy-gradients.vercel.app/noise.svg"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED"
+      },
+      {
+        "type": "pageerror",
+        "text": "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "jobs:mobile": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "for-employers:mobile": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3001/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ],
+    "job-detail-modal:mobile": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "application-modal:mobile": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "home:desktop-reduced-motion": [
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_TUNNEL_CONNECTION_FAILED https://grainy-gradients.vercel.app/noise.svg"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED"
+      },
+      {
+        "type": "pageerror",
+        "text": "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "jobs:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ],
+    "for-employers:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3001/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ],
+    "job-detail-modal:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "application-modal:desktop-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ],
+    "home:mobile-reduced-motion": [
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_TUNNEL_CONNECTION_FAILED https://grainy-gradients.vercel.app/noise.svg"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED"
+      },
+      {
+        "type": "pageerror",
+        "text": "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "jobs:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "for-employers:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/background-for-employers.webp"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "http",
+        "text": "400 http://127.0.0.1:3001/_next/image?url=%2Fwhy-partner-with-us.webp&w=640&q=75"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ],
+    "job-detail-modal:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      }
+    ],
+    "application-modal:mobile-reduced-motion": [
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/session"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "[next-auth][error][CLIENT_FETCH_ERROR] \nhttps://next-auth.js.org/errors#client_fetch_error There is a problem with the server configuration. Check the server logs for more information. {error: Object, url: /api/auth/session, message: There is a problem with the server configuration. Check the server logs for more information.}"
+      },
+      {
+        "type": "http",
+        "text": "500 http://127.0.0.1:3001/api/auth/_log"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      },
+      {
+        "type": "http",
+        "text": "404 http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "requestfailed",
+        "text": "net::ERR_ABORTED http://127.0.0.1:3001/_vercel/speed-insights/script.js"
+      }
+    ]
+  },
+  "inventory": {
+    "desktop": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 900
+        },
+        "paintedShare": 1,
+        "paintedColours": 78,
+        "paintedLumaRange": 429,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 720
+        },
+        "paintedShare": 0.54,
+        "paintedColours": 6,
+        "paintedLumaRange": 34,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 2112
+        },
+        "paintedShare": 1,
+        "paintedColours": 21,
+        "paintedLumaRange": 91,
+        "drawn": true
+      },
+      "jobCards": 11,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "mobile": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 844
+        },
+        "paintedShare": 1,
+        "paintedColours": 83,
+        "paintedLumaRange": 416,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 1166
+        },
+        "paintedShare": 0.627,
+        "paintedColours": 7,
+        "paintedLumaRange": 552,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 5065
+        },
+        "paintedShare": 1,
+        "paintedColours": 17,
+        "paintedLumaRange": 70,
+        "drawn": true
+      },
+      "jobCards": 11,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "desktop-reduced-motion": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 900
+        },
+        "paintedShare": 1,
+        "paintedColours": 82,
+        "paintedLumaRange": 426,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 720
+        },
+        "paintedShare": 0.539,
+        "paintedColours": 6,
+        "paintedLumaRange": 34,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 1440,
+          "h": 2112
+        },
+        "paintedShare": 1,
+        "paintedColours": 21,
+        "paintedLumaRange": 89,
+        "drawn": true
+      },
+      "jobCards": 11,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    },
+    "mobile-reduced-motion": {
+      "Beams_home": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 844
+        },
+        "paintedShare": 1,
+        "paintedColours": 71,
+        "paintedLumaRange": 393,
+        "drawn": true
+      },
+      "FlowingHub": {
+        "rendered": true
+      },
+      "LaserStreamSection": {
+        "rendered": true
+      },
+      "TalentPortal": {
+        "rendered": true
+      },
+      "CapitalLayer": {
+        "rendered": true
+      },
+      "ActiveNetworkQueries": {
+        "rendered": true
+      },
+      "ResearchLayer": {
+        "rendered": true
+      },
+      "TheHandshake": {
+        "rendered": true
+      },
+      "FaultyTerminal": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 1166
+        },
+        "paintedShare": 0.561,
+        "paintedColours": 6,
+        "paintedLumaRange": 36,
+        "drawn": true
+      },
+      "Accordion": {
+        "rendered": true
+      },
+      "magicui/marquee": {
+        "rendered": true
+      },
+      "magicui/DecryptedText": {
+        "rendered": true
+      },
+      "canvasCount_home": 2,
+      "Beams_jobs": {
+        "present": true,
+        "size": {
+          "w": 390,
+          "h": 5065
+        },
+        "paintedShare": 1,
+        "paintedColours": 15,
+        "paintedLumaRange": 65,
+        "drawn": true
+      },
+      "jobCards": 11,
+      "job-detail-modal": {
+        "opened": true
+      },
+      "application-modal": {
+        "opened": true
+      }
+    }
+  }
+}
