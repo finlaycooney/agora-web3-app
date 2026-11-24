@@ -75,7 +75,11 @@ async function canvasPixelStats(page, canvas) {
         document.getElementById('pixel-probe-style')?.remove();
     }, handle);
 
-    return page.evaluate(async (base64) => {
+    // Decode in a blank page: the page under test is busy rendering WebGL
+    // frames and can starve an evaluate for minutes on slow software GL.
+    const scratch = await page.context().newPage();
+    try {
+        return await scratch.evaluate(async (base64) => {
         const image = new Image();
         image.src = `data:image/png;base64,${base64}`;
         await image.decode();
@@ -111,7 +115,10 @@ async function canvasPixelStats(page, canvas) {
             paintedColours: painted.size,
             paintedLumaRange: paintedCount ? max - min : 0,
         };
-    }, png.toString('base64'));
+        }, png.toString('base64'));
+    } finally {
+        await scratch.close();
+    }
 }
 
 function expectDrawn(stats, name) {
@@ -124,7 +131,10 @@ function expectDrawn(stats, name) {
 
 for (const reducedMotion of ['no-preference', 'reduce']) {
     test.describe(`visual components (prefers-reduced-motion: ${reducedMotion})`, () => {
-        test.use({ reducedMotion });
+        // Render at 1x: the mobile project emulates a 2.75x screen, and three
+        // WebGL effects at that density on software GL (CI runners, this
+        // sandbox) starve the page for minutes. Layout at 393px is unchanged.
+        test.use({ reducedMotion, deviceScaleFactor: 1 });
 
         test('homepage components render and canvases draw', async ({ page }) => {
             test.setTimeout(180_000);
