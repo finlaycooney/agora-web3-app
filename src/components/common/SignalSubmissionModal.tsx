@@ -1,22 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Github, CheckCircle, Upload, Check } from 'lucide-react';
+import { X, CheckCircle, Upload, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { useSession, signIn } from "next-auth/react";
+import {
+    CV_ACCEPT_ATTRIBUTE,
+    isApplicationReference,
+    normalizeProfessionalUrl,
+    validateApplicationFields,
+    validateCvFileMetadata,
+} from '@/lib/application';
+
+interface JobSummary {
+    id: string;
+    title: string;
+}
+
+type JobAvailability = 'open' | 'unavailable' | 'unknown';
 
 interface SignalSubmissionModalProps {
     isOpen: boolean;
     onClose: () => void;
-    jobTitle?: string;
+    job?: JobSummary | null;
+    availability?: JobAvailability;
+    onCheckAvailability?: () => Promise<boolean>;
+    onJobUnavailable?: () => void;
 }
 
-const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, onClose, jobTitle }) => {
-    const { data: session, status } = useSession();
+const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({
+    isOpen,
+    onClose,
+    job,
+    availability = 'open',
+    onCheckAvailability,
+    onJobUnavailable,
+}) => {
     const [step, setStep] = useState<'initial' | 'submitting' | 'success'>('initial');
-
-    // User requested "loadingState" to be defined
-    const [loadingState, setLoadingState] = useState<string>('');
-
+    const [errorMessage, setErrorMessage] = useState('');
+    const [professionalUrlError, setProfessionalUrlError] = useState('');
+    const [checking, setChecking] = useState(false);
+    const generationRef = useRef(0);
+    const busyRef = useRef(false);
+    const [availabilityOverride, setAvailabilityOverride] = useState<JobAvailability | null>(null);
+    const [seenAvailability, setSeenAvailability] = useState(availability);
+    if (seenAvailability !== availability) {
+        setSeenAvailability(availability);
+        setAvailabilityOverride(null);
+    }
+    const effectiveAvailability = availabilityOverride ?? availability;
     const [data, setData] = useState({
         fullName: '',
         email: '',
@@ -25,94 +55,173 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
     });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [terminalLines, setTerminalLines] = useState<string[]>([]);
+    const [website, setWebsite] = useState('');
+    const [submissionRefId, setSubmissionRefId] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
-            setStep('initial');
-            setTerminalLines([]);
-            document.body.style.overflow = 'hidden';
-
-            // Pre-fill form if session exists
-            if (session?.user) {
-                setData(prev => ({
-                    ...prev,
-                    fullName: session.user?.name || prev.fullName,
-                    email: session.user?.email || prev.email
-                }));
-            }
-        } else {
-            document.body.style.overflow = 'unset';
+        generationRef.current += 1;
+        busyRef.current = false;
+        if (!isOpen) {
+            return () => {
+                generationRef.current += 1;
+                busyRef.current = false;
+            };
         }
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        setStep('initial');
+        setErrorMessage('');
+        setProfessionalUrlError('');
+        setChecking(false);
+        setAvailabilityOverride(null);
+        setTerminalLines([]);
+        setSelectedFile(null);
+        setWebsite('');
+        setSubmissionRefId('');
+        setData({
+            fullName: '',
+            email: '',
+            professionalUrl: '',
+            technicalAchievement: '',
+        });
         return () => {
-            document.body.style.overflow = 'unset';
-            // Reset state
-            setLoadingState('');
+            generationRef.current += 1;
+            busyRef.current = false;
+            document.body.style.overflow = previousOverflow;
         };
-    }, [isOpen, session]);
+    }, [isOpen, job?.id]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
+        if (name === 'professionalUrl') {
+            setProfessionalUrlError('');
+        }
         setData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                alert("File too large. Max 5MB.");
+            setErrorMessage('');
+            const validation = validateCvFileMetadata(file);
+            if (!validation.ok) {
+                setSelectedFile(null);
+                setErrorMessage(validation.message);
+                e.target.value = '';
                 return;
             }
+
             setSelectedFile(file);
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setStep('submitting');
-        setLoadingState('INITIALIZING_SECURE_HANDSHAKE...');
-
-        // 1. Simulate terminal sequence
-        const lines = [
-            "> INITIALIZING_SECURE_HANDSHAKE...",
-            "> VERIFYING_IDENTITY_TOKENS...",
-            "> ENCRYPTING_SIGNAL_PACKET...",
-            "> UPLOADING_TO_AGORA_NODES...",
-        ];
-
-        for (let i = 0; i < lines.length; i++) {
-            setLoadingState(lines[i]);
-            await new Promise(resolve => setTimeout(resolve, 600));
-            setTerminalLines(prev => [...prev, lines[i]]);
+    const handleProfessionalUrlBlur = () => {
+        const result = normalizeProfessionalUrl(data.professionalUrl);
+        if (!result.ok) {
+            setProfessionalUrlError(result.message);
+            return;
         }
 
-        // 2. Submit Data
-        const formData = new FormData();
-        formData.append('fullName', data.fullName);
-        formData.append('email', data.email);
-        formData.append('professionalUrl', data.professionalUrl);
-        formData.append('technicalAchievement', data.technicalAchievement);
-
-        // GitHub Sync Logic Fix
-        if (session?.user) {
-            // Safe cast as requested
-            formData.append('githubHandle', (session.user as any).username || '');
+        setProfessionalUrlError('');
+        if (result.value !== data.professionalUrl) {
+            setData(previous => ({ ...previous, professionalUrl: result.value }));
         }
+    };
 
-        if (selectedFile) {
-            formData.append('cvFile', selectedFile);
-        }
-
+    const recheckAvailability = async () => {
+        if (!onCheckAvailability || busyRef.current) return;
+        const generation = generationRef.current;
+        busyRef.current = true;
+        setChecking(true);
         try {
+            const available = await onCheckAvailability();
+            if (generationRef.current !== generation) return;
+            setAvailabilityOverride(available ? 'open' : 'unavailable');
+            setErrorMessage('');
+        } catch {
+            if (generationRef.current !== generation) return;
+            setAvailabilityOverride('unknown');
+        } finally {
+            if (generationRef.current === generation) {
+                busyRef.current = false;
+                setChecking(false);
+            }
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!isOpen || busyRef.current || effectiveAvailability !== 'open') return;
+        const generation = generationRef.current;
+
+        const fieldValidation = validateApplicationFields({
+            jobId: job?.id || '',
+            ...data,
+        }, job ? [job] : []);
+
+        if (!fieldValidation.ok) {
+            if (fieldValidation.code === 'INVALID_URL') {
+                setProfessionalUrlError(fieldValidation.message);
+                setErrorMessage('');
+                return;
+            }
+            setErrorMessage(fieldValidation.message);
+            return;
+        }
+
+        if (!selectedFile) {
+            setErrorMessage('Attach your CV as a PDF or DOCX file.');
+            return;
+        }
+
+        busyRef.current = true;
+        setChecking(true);
+        try {
+            if (onCheckAvailability) {
+                try {
+                    const stillOpen = await onCheckAvailability();
+                    if (generationRef.current !== generation) return;
+                    if (!stillOpen) {
+                        setAvailabilityOverride('unavailable');
+                        setErrorMessage('');
+                        return;
+                    }
+                    setAvailabilityOverride(null);
+                } catch {
+                    if (generationRef.current !== generation) return;
+                    setAvailabilityOverride('unknown');
+                    setErrorMessage('');
+                    return;
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('jobId', fieldValidation.job.id);
+            formData.append('fullName', fieldValidation.fields.fullName);
+            formData.append('email', fieldValidation.fields.email);
+            formData.append('professionalUrl', fieldValidation.fields.professionalUrl);
+            formData.append('technicalAchievement', fieldValidation.fields.technicalAchievement);
+            formData.append('website', website);
+            formData.append('cvFile', selectedFile);
+
+            setErrorMessage('');
+            setStep('submitting');
+            setTerminalLines([
+                '> VALIDATING_APPLICATION...',
+                '> UPLOADING_CV...',
+            ]);
+
             const response = await fetch('/api/submit-signal', {
                 method: 'POST',
                 body: formData,
             });
 
-            if (response.ok) {
-                setLoadingState('HANDSHAKE_COMPLETE');
-                setTerminalLines(prev => [...prev, "> SIGNAL_RECEIVED.", "> HANDSHAKE_COMPLETE."]);
+            const result = await response.json().catch(() => null);
+            if (generationRef.current !== generation) return;
 
-                await new Promise(resolve => setTimeout(resolve, 500));
+            if (response.ok && result?.success && isApplicationReference(result.refId)) {
+                setSubmissionRefId(result.refId);
+                setTerminalLines(prev => [...prev, "> SIGNAL_RECEIVED.", "> HANDSHAKE_COMPLETE."]);
                 setStep('success');
                 confetti({
                     particleCount: 100,
@@ -120,15 +229,28 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                     origin: { y: 0.6 },
                     colors: ['#22d3ee', '#34d399', '#ffffff']
                 });
+            } else if (result?.code === 'INVALID_JOB') {
+                setAvailabilityOverride('unavailable');
+                onJobUnavailable?.();
+                setWebsite('');
+                setStep('initial');
             } else {
-                const error = await response.json();
-                setTerminalLines(prev => [...prev, `> ERROR: ${error.message}`]);
-                setLoadingState('PROTOCOL_FAILURE');
+                const unconfirmedMessage = response.ok && result?.success
+                    ? 'We could not confirm that your application was saved. Please try again.'
+                    : result?.message;
+                setErrorMessage(unconfirmedMessage || 'Your application could not be submitted. Please try again.');
+                setWebsite('');
+                setStep('initial');
             }
-
-        } catch (error: any) {
-            setTerminalLines(prev => [...prev, `> ERROR: ${error.message}`]);
-            setLoadingState('CONNECTION_LOST');
+        } catch {
+            if (generationRef.current !== generation) return;
+            setErrorMessage('The connection was interrupted. Please try again.');
+            setStep('initial');
+        } finally {
+            if (generationRef.current === generation) {
+                busyRef.current = false;
+                setChecking(false);
+            }
         }
     };
 
@@ -152,11 +274,15 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-[#020b1a] border border-teal-500/30 w-full max-w-lg rounded-2xl shadow-[0_0_40px_rgba(20,184,166,0.1)] overflow-hidden relative"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="signal-submission-title"
+                            className="bg-[#020b1a] border border-teal-500/30 w-full max-w-lg max-h-[calc(100vh-2rem)] rounded-2xl shadow-[0_0_40px_rgba(20,184,166,0.1)] overflow-y-auto relative"
                         >
                             {/* Close Button */}
                             <button
                                 onClick={onClose}
+                                aria-label="Close application form"
                                 className="absolute top-4 right-4 text-teal-500/50 hover:text-teal-400 transition-colors"
                             >
                                 <X size={20} />
@@ -165,11 +291,11 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                             {/* Header */}
                             <div className="p-8 pb-0">
                                 <div className="flex items-center space-x-3 mb-2">
-                                    <h2 className="text-2xl font-bold text-white font-outfit">Signal Submission</h2>
+                                    <h2 id="signal-submission-title" className="text-2xl font-bold text-white font-outfit">Signal Submission</h2>
                                     <CheckCircle className="text-blue-500 fill-blue-500/20" size={20} />
                                 </div>
                                 <p className="text-gray-400 text-sm font-outfit">
-                                    Applying for: <span className="text-teal-400">{jobTitle || 'Position'}</span>
+                                    Applying for: <span className="text-teal-400">{job?.title || 'Position'}</span>
                                 </p>
                             </div>
 
@@ -180,68 +306,117 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                         animate={{ opacity: 1 }}
                                         className="space-y-6"
                                     >
-                                        {/* Sync GitHub - Primary Action */}
-                                        <button
-                                            type="button"
-                                            onClick={() => !session && signIn('github')}
-                                            disabled={status === 'loading' || status === 'authenticated'}
-                                            className="w-full group relative overflow-hidden rounded-xl bg-emerald-900/20 border border-emerald-500/30 p-4 hover:bg-emerald-900/30 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
-                                        >
-                                            <div className="flex items-center justify-center space-x-3 relative z-10">
-                                                <Github className="text-emerald-400" size={20} />
-                                                <span className="font-mono font-bold text-emerald-100">
-                                                    {status === 'loading' ? 'VERIFYING_SIGNAL...' :
-                                                        status === 'authenticated' ? `IDENTITY_SYNCED: @${(session.user as any)?.username || session.user?.name}` :
-                                                            'SYNC_GITHUB_IDENTITY'}
-                                                </span>
-                                            </div>
-                                            <div className="absolute inset-0 bg-emerald-500/10 blur-xl group-hover:bg-emerald-500/20 transition-all duration-500" />
-                                            {status !== 'authenticated' && (
-                                                <p className="text-[10px] text-emerald-400/60 font-mono mt-1 text-center uppercase tracking-wider">
-                                                    Verify technical signal to bypass manual form
-                                                </p>
-                                            )}
-                                        </button>
-
-                                        <div className="flex items-center space-x-4">
-                                            <div className="h-px bg-white/10 flex-1" />
-                                            <span className="text-gray-500 text-xs font-mono">OR</span>
-                                            <div className="h-px bg-white/10 flex-1" />
-                                        </div>
-
                                         {/* Minimalist Form */}
-                                        <form onSubmit={handleSubmit} className="space-y-4">
-                                            <div className="space-y-4">
+                                        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                                            <label hidden aria-hidden="true">
+                                                Leave this field empty
                                                 <input
+                                                    type="text"
+                                                    name="website"
+                                                    tabIndex={-1}
+                                                    autoComplete="new-password"
+                                                    data-lpignore="true"
+                                                    data-1p-ignore="true"
+                                                    value={website}
+                                                    onChange={(event) => setWebsite(event.target.value)}
+                                                />
+                                            </label>
+
+                                            {effectiveAvailability === 'unavailable' && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+                                                >
+                                                    This position is no longer accepting applications.
+                                                </div>
+                                            )}
+                                            {effectiveAvailability === 'unknown' && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+                                                >
+                                                    <span>
+                                                        We could not confirm this position is
+                                                        still open.
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={checking}
+                                                        onClick={() => void recheckAvailability()}
+                                                        className="ml-2 font-mono text-xs uppercase tracking-wider underline-offset-4 hover:underline disabled:opacity-60"
+                                                    >
+                                                        Retry
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {errorMessage && (
+                                                <div
+                                                    role="alert"
+                                                    className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+                                                >
+                                                    {errorMessage}
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4">
+                                                <label htmlFor="application-full-name" className="sr-only">Full name</label>
+                                                <input
+                                                    id="application-full-name"
                                                     type="text"
                                                     name="fullName"
                                                     placeholder="Full Name"
                                                     required
+                                                    maxLength={120}
+                                                    autoComplete="name"
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
                                                     value={data.fullName}
                                                     onChange={handleInputChange}
                                                 />
+                                                <label htmlFor="application-email" className="sr-only">Email address</label>
                                                 <input
+                                                    id="application-email"
                                                     type="email"
                                                     name="email"
                                                     placeholder="Email Address"
                                                     required
+                                                    maxLength={254}
+                                                    autoComplete="email"
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
                                                     value={data.email}
                                                     onChange={handleInputChange}
                                                 />
+                                                <label htmlFor="application-professional-url" className="sr-only">Professional URL</label>
                                                 <input
-                                                    type="url"
-                                                    name="portfolioUrl"
+                                                    id="application-professional-url"
+                                                    type="text"
+                                                    inputMode="url"
+                                                    name="professionalUrl"
                                                     placeholder="Professional URL (LinkedIn/GitHub)"
-                                                    className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit"
+                                                    maxLength={2048}
+                                                    autoComplete="url"
+                                                    aria-invalid={Boolean(professionalUrlError)}
+                                                    aria-describedby={professionalUrlError ? 'application-professional-url-error' : undefined}
+                                                    className={`w-full bg-transparent border-b text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit ${professionalUrlError ? 'border-red-400/70 focus:border-red-400' : 'border-white/10 focus:border-teal-500'}`}
                                                     value={data.professionalUrl}
                                                     onChange={handleInputChange}
+                                                    onBlur={handleProfessionalUrlBlur}
                                                 />
+                                                {professionalUrlError && (
+                                                    <p
+                                                        id="application-professional-url-error"
+                                                        role="alert"
+                                                        className="px-3 text-sm text-red-200"
+                                                    >
+                                                        {professionalUrlError}
+                                                    </p>
+                                                )}
+                                                <label htmlFor="application-achievement" className="sr-only">Technical achievement</label>
                                                 <textarea
+                                                    id="application-achievement"
                                                     name="technicalAchievement"
                                                     placeholder="Briefly describe your core contribution to a Tier 1 protocol..."
                                                     rows={3}
+                                                    maxLength={2000}
                                                     className="w-full bg-transparent border-b border-white/10 focus:border-teal-500 text-white p-3 outline-none transition-colors placeholder:text-gray-600 font-outfit resize-none"
                                                     value={data.technicalAchievement}
                                                     onChange={handleInputChange}
@@ -255,9 +430,13 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                     {selectedFile ? `SELECTED: ${selectedFile.name}` : 'DROP_CV_HERE_OR_CLICK_TO_UPLOAD'}
                                                 </p>
                                                 <input
+                                                    id="application-cv"
                                                     type="file"
+                                                    name="cvFile"
                                                     className="absolute inset-0 opacity-0 cursor-pointer"
-                                                    accept=".pdf,.docx"
+                                                    accept={CV_ACCEPT_ATTRIBUTE}
+                                                    required
+                                                    aria-label="Upload CV as PDF or DOCX, maximum 4 MB"
                                                     onChange={handleFileChange}
                                                 />
                                             </div>
@@ -265,9 +444,10 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                             {/* Submit Button */}
                                             <button
                                                 type="submit"
-                                                className="w-full bg-teal-500 hover:bg-teal-400 text-[#020b1a] font-mono font-bold py-3 rounded-xl transition-all duration-300 mt-4 flex items-center justify-center space-x-2"
+                                                disabled={effectiveAvailability !== 'open' || checking}
+                                                className="w-full bg-teal-500 hover:bg-teal-400 text-[#020b1a] font-mono font-bold py-3 rounded-xl transition-all duration-300 mt-4 flex items-center justify-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
-                                                <span>SUBMIT_SIGNAL</span>
+                                                <span>{checking ? 'CHECKING_AVAILABILITY...' : 'SUBMIT_SIGNAL'}</span>
                                             </button>
                                         </form>
                                     </motion.div>
@@ -302,6 +482,7 @@ const SignalSubmissionModal: React.FC<SignalSubmissionModalProps> = ({ isOpen, o
                                                 <div>
                                                     <p className="font-bold">SIGNAL_VERIFIED</p>
                                                     <p className="opacity-70">We will be in touch shortly.</p>
+                                                    <p className="mt-1 opacity-70">REFERENCE: {submissionRefId}</p>
                                                 </div>
                                             </motion.div>
                                         )}

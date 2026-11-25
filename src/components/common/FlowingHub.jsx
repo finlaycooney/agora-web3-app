@@ -59,28 +59,17 @@ const AnimatedBeam = ({ path, delay = 0, duration = 3, isTargeted = false, side 
     );
 };
 
-const Particle = ({ path, delay, isTargeted, onEnteringHub }) => {
+// Invisible timing particle. Its only visible effect is the hub flash it
+// triggers half-way along its path. It renders as an SVG <g> because it lives
+// inside the beam <svg>: the previous <div> was invalid there (it never
+// painted and caused a hydration error), so the visual result is unchanged.
+const Particle = ({ path, delay, onEnteringHub }) => {
     return (
-        <motion.div
-            style={{
-                position: 'absolute',
-                width: isTargeted ? 8 : 4,
-                height: isTargeted ? 8 : 4,
-                borderRadius: '50%',
-                background: '#fff',
-                offsetPath: `path("${path}")`,
-                zIndex: 15,
-            }}
-            initial={{ opacity: 0, scale: 0 }}
+        <motion.g
+            style={{ offsetPath: `path("${path}")` }}
+            initial={{ opacity: 0 }}
             animate={{
                 opacity: [0, 1, 1, 0],
-                scale: [0.5, 1, 1.2, 0.8],
-                background: [
-                    '#ffffff',
-                    '#ffffff',
-                    '#10b981',
-                    '#06b6d4'
-                ],
                 offsetDistance: '100%',
             }}
             transition={{
@@ -95,18 +84,7 @@ const Particle = ({ path, delay, isTargeted, onEnteringHub }) => {
                     onEnteringHub();
                 }
             }}
-        >
-            <div className="particle-streak" style={{
-                position: 'absolute',
-                top: '50%',
-                right: '100%',
-                width: '30px',
-                height: '2px',
-                background: 'linear-gradient(to left, #10b981, transparent)',
-                transform: 'translateY(-50%)',
-                opacity: 0.6
-            }} />
-        </motion.div>
+        />
     );
 };
 
@@ -258,7 +236,7 @@ const FlowingHub = () => {
                         transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
                     />
                     <div className="hub-main overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
+                        <div className="absolute inset-0 noise-texture opacity-10 mix-blend-overlay pointer-events-none"></div>
                         <img src="/agora4logo.webp" alt="Agora4" className="hub-image" />
                         <AnimatePresence>
                             {isFlashActive && (
@@ -336,7 +314,6 @@ const FlowingHub = () => {
                                         key={`p-left-${node.id}-${delay}`}
                                         path={path}
                                         delay={delay + (i * 1.5)}
-                                        isTargeted={hoveredSource === node.id}
                                         onEnteringHub={triggerFlash}
                                     />
                                 ))}
@@ -364,36 +341,6 @@ const FlowingHub = () => {
                                     duration={3.5}
                                     side="right"
                                 />
-                                {[0].map((delay) => (
-                                    <motion.div
-                                        key={`p-right-${node.id}-${delay}`}
-                                        style={{
-                                            position: 'absolute',
-                                            width: 14,
-                                            height: 14,
-                                            offsetPath: `path("${path}")`,
-                                            zIndex: 15,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                        initial={{ opacity: 0 }}
-                                        animate={{
-                                            opacity: [0, 1, 1, 0],
-                                            offsetDistance: ['0%', '100%'],
-                                        }}
-                                        transition={{
-                                            duration: 1.5,
-                                            delay: baseDelay + (i * 1.2),
-                                            repeat: Infinity,
-                                            ease: "linear"
-                                        }}
-                                    >
-                                        <div className="bg-emerald-500 rounded-full p-1 shadow-lg shadow-emerald-500/50">
-                                            <CheckCircle2 size={10} className="text-white" />
-                                        </div>
-                                    </motion.div>
-                                ))}
                             </React.Fragment>
                         );
                     })}

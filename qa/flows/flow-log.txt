@@ -1,0 +1,14 @@
+✓ Google account outside @agora4.xyz lands on no-access; staff API answers 401
+✓ fin@agora4.xyz (bootstrapped admin) signs in, enrols TOTP with a real code and reaches /staff
+✓ a new session must pass TOTP verification; wrong code 401, right code admitted
+✓ created stealth client "Stealth Client mwtykzlk"
+✓ created a job draft; it is not on the public board
+✓ published the job; it appears on the public board API without the client name or contact
+✓ applied without signing in; application 8624124b-3fff-4e54-9d0f-556d3113e5da is linked to job 1cddc99b-b7a6-4f4c-b25b-7468dad04370; CV stored privately at cv-submissions/cvs/job-1cddc99b-b7a6-4f4c-b25b-7468dad04370/AG-879045265884.pdf (anon download refused, public URL 400)
+✓ application shows in /staff/applications; CV opens through a 60-second signed URL (anonymous request 401)
+✓ added a candidate note
+✓ changed the application stage to "Initial screen"
+✓ unlisted the job; it left /jobs and the public API
+✓ off-domain invite refused (403); invited ada-mwtykzlk@agora4.xyz
+✓ ada-mwtykzlk@agora4.xyz signed in with Google, claimed the invite, enrolled TOTP and can use /staff
+✓ revoked Ada; her existing session is sent to no-access and the staff API answers 401

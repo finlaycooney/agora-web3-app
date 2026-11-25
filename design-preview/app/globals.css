@@ -1,0 +1,89 @@
+@import 'tailwindcss';
+@plugin 'tailwindcss-animate';
+
+@source '../../src/components/staff-preview';
+@source '../../src/components/staff-ui';
+
+@theme inline {
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-restriction: var(--restriction);
+    --color-restriction-foreground: var(--restriction-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-hover: var(--hover);
+    --color-primary-hover: var(--primary-hover);
+    --color-nav-active: var(--nav-active);
+    --color-sidebar: var(--sidebar);
+    --color-attention: var(--attention);
+    --color-attention-foreground: var(--attention-foreground);
+}
+
+:root {
+    --background: #ffffff;
+    --foreground: #202124;
+    --card: #ffffff;
+    --card-foreground: #202124;
+    --popover: #ffffff;
+    --popover-foreground: #202124;
+    --primary: #24272c;
+    --primary-foreground: #ffffff;
+    --secondary: #fdfbf6;
+    --secondary-foreground: #41464e;
+    --muted: #fafafa;
+    --muted-foreground: #68707b;
+    --accent: #fdfbf6;
+    --accent-foreground: #30363d;
+    --success: #e2f4e9;
+    --success-foreground: #1d6b45;
+    --warning: #fdf1d8;
+    --warning-foreground: #8a5a08;
+    --restriction: #fbe8ec;
+    --restriction-foreground: #9f2843;
+    --destructive: #b42318;
+    --destructive-foreground: #fef3f2;
+    --border: #e5e7eb;
+    --input: #d8dce2;
+    --ring: #73777f;
+    --hover: #faf2df;
+    --primary-hover: #faf2df;
+    --nav-active: #fae7b9;
+    --sidebar: #fdfbf6;
+    --attention: #fada5e;
+    --attention-foreground: #493814;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background font-sans text-sm text-foreground antialiased;
+    }
+
+    :focus-visible {
+        outline-color: var(--ring);
+    }
+}

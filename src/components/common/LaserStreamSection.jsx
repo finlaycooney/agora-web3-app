@@ -249,7 +249,7 @@ const LaserStreamSection = () => {
 
                         <div className="relative bg-blue-900/20 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl overflow-hidden">
                             {/* Noise Texture Overlay */}
-                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                            <div className="noise-texture absolute inset-0 opacity-20 mix-blend-overlay"></div>
 
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-2">

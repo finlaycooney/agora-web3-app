@@ -1,0 +1,164 @@
+'use client';
+
+import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { FileText, Search, X } from 'lucide-react';
+
+import { Button } from '@/components/staff-ui/button';
+import { Input } from '@/components/staff-ui/input';
+import { Label } from '@/components/staff-ui/label';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/staff-ui/table';
+
+interface CandidateRow {
+    candidateId: string;
+    fullName: string | null;
+    email: string | null;
+    ownerName: string | null;
+    applicationCount: number;
+    hasCv: boolean;
+    createdAt: string;
+}
+
+const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+    });
+
+export function CandidatesBrowser({
+    candidates,
+    capped = false,
+}: {
+    candidates: CandidateRow[];
+    capped?: boolean;
+}) {
+    const searchParams = useSearchParams();
+    const query = searchParams.get('q') ?? '';
+
+    const updateQuery = (value: string) => {
+        const params = new URLSearchParams();
+        if (value.trim()) params.set('q', value);
+        const queryString = params.toString();
+        window.history.replaceState(
+            null, '',
+            `/staff/candidates${queryString ? `?${queryString}` : ''}`);
+    };
+
+    const visible = useMemo(() => {
+        const needle = query.trim().toLowerCase();
+        if (!needle) return candidates;
+        return candidates.filter((row) =>
+            `${row.fullName ?? ''} ${row.email ?? ''}`.toLowerCase().includes(needle));
+    }, [candidates, query]);
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] font-semibold tracking-[0.08em] text-accent-foreground uppercase">
+                    Workspace
+                </p>
+                <h1 className="text-[26px] leading-8 font-medium text-foreground">Candidates</h1>
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                    Everyone who has applied or been added, deduplicated by email.
+                </p>
+            </div>
+
+            <div className="flex items-end gap-3 rounded-lg border border-border bg-card p-4">
+                <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="candidate-search">Search</Label>
+                    <div className="relative">
+                        <Search
+                            className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden="true"
+                        />
+                        <Input
+                            id="candidate-search"
+                            className="pl-9"
+                            placeholder="Search name or email…"
+                            value={query}
+                            onChange={(event) => updateQuery(event.target.value)}
+                        />
+                    </div>
+                </div>
+                {query ? (
+                    <Button variant="ghost" size="sm" onClick={() => updateQuery('')}>
+                        <X aria-hidden="true" />
+                        Clear
+                    </Button>
+                ) : null}
+            </div>
+
+            <span role="status" className="text-xs text-muted-foreground">
+                {visible.length} candidate{visible.length === 1 ? '' : 's'}
+                {capped
+                    ? ' · Showing the latest 500 candidates; filters apply to loaded records'
+                    : ''}
+            </span>
+
+            {visible.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">No candidates found</p>
+                    <p className="max-w-sm text-sm text-muted-foreground">
+                        {candidates.length === 0
+                            ? 'Candidates appear here after submissions are imported from the applications page.'
+                            : 'Try clearing the search.'}
+                    </p>
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Owner</TableHead>
+                            <TableHead>Applications</TableHead>
+                            <TableHead>CV</TableHead>
+                            <TableHead>Added</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {visible.map((row) => (
+                            <TableRow key={row.candidateId}>
+                                <TableCell>
+                                    <a
+                                        href={`/staff/candidates/${row.candidateId}`}
+                                        className="font-medium text-foreground underline-offset-4 hover:underline"
+                                    >
+                                        {row.fullName ?? 'Unnamed'}
+                                    </a>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {row.email ?? '—'}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {row.ownerName ?? '—'}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {row.applicationCount}
+                                </TableCell>
+                                <TableCell>
+                                    {row.hasCv ? (
+                                        <FileText className="h-4 w-4 text-muted-foreground" aria-label="CV on file" />
+                                    ) : (
+                                        <span className="text-muted-foreground">—</span>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {formatDate(row.createdAt)}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                </div>
+            )}
+        </div>
+    );
+}

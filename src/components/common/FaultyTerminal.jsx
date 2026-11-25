@@ -313,6 +313,13 @@ export default function FaultyTerminal({
 
         const mesh = new Mesh(gl, { geometry, program });
 
+        // Animate only while on screen and when the visitor allows motion.
+        // Otherwise keep a single still frame, redrawn on resize, so the
+        // shader costs nothing (it can saturate the main thread on software GL).
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        let running = false;
+        let lastTime = 0;
+
         function resize() {
             if (!ctn || !renderer) return;
             renderer.setSize(ctn.offsetWidth, ctn.offsetHeight);
@@ -321,14 +328,12 @@ export default function FaultyTerminal({
                 gl.canvas.height,
                 gl.canvas.width / gl.canvas.height
             );
+            // Resizing clears the canvas; repaint it when no loop will.
+            if (!running) draw(lastTime);
         }
 
-        const resizeObserver = new ResizeObserver(() => resize());
-        resizeObserver.observe(ctn);
-        resize();
-
-        const update = t => {
-            rafRef.current = requestAnimationFrame(update);
+        function draw(t) {
+            lastTime = t;
 
             if (pageLoadAnimation && loadAnimationStartRef.current === 0) {
                 loadAnimationStartRef.current = t;
@@ -345,7 +350,7 @@ export default function FaultyTerminal({
             if (pageLoadAnimation && loadAnimationStartRef.current > 0) {
                 const animationDuration = 2000;
                 const animationElapsed = t - loadAnimationStartRef.current;
-                const progress = Math.min(animationElapsed / animationDuration, 1);
+                const progress = reduceMotion ? 1 : Math.min(animationElapsed / animationDuration, 1);
                 program.uniforms.uPageLoadProgress.value = progress;
             }
 
@@ -362,15 +367,42 @@ export default function FaultyTerminal({
             }
 
             renderer.render({ scene: mesh });
+        }
+
+        const update = t => {
+            rafRef.current = requestAnimationFrame(update);
+            draw(t);
         };
-        rafRef.current = requestAnimationFrame(update);
+        const start = () => {
+            if (running || reduceMotion) return;
+            running = true;
+            rafRef.current = requestAnimationFrame(update);
+        };
+        const stop = () => {
+            running = false;
+            cancelAnimationFrame(rafRef.current);
+        };
+
+        const resizeObserver = new ResizeObserver(() => resize());
+        resizeObserver.observe(ctn);
+        resize();
+
+        const visibilityObserver = typeof IntersectionObserver === 'undefined'
+            ? null
+            : new IntersectionObserver(([entry]) => {
+                if (entry?.isIntersecting) start();
+                else stop();
+            });
+        if (visibilityObserver) visibilityObserver.observe(ctn);
+        else start();
         ctn.appendChild(gl.canvas);
 
         if (mouseReact) ctn.addEventListener('mousemove', handleMouseMove);
 
         return () => {
-            cancelAnimationFrame(rafRef.current);
+            stop();
             resizeObserver.disconnect();
+            visibilityObserver?.disconnect();
             if (mouseReact) ctn.removeEventListener('mousemove', handleMouseMove);
             if (gl.canvas.parentElement === ctn) ctn.removeChild(gl.canvas);
             gl.getExtension('WEBGL_lose_context')?.loseContext();

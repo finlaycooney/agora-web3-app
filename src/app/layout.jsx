@@ -7,7 +7,7 @@ import { Outfit } from 'next/font/google';
 
 // 2. Import Components
 import HeaderWrapper from '@/components/common/HeaderWrapper'; // Created a wrapper for scroll logic
-import Footer from '@/components/common/Footer';
+import FooterVisibility from '@/components/common/FooterVisibility';
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -37,7 +37,7 @@ export default function RootLayout({ children }) {
               {children}
             </main>
 
-            <Footer />
+            <FooterVisibility />
           </LazyMotion>
         </Providers>
         <Analytics />

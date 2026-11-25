@@ -1,0 +1,1 @@
+-- Intentionally empty. Candidate application tests create and remove their own records.

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 .env.local
+*.tsbuildinfo
+/test-results/
+/playwright-report/
 
 # Next.js build output
 .next

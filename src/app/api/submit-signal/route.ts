@@ -1,82 +1,219 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { getIntakePool } from '@/lib/intake-db.server';
+import {
+    listPublicJobs,
+    submitPublicApplication,
+} from '@/lib/intake-operations';
+import {
+    readApplicationFields,
+    validateApplicationFields,
+} from '@/lib/application';
+import { validateCvFile } from '@/lib/application-file';
+import { rateLimitAllow } from '@/lib/rate-limit';
 
+export const runtime = 'nodejs';
 
+const CV_BUCKET = 'cv-submissions';
+// Per-IP submission throttle. Best-effort across serverless instances; the
+// durable per-address cap lives in submit_public_application_v1.
+const SUBMIT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
+
+const jsonError = (code: string, message: string, status: number) => (
+    NextResponse.json({ success: false, code, message }, { status })
+);
+
+const requestIp = (req: Request) => {
+    const forwarded = req.headers.get('x-forwarded-for');
+    if (forwarded) {
+        const first = forwarded.split(',')[0]?.trim();
+        if (first) {
+            return first;
+        }
+    }
+    return req.headers.get('x-real-ip') ?? 'unknown';
+};
+
+const intakeUnavailable = () => jsonError(
+    'SERVICE_UNAVAILABLE',
+    'Applications are temporarily unavailable. Please try again later.',
+    503,
+);
 
 export async function POST(req: Request) {
     try {
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY! // Use Service Role for backend writes
-        );
-
         const formData = await req.formData();
 
-        // 1. THE HONEYPOT DEFENSE 🍯
-        // If a bot fills out this hidden field, we return a fake success.
-        const botShield = formData.get('protocol_token');
-        if (botShield) {
-            console.log("🛡️ Bot signal intercepted via Honeypot.");
-            return NextResponse.json({ success: true, message: "Signal received." });
+        const honeypot = formData.get('website') ?? formData.get('protocol_token');
+        if (typeof honeypot === 'string' && honeypot.trim()) {
+            return NextResponse.json(
+                { success: true, message: 'Application received.' },
+                { status: 202 },
+            );
         }
 
-        // 2. EXTRACT DATA
-        const fullName = formData.get('fullName') as string;
-        const email = formData.get('email') as string;
-        const cvFile = formData.get('cvFile') as File;
-        const refId = `AG-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
-        // 3. STRICT FILE VALIDATION 🛑
-        if (!cvFile || cvFile.size === 0) {
-            return NextResponse.json({ error: "MISSING_CV" }, { status: 400 });
+        if (!rateLimitAllow(`submit:${requestIp(req)}`, SUBMIT_RATE_LIMIT)) {
+            return jsonError(
+                'RATE_LIMITED',
+                'Too many submissions. Please try again later.',
+                429,
+            );
         }
 
-        // Limit to 5MB
-        if (cvFile.size > 5 * 1024 * 1024) {
-            return NextResponse.json({ error: "FILE_TOO_LARGE" }, { status: 400 });
+        const pool = getIntakePool();
+        const organizationId = process.env.STAFF_ORGANIZATION_ID;
+        if (!pool || !organizationId) {
+            console.error('Application submission is missing intake configuration.');
+            return intakeUnavailable();
         }
 
-        // Only allow PDFs
-        if (cvFile.type !== 'application/pdf') {
-            return NextResponse.json({ error: "INVALID_FORMAT_PDF_ONLY" }, { status: 400 });
+        let listedJobs;
+        try {
+            listedJobs = (await listPublicJobs(pool, organizationId))?.jobs ?? [];
+        } catch (error) {
+            console.error('Public job listing failed during submission:', error);
+            return intakeUnavailable();
         }
 
-        // 4. FILENAME SANITIZATION 🧼
-        const timestamp = Date.now();
-        const cleanName = cvFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const fileName = `${timestamp}-${cleanName}`;
-        const filePath = `cvs/${fileName}`;
+        const fields = readApplicationFields(formData);
+        const fieldValidation = validateApplicationFields(
+            fields,
+            listedJobs.map((job: any) => ({ id: job.slug })),
+        );
+        if (!fieldValidation.ok) {
+            if (fieldValidation.code === 'INVALID_JOB') {
+                return jsonError(
+                    'INVALID_JOB',
+                    'This position is no longer accepting applications.',
+                    400,
+                );
+            }
+            return jsonError(fieldValidation.code, fieldValidation.message, 400);
+        }
+        const job = listedJobs.find(
+            (entry: any) => entry.slug === fieldValidation.job.id);
+        if (!job?.applicationOpen) {
+            return jsonError(
+                'INVALID_JOB',
+                'This position is no longer accepting applications.',
+                400,
+            );
+        }
 
-        // 5. THE VAULT HANDSHAKE (STORAGE)
+        const cvFile = formData.get('cvFile');
+        const fileValidation = await validateCvFile(cvFile);
+        if (!fileValidation.ok) {
+            return jsonError(fileValidation.code, fileValidation.message, 400);
+        }
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !serviceRoleKey) {
+            console.error('Application submission is missing Supabase configuration.');
+            return intakeUnavailable();
+        }
+        const supabase = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+        });
+
+        const refId = `AG-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+        const bytes = Buffer.from(await fileValidation.file.arrayBuffer());
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        const filePath = `cvs/${fieldValidation.job.id}/${refId}.${fileValidation.extension}`;
+
         const { error: uploadError } = await supabase.storage
-            .from('cv-submissions')
-            .upload(filePath, cvFile);
+            .from(CV_BUCKET)
+            .upload(filePath, bytes, {
+                contentType: fileValidation.mimeType,
+                upsert: false,
+            });
 
         if (uploadError) {
-            console.error("❌ STORAGE_FAILURE:", uploadError);
-            return NextResponse.json({ error: "VAULT_UPLOAD_FAILED" }, { status: 500 });
+            console.error('CV upload failed:', uploadError);
+            return jsonError(
+                'CV_UPLOAD_FAILED',
+                'Your CV could not be uploaded. Please try again.',
+                500,
+            );
         }
 
-        // 6. DATABASE INGESTION
-        const { error: dbError } = await supabase
-            .from('applicants')
-            .insert([{
-                full_name: fullName,
-                email: email,
-                cv_url: filePath,
-                ref_id: refId,
-                status: 'pending'
-            }]);
-
-        if (dbError) {
-            console.error("❌ DB_FAILURE:", dbError);
-            return NextResponse.json({ error: "DATABASE_WRITE_FAILURE" }, { status: 500 });
+        let result;
+        try {
+            result = await submitPublicApplication(pool, organizationId, {
+                jobSlug: fieldValidation.job.id,
+                reference: refId,
+                fullName: fieldValidation.fields.fullName,
+                email: fieldValidation.fields.email,
+                professionalUrl: fieldValidation.fields.professionalUrl || null,
+                achievement: fieldValidation.fields.technicalAchievement || null,
+                document: {
+                    sha256,
+                    sizeBytes: bytes.length,
+                    mimeType: fileValidation.mimeType,
+                    extension: fileValidation.extension,
+                    bucket: CV_BUCKET,
+                    objectKey: filePath,
+                    filename: fileValidation.file.name || `cv.${fileValidation.extension}`,
+                },
+            });
+        } catch (error: any) {
+            const { error: cleanupError } = await supabase.storage
+                .from(CV_BUCKET)
+                .remove([filePath]);
+            if (cleanupError) {
+                console.error('Failed to clean up orphaned CV:', cleanupError);
+            }
+            if (error?.code === '54000') {
+                return jsonError(
+                    'RATE_LIMITED',
+                    'Too many submissions. Please try again later.',
+                    429,
+                );
+            }
+            if (error?.code === 'P0002') {
+                return jsonError(
+                    'INVALID_JOB',
+                    'This position is no longer accepting applications.',
+                    400,
+                );
+            }
+            if (error?.code === '22023') {
+                return jsonError(
+                    'INVALID_APPLICATION',
+                    'Your application could not be validated. Please check the form and try again.',
+                    400,
+                );
+            }
+            console.error('Application write failed:', error);
+            return jsonError(
+                'APPLICATION_SAVE_FAILED',
+                'Your application could not be saved. Please try again.',
+                500,
+            );
         }
 
-        return NextResponse.json({ success: true, refId });
+        if (result?.duplicate) {
+            // The verified chain belongs to the original application; this
+            // upload is unreferenced and would orphan.
+            const { error: cleanupError } = await supabase.storage
+                .from(CV_BUCKET)
+                .remove([filePath]);
+            if (cleanupError) {
+                console.error('Failed to clean up duplicate CV upload:', cleanupError);
+            }
+        }
 
+        return NextResponse.json({
+            success: true,
+            refId: result?.publicReference ?? refId,
+        });
     } catch (error) {
-        console.error("💥 CRITICAL_FAILURE:", error);
-        return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
+        console.error('Unexpected application submission failure:', error);
+        return jsonError(
+            'INTERNAL_SERVER_ERROR',
+            'Applications are temporarily unavailable. Please try again later.',
+            500,
+        );
     }
 }
