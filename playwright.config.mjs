@@ -18,6 +18,12 @@ export default defineConfig({
     use: {
         baseURL: 'http://127.0.0.1:3000',
         trace: 'retain-on-failure',
+        // Functional specs run with reduced motion, so the WebGL backgrounds
+        // (Beams, FaultyTerminal) paint one still frame instead of animating.
+        // Animated, they hold the main thread on software GL (CI runners have
+        // no GPU) and clicks and navigations time out. visual-components.spec
+        // overrides this and covers both motion settings.
+        reducedMotion: 'reduce',
     },
     webServer: {
         command: 'npm run dev -- --hostname 127.0.0.1',

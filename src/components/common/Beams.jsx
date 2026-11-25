@@ -15,7 +15,7 @@ import {
 import { Canvas, useFrame } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import { degToRad } from 'three/src/math/MathUtils.js';
-import { useInView } from 'framer-motion';
+import { useInView, useReducedMotion } from 'framer-motion';
 
 function extendMaterial(BaseMaterial, cfg) {
     const physical = ShaderLib.physical;
@@ -58,8 +58,10 @@ function extendMaterial(BaseMaterial, cfg) {
     return mat;
 }
 
-const CanvasWrapper = ({ children, inView }) => (
-    <Canvas dpr={[1, 2]} frameloop={inView ? "always" : "demand"} className="w-full h-full relative">
+// Animate only while on screen and when the visitor allows motion. Otherwise
+// render on demand: one still frame on mount and resize, then no GPU work.
+const CanvasWrapper = ({ children, animate }) => (
+    <Canvas dpr={[1, 2]} frameloop={animate ? "always" : "demand"} className="w-full h-full relative">
         {children}
     </Canvas>
 );
@@ -162,6 +164,7 @@ const Beams = ({
     const meshRef = useRef(null);
     const containerRef = useRef(null);
     const inView = useInView(containerRef);
+    const reduceMotion = useReducedMotion();
 
     const beamMaterial = useMemo(
         () =>
@@ -222,7 +225,7 @@ const Beams = ({
 
     return (
         <div ref={containerRef} className="w-full h-full absolute inset-0">
-            <CanvasWrapper inView={inView}>
+            <CanvasWrapper animate={inView && !reduceMotion}>
                 <group rotation={[0, 0, degToRad(rotation)]}>
                     <PlaneNoise ref={meshRef} material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
                     <DirLight color={lightColor} position={[0, 3, 10]} />

@@ -332,6 +332,11 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
 
     const browser = await chromium.launch();
+    // Every context defaults to reduced motion, so the public board's WebGL
+    // background paints one still frame; animated on software GL it starves
+    // the page (see playwright.config.mjs).
+    const openContext = browser.newContext.bind(browser);
+    browser.newContext = (options = {}) => openContext({ reducedMotion: 'reduce', ...options });
     t.after(async () => { await browser.close().catch(() => {}); });
     mkdirSync(resultsDir, { recursive: true });
 
@@ -1098,6 +1103,10 @@ test('staff workspace end-to-end in a real browser', async (t) => {
         assert.equal(relisted.status(), 200, await relisted.text());
         await page.getByText('Listed', { exact: true }).first().waitFor();
     });
+
+    // The public board is done; close it so its page stops rendering for the
+    // rest of the suite.
+    await boardPage?.context().close();
 
     await t.test('jobs search filters and reset restores the list', async () => {
         await gotoStaff(page, `${baseURL}/staff/jobs`);
